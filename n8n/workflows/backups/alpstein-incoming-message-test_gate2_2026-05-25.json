@@ -1,0 +1,365 @@
+{
+  "name": "alpstein-incoming-message-test",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "alpstein/test/incoming",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "a1b2c3d4-1111-4000-8000-000000000001",
+      "name": "Test Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "alpstein-test-incoming-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// T13.2 \u2014 field mapping only (no business / lead / notify / AI logic)\nconst item = $input.first().json;\nconst body = item.body ?? item;\n\nconst businessId =\n  body.business_id ??\n  (typeof $env !== 'undefined' && $env.ALPSTEIN_TEST_BUSINESS_ID\n    ? $env.ALPSTEIN_TEST_BUSINESS_ID\n    : 'demo_barbershop_001');\n\nconst phone = body.customer?.phone ?? body.phone ?? null;\nconst externalCustomerId =\n  body.customer?.external_customer_id ?? body.external_customer_id ?? null;\n\nif (!phone && !externalCustomerId) {\n  throw new Error(\n    'Validation: customer.phone or customer.external_customer_id is required'\n  );\n}\n\nconst text = body.message?.text ?? body.text ?? null;\nif (!text || String(text).trim() === '') {\n  throw new Error('Validation: message.text is required');\n}\n\nconst externalMessageId =\n  body.message?.external_message_id ?? body.external_message_id ?? null;\n\nconst name = body.customer?.name ?? body.name ?? null;\nconst email = body.customer?.email ?? body.email ?? null;\nconst timestamp =\n  body.message?.timestamp ?? body.timestamp ?? new Date().toISOString();\n\nfunction sanitizeRawPayload(value) {\n  if (value == null || typeof value !== 'object') {\n    return {};\n  }\n  const secretPattern =\n    /^(token|secret|password|authorization|api[_-]?key)$/i;\n  if (Array.isArray(value)) {\n    return value.map((entry) =>\n      typeof entry === 'object' && entry !== null\n        ? sanitizeRawPayload(entry)\n        : entry\n    );\n  }\n  const out = {};\n  for (const [key, val] of Object.entries(value)) {\n    if (secretPattern.test(key)) {\n      out[key] = '[REDACTED]';\n    } else if (typeof val === 'object' && val !== null) {\n      out[key] = sanitizeRawPayload(val);\n    } else {\n      out[key] = val;\n    }\n  }\n  return out;\n}\n\nconst rawSource =\n  body.message?.raw_payload ?? body.raw_payload ?? body;\nconst sanitizedRaw = sanitizeRawPayload(rawSource);\n\nconst normalized = {\n  business_id: businessId,\n  channel: 'test',\n  customer: {\n    phone,\n    name,\n    email,\n    external_customer_id: externalCustomerId,\n  },\n  message: {\n    text: String(text).trim(),\n    external_message_id: externalMessageId,\n    timestamp,\n    raw_payload: sanitizedRaw,\n  },\n};\n\nreturn [{ json: normalized }];"
+      },
+      "id": "a1b2c3d4-1111-4000-8000-000000000002",
+      "name": "Normalize Test Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        280,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_BASE_URL }}/api/v1/webhook/message",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Alpstein-Webhook-Token",
+              "value": "={{ $env.N8N_BACKEND_API_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "a1b2c3d4-1111-4000-8000-000000000003",
+      "name": "POST Backend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        560,
+        300
+      ],
+      "notesInFlow": true,
+      "notes": "T13.3: POST normalized payload. Success \u2192 Shape Customer Reply (T13.4). Owner notify (T13.5) runs after Respond; reads $('POST Backend').",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// T13.3 \u2014 safe error envelope only; do not expose URL, token, or backend stack traces\nreturn [\n  {\n    json: {\n      success: false,\n      error: {\n        code: 'N8N_BACKEND_REQUEST_FAILED',\n        message: 'Backend request failed',\n      },\n    },\n  },\n];"
+      },
+      "id": "a1b2c3d4-1111-4000-8000-000000000006",
+      "name": "Format Backend Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        820,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// T13.4 \u2014 test-channel customer reply only (no lead/notify/internal envelope)\nconst backend = $input.first().json;\n\nif (backend.success !== true || !backend.data) {\n  return [\n    {\n      json: {\n        success: false,\n        error: {\n          code: backend.error?.code || 'BACKEND_RESPONSE_FAILED',\n          message: backend.error?.message || 'Backend request was not successful',\n        },\n      },\n    },\n  ];\n}\n\nconst shaped = {\n  success: true,\n  reply_to_customer: backend.data.reply_to_customer || '',\n};\n\nif (\n  backend.data.message &&\n  typeof backend.data.message.is_duplicate === 'boolean'\n) {\n  shaped.message = { is_duplicate: backend.data.message.is_duplicate };\n}\n\nreturn [{ json: shaped }];"
+      },
+      "id": "a1b2c3d4-1111-4000-8000-000000000008",
+      "name": "Shape Customer Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        820,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-notify-owner",
+              "leftValue": "={{ $('POST Backend').first().json.data.notify_owner }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "cond-notification-exists",
+              "leftValue": "={{ $('POST Backend').first().json.data.notification }}",
+              "rightValue": "",
+              "operator": {
+                "type": "object",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "cond-not-duplicate",
+              "leftValue": "={{ $('POST Backend').first().json.data.message.is_duplicate }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-1111-4000-8000-000000000009",
+      "name": "IF Notify Owner",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1280,
+        300
+      ],
+      "notesInFlow": true,
+      "notes": "T13.5: Runs after Respond (webhook safe). Conditions use $('POST Backend') \u2014 not Shape Customer Reply."
+    },
+    {
+      "parameters": {
+        "jsCode": "// T13.5 \u2014 Telegram-safe owner alert (backend from POST Backend; customer text from Normalize only)\nconst backend = $('POST Backend').first().json;\nconst data = backend.data || {};\nconst notification = data.notification || {};\nconst normalized = $('Normalize Test Payload').first().json;\n\nconst customerText = normalized?.message?.text?.trim() || null;\nconst customerName = normalized?.customer?.name || null;\nconst leadStatus = data.lead?.status || null;\nconst leadPriority = data.lead?.priority || null;\nconst convStatus = data.conversation?.status || null;\n\nconst type = notification.notification_type || 'system_error';\nconst reason = notification.reason || 'unknown';\nconst priority = notification.priority || 'normal';\n\nconst TYPE_LABELS = {\n  new_lead: 'New lead',\n  urgent_lead: 'Urgent lead',\n  human_handoff: 'Human handoff',\n  ai_failure: 'AI failure',\n  system_error: 'System alert',\n};\n\nconst lines = [\n  `[Alpstein] ${TYPE_LABELS[type] || TYPE_LABELS.system_error}`,\n  `Type: ${type}`,\n  `Priority: ${priority}`,\n  `Reason: ${reason}`,\n];\n\nif (customerName) {\n  lines.push(`Customer: ${customerName}`);\n}\nif (customerText) {\n  const snippet =\n    customerText.length > 280\n      ? customerText.slice(0, 277) + '...'\n      : customerText;\n  lines.push(`Message: ${snippet}`);\n}\nif (leadStatus) {\n  const lp = leadPriority ? ` (${leadPriority})` : '';\n  lines.push(`Lead: ${leadStatus}${lp}`);\n}\nif (convStatus) {\n  lines.push(`Conversation: ${convStatus}`);\n}\n\nreturn [\n  {\n    json: {\n      telegram_text: lines.join('\\n'),\n      notification_type: type,\n    },\n  },\n];"
+      },
+      "id": "a1b2c3d4-1111-4000-8000-00000000000a",
+      "name": "Shape Owner Notification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        200
+      ],
+      "notesInFlow": true,
+      "notes": "T13.5: Copy-only templates. No UUIDs or raw backend envelope in telegram_text."
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "={{ $json.telegram_text }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "a1b2c3d4-1111-4000-8000-00000000000b",
+      "name": "Telegram Owner Notify",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1760,
+        200
+      ],
+      "notesInFlow": true,
+      "notes": "T13.5: Create Telegram API credential in n8n UI (name below). TELEGRAM_CHAT_ID from env. continueOnFail so customer webhook reply is unaffected.",
+      "continueOnFail": true,
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "a1b2c3d4-1111-4000-8000-000000000004",
+      "name": "Respond Customer Reply",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1060,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 502
+        }
+      },
+      "id": "a1b2c3d4-1111-4000-8000-000000000007",
+      "name": "Respond Backend Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1060,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## T13.5 \u2014 Owner notify\n\n**Customer:** POST Backend \u2192 Shape Customer Reply \u2192 Respond (T13.4).\n**Owner:** after Respond \u2192 IF ($('POST Backend')) \u2192 Shape \u2192 Telegram.\n\nNotify data never read from Shape Customer Reply.\n\n**Next:** T13.6 errors/retries; live Telegram + production channel testing.",
+        "height": 260,
+        "width": 420,
+        "color": 5
+      },
+      "id": "a1b2c3d4-1111-4000-8000-000000000005",
+      "name": "Sticky Note T13.5",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        760,
+        -80
+      ]
+    }
+  ],
+  "connections": {
+    "Test Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize Test Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Test Payload": {
+      "main": [
+        [
+          {
+            "node": "POST Backend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST Backend": {
+      "main": [
+        [
+          {
+            "node": "Shape Customer Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ],
+      "error": [
+        [
+          {
+            "node": "Format Backend Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shape Customer Reply": {
+      "main": [
+        [
+          {
+            "node": "Respond Customer Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond Customer Reply": {
+      "main": [
+        [
+          {
+            "node": "IF Notify Owner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Notify Owner": {
+      "main": [
+        [
+          {
+            "node": "Shape Owner Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shape Owner Notification": {
+      "main": [
+        [
+          {
+            "node": "Telegram Owner Notify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Backend Error": {
+      "main": [
+        [
+          {
+            "node": "Respond Backend Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "t13-5-owner-notify-v5",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    {
+      "name": "alpstein",
+      "createdAt": "2026-05-25T00:00:00.000Z",
+      "updatedAt": "2026-05-25T00:00:00.000Z",
+      "id": "alpstein-tag"
+    },
+    {
+      "name": "t13",
+      "createdAt": "2026-05-25T00:00:00.000Z",
+      "updatedAt": "2026-05-25T00:00:00.000Z",
+      "id": "t13-tag"
+    }
+  ]
+}
