@@ -10,7 +10,7 @@
 
 Specification-driven MVP with **backend AI orchestration complete**, **n8n test + Telegram ingress workflows implemented** (ops maturity partial), and **conversational behavior extensions** (greeting, intent for one demo business, operator context) shipped in backend.
 
-**Primary open engineering:** CIP-C Langfuse intent metadata, T14.5–T14.6 Telegram regression/export gate, ATTR-3 attribution persistence, **B2.9** clean-clone gate.
+**Primary open engineering:** CIP-C Langfuse intent metadata, T14.5–T14.6 Telegram regression/export gate, ATTR-3 attribution persistence. **Phase B portable compose:** complete (B2.9 gate passed 2026-05-27).
 
 ---
 
@@ -138,7 +138,7 @@ Specification-driven MVP with **backend AI orchestration complete**, **n8n test 
 | B2.6 Compose backend service | **done** — `postgres` + `backend` in root compose |
 | B2.7 n8n compose integration | **done** — `n8n` on `alpstein_internal`, `BACKEND_BASE_URL=http://backend:8000`; legacy `alpstein_n8n` unchanged |
 | B2.8 Bootstrap profile | **done** — compose profile `bootstrap`; [`bootstrap-profile.md`](../deployment/bootstrap-profile.md) |
-| B2.9+ clean-clone gate | **not started** |
+| B2.9 Clean-clone gate | **done** — [`clean-clone-gate-2026-05-27.md`](../audits/clean-clone-gate-2026-05-27.md) |
 
 **Portable Postgres:** service `postgres`, DB `alpstein_ai`, volume `alpstein_postgres_data` — separate from legacy `backend_postgres` / `bitrix_app`.
 

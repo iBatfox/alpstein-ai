@@ -16,7 +16,7 @@
 
 # Next Steps
 
-## Recommended next task: **B2.9** (clean-clone gate) or **CIP-C** / **T14.5**
+## Recommended next task: **CIP-C** / **T14.5** (product/ops) or production cutover planning (separate from Phase B)
 
 ### Deployment portability (B2)
 
@@ -31,7 +31,7 @@
 | B2.6 | **done** | Root compose `backend` — [`T-b2.6-backend-compose-service.md`](../../tasks/done/T-b2.6-backend-compose-service.md) |
 | **B2.7** | **done** | n8n on `alpstein_internal` — [`n8n-compose.md`](../deployment/n8n-compose.md), [`T-b2.7-n8n-internal-compose-network.md`](../../tasks/done/T-b2.7-n8n-internal-compose-network.md) |
 | B2.8 | **done** | [`bootstrap-profile.md`](../deployment/bootstrap-profile.md) — [`T-b2.8-bootstrap-dev-seed-profile.md`](../../tasks/done/T-b2.8-bootstrap-dev-seed-profile.md) |
-| **B2.9** | **next** | Clean-clone gate transcript |
+| B2.9 | **done** | [`clean-clone-gate-2026-05-27.md`](../audits/clean-clone-gate-2026-05-27.md) — [`T-b2.9-clean-clone-verification-gate.md`](../../tasks/done/T-b2.9-clean-clone-verification-gate.md) |
 
 Compose: [`postgres-compose.md`](../deployment/postgres-compose.md), [`n8n-compose.md`](../deployment/n8n-compose.md). Image + entrypoint: [`backend-image.md`](../deployment/backend-image.md).
 
