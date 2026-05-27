@@ -73,7 +73,7 @@ docs/
 
 | Area | Status | Index |
 |------|--------|-------|
-| Early MVP backlog checklists | deprecated | [`project-status/backlog.md`](project-status/backlog.md) |
+| Early MVP backlog checklists | deprecated | [`project-status/historical/backlog.md`](project-status/historical/backlog.md) |
 | Superseded design drafts | deprecated | [`architecture/deprecated/README.md`](architecture/deprecated/README.md) |
 | Completed slice plans (T11–T13) | archived / historical | [`project-status/documentation-topology-status.md`](project-status/documentation-topology-status.md) |
 | Ad-hoc n8n export `My_workflow.json` | experimental / non-canonical | repo `n8n/workflows/` |

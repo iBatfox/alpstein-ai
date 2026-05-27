@@ -79,7 +79,7 @@ Documented in `docs/project-status/decisions.md`:
 - Gate 1 / Telegram paths documented with `BACKEND_BASE_URL=http://172.20.0.1:8010`, backend on `0.0.0.0:8010`, UFW allowing Docker bridge → host (`docs/ops/n8n-workflow1-test-webhook.md`).
 - Webhook auth: `X-Alpstein-Webhook-Token` ↔ `N8N_BACKEND_API_TOKEN` (**implemented** T10-F1).
 
-### Deferred / backlog (still listed in `docs/project-status/backlog.md`)
+### Deferred / backlog (historical checklist: `docs/project-status/historical/backlog.md`)
 
 - Single Docker Compose “full stack” (Postgres + API + n8n + nginx) as one artifact — **planned / partial** (n8n compose exists; full stack checklist still open in backlog).
 
@@ -205,7 +205,7 @@ Supporting:
 
 ### Design artifact
 
-- `docs/project-status/t11-prompt-builder-design.md` — draft pointer to canonical spec (superseded by `prompt-builder-rules.md` for implementation).
+- `docs/architecture/deprecated/t11-prompt-builder-design.md` — draft pointer to canonical spec (superseded by `prompt-builder-rules.md` for implementation).
 
 ---
 

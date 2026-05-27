@@ -1,6 +1,6 @@
 **Doc status:** archived  
 **Tier:** project-status/historical (pending move)  
-**Note:** Findings partially remediated 2026-05-27; use [`documentation-topology-status.md`](documentation-topology-status.md) + canonical map for current state
+**Note:** Findings partially remediated 2026-05-27; use [`documentation-topology-status.md`](../documentation-topology-status.md) + canonical map for current state
 
 # Alpstein AI — Engineering Audit Report
 
@@ -9,7 +9,7 @@
 **Method:** repository review of `specs/`, `docs/`, `tasks/`, `backend/app/`, `n8n/workflows/` — no runtime changes performed  
 **Rule:** status labels are **implemented** | **partial** | **spec-only** | **deprecated** | **planned** | **abandoned**
 
-**Companion docs:** [`engineering-archive.md`](engineering-archive.md) (chronology), [`completed.md`](completed.md) (slice log), [`next-steps.md`](next-steps.md) (queue — **partially stale**)
+**Companion docs:** [`engineering-archive.md`](../engineering-archive.md) (chronology), [`completed.md`](../completed.md) (slice log), [`next-steps.md`](../next-steps.md) (queue — **partially stale**)
 
 ---
 
@@ -288,7 +288,7 @@ Evidence: `prompt_builder_service._build_task_instructions_body`, `conversation_
 |----------|-------|
 | `docs/project-status/current-state.md` | Says **T13 missing**, **252 tests**, no greeting/intent/n8n complete — **severely stale** |
 | `docs/project-status/next-steps.md` | § “Conversation Intent Policy — not implemented” **conflicts** with CIP-B done + completed.md |
-| `docs/project-status/backlog.md` | All P0 checkboxes open — **obsolete** vs completed work |
+| `docs/project-status/historical/backlog.md` | All P0 checkboxes open — **obsolete** vs completed work |
 | `docs/project-status/engineering-archive.md` | Pre–CIP-B snapshot; omits intent, contact cleanup |
 | `conversation-intent-policy-mvp.md` intro table | Still says technical-pre-sales “to be refactored” — **partially fixed** in technical-pre-sales doc |
 | `docs/architecture/langfuse-tracing.md` | Tags `alpstein_ai_demo_001` in text; code uses `demo_barbershop_001` for tag |
@@ -310,7 +310,7 @@ Evidence: `prompt_builder_service._build_task_instructions_body`, `conversation_
 - `n8n/workflows/My_workflow.json`
 - `n8n/workflows/backups/*.json` (backup only)
 - `tasks/todo/t13-n8n-workflow-slice.md` (duplicate of done)
-- `docs/project-status/t11-prompt-builder-design.md` (draft pointer)
+- `docs/architecture/deprecated/t11-prompt-builder-design.md` (draft pointer)
 
 ---
 
@@ -497,8 +497,8 @@ tasks/
 
 - `tasks/todo/t13-n8n-workflow-slice.md`  
 - `tasks/todo/CIP-*.md` (move to done)  
-- `docs/project-status/t11-prompt-builder-design.md` (banner: superseded)  
-- `docs/project-status/backlog.md` (replace with next-steps or delete)
+- `docs/architecture/deprecated/t11-prompt-builder-design.md` (banner: superseded)  
+- `docs/project-status/historical/backlog.md` (replace with next-steps or delete)
 
 ---
 

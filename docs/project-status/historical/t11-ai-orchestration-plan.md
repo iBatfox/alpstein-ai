@@ -1,10 +1,10 @@
 **Doc status:** archived  
 **Tier:** project-status/historical (pending move)  
-**Note:** T11 slice complete — see [`completed.md`](completed.md)
+**Note:** T11 slice complete — see [`completed.md`](../completed.md)
 
 # T11 — AI orchestration plan (canonical reference)
 
-**Canonical task breakdown:** [`tasks/done/t11-ai-orchestration-slice.md`](../../tasks/done/t11-ai-orchestration-slice.md)
+**Canonical task breakdown:** [`tasks/done/t11-ai-orchestration-slice.md`](../../../tasks/done/t11-ai-orchestration-slice.md)
 
 **Status:** **Done** (T11.1–T11.16, 2026-05-24).
 

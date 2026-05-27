@@ -26,12 +26,12 @@ Living project status vs historical record.
 | Document | Doc status |
 |----------|------------|
 | [`engineering-archive.md`](engineering-archive.md) | archived |
-| [`engineering-audit-report.md`](engineering-audit-report.md) | archived |
-| [`t11-ai-orchestration-plan.md`](t11-ai-orchestration-plan.md) | archived |
-| [`t12-lead-notification-plan.md`](t12-lead-notification-plan.md) | archived |
+| [`historical/engineering-audit-report.md`](historical/engineering-audit-report.md) | archived |
+| [`historical/t11-ai-orchestration-plan.md`](historical/t11-ai-orchestration-plan.md) | archived |
+| [`historical/t12-lead-notification-plan.md`](historical/t12-lead-notification-plan.md) | archived |
 | [`t13-n8n-workflow-plan.md`](t13-n8n-workflow-plan.md) | archived |
-| [`t11-prompt-builder-design.md`](t11-prompt-builder-design.md) | deprecated |
-| [`backlog.md`](backlog.md) | deprecated |
+| [`../architecture/deprecated/t11-prompt-builder-design.md`](../architecture/deprecated/t11-prompt-builder-design.md) | deprecated |
+| [`historical/backlog.md`](historical/backlog.md) | deprecated |
 | [`channel-source-attribution-design.md`](channel-source-attribution-design.md) | draft |
 
 Subdirectories: [`current/`](current/), [`historical/`](historical/)

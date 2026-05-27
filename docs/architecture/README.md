@@ -59,7 +59,7 @@ See [`../MIGRATION-PLAN.md`](../MIGRATION-PLAN.md).
 
 Listed in [`deprecated/README.md`](deprecated/README.md), including:
 
-- `../project-status/t11-prompt-builder-design.md` (superseded by spec)
+- `deprecated/t11-prompt-builder-design.md` (superseded by spec)
 - `technical-pre-sales-behavior-mvp.md` (partially obsolete after CIP-B)
 - Early slice plans in `../project-status/t11-*`, `t12-*`, `t13-*`
 

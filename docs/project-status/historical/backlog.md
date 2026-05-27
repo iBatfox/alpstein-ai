@@ -3,7 +3,7 @@
 
 # Alpstein AI Backlog
 
-**Status:** **obsolete** — pre-MVP checklist from early project phase. Do not use for planning. Canonical queue: [`next-steps.md`](next-steps.md). Shipped work: [`completed.md`](completed.md).
+**Status:** **obsolete** — pre-MVP checklist from early project phase. Do not use for planning. Canonical queue: [`next-steps.md`](../next-steps.md). Shipped work: [`completed.md`](../completed.md).
 
 ---
 

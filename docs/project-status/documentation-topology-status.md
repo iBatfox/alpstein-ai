@@ -114,8 +114,8 @@ Verified against code; must stay aligned with canonical map.
 
 | Document | Marker | Action |
 |----------|--------|--------|
-| `project-status/backlog.md` | deprecated | Move Phase 1.3 → `historical/` |
-| `project-status/t11-prompt-builder-design.md` | deprecated | Move Phase 1.3 → `architecture/deprecated/` |
+| `project-status/historical/backlog.md` | deprecated | Moved (Phase 1.3A) |
+| `architecture/deprecated/t11-prompt-builder-design.md` | deprecated | Moved (Phase 1.3A) |
 | `architecture/technical-pre-sales-behavior-mvp.md` | deprecated | Move Phase 1.4 → `architecture/deprecated/` |
 | `ops/n8n-deployment-plan.md` | deprecated | Move Phase 1.5 → `ops/archived/` |
 
@@ -128,9 +128,9 @@ Full list: [`architecture/deprecated/README.md`](../architecture/deprecated/READ
 | Document | Reason |
 |----------|--------|
 | `engineering-archive.md` | Long-form engineering history |
-| `engineering-audit-report.md` | 2026-05 drift audit |
-| `t11-ai-orchestration-plan.md` | Completed slice |
-| `t12-lead-notification-plan.md` | Completed slice |
+| `project-status/historical/engineering-audit-report.md` | 2026-05 drift audit |
+| `project-status/historical/t11-ai-orchestration-plan.md` | Completed slice |
+| `project-status/historical/t12-lead-notification-plan.md` | Completed slice |
 | `t13-n8n-workflow-plan.md` | Completed slice; deferred items noted |
 | `ops/post-t13-5-stabilization.md` | One-time gate |
 
@@ -152,7 +152,7 @@ Full list: [`architecture/deprecated/README.md`](../architecture/deprecated/READ
 | `canonical-runtime-architecture.md` | §5.7 / §12 say HF-1 plan-only; code has HF-1 | Archivist: patch map §5.7 + §12 |
 | `langfuse-tracing.md` | Demo tag may mismatch `langfuse_tracing_service.py` | Backend on CIP-C |
 | `technical-pre-sales-behavior-mvp.md` | Describes always-on appendix as current for all businesses | Mark deprecated **done** |
-| `t11-ai-orchestration-plan.md` | Says "Next: T12" | Mark archived **done** |
+| `project-status/historical/t11-ai-orchestration-plan.md` | Says "Next: T12" | Mark archived **done** |
 | `ops/n8n-deployment-plan.md` | "runtime not started" | Mark deprecated; point to `n8n-runtime-start.md` |
 
 **Resolved in prior archivist sweep:** `next-steps.md` CIP "not implemented"; `current-state.md` n8n missing; stale test count.
@@ -161,7 +161,7 @@ Full list: [`architecture/deprecated/README.md`](../architecture/deprecated/READ
 
 ## 10. Migration recommendations (ordered)
 
-1. **Phase 1.3** — Move 5 low-risk historical/deprecated files ([`MIGRATION-PLAN.md`](../MIGRATION-PLAN.md)); leave stub redirects.
+1. **Phase 1.3A (executed):** moved backlog + t11 prompt-builder design + engineering audit (t11/t12 slices) into tier dirs; stubs left at old paths.
 2. **Phase 1.4** — Conversational cluster under `docs/conversational/`.
 3. **Phase 1.5** — Ops production/archived split; resolve Telegram duplicate cluster.
 4. **Link sweep** — `rg` for moved paths across `docs/`, `tasks/`, `.cursor/skills/`.
@@ -209,7 +209,7 @@ docs/project-status/{current,historical}/
 
 ## 14. Recommended next stabilization step
 
-**Phase 1.3 low-risk moves:** relocate `backlog.md`, `t11-prompt-builder-design.md`, and completed slice plans to `historical/` / `deprecated/` with one-line stub files at old paths; run link sweep.
+**Phase 1.3A:** executed — run link sweep for any remaining legacy paths; next: Phase 1.4 conversational cluster.
 
 Command:
 

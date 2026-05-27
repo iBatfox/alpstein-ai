@@ -1,6 +1,6 @@
 **Doc status:** archived  
 **Tier:** project-status/historical (pending move)  
-**Note:** T12 slice complete — runtime in [`canonical-runtime-architecture.md`](../architecture/canonical-runtime-architecture.md)
+**Note:** T12 slice complete — runtime in [`canonical-runtime-architecture.md`](../../architecture/canonical-runtime-architecture.md)
 
 # T12 — Lead creation & owner notification (design plan)
 
@@ -12,7 +12,7 @@
 
 **MVP success (when implemented):** First non-duplicate customer contact creates a lead in PostgreSQL; follow-up messages update the active lead without duplicates; webhook response exposes accurate `lead_created` / `lead_updated` / `notify_owner` (+ optional `notification` payload); duplicate webhooks never create duplicate leads or owner alerts; n8n can branch on flags without business logic.
 
-**Task breakdown:** [`tasks/todo/t12-lead-notification-slice.md`](../../tasks/todo/t12-lead-notification-slice.md)
+**Task breakdown:** [`tasks/todo/t12-lead-notification-slice.md`](../../../tasks/todo/t12-lead-notification-slice.md)
 
 ---
 
@@ -231,7 +231,7 @@ No `lead` or `notification` objects on duplicate path.
 
 ## 7. T12 task breakdown (summary)
 
-Full table with review gates: [`tasks/todo/t12-lead-notification-slice.md`](../../tasks/todo/t12-lead-notification-slice.md)
+Full table with review gates: [`tasks/todo/t12-lead-notification-slice.md`](../../../tasks/todo/t12-lead-notification-slice.md)
 
 | ID | Task | Skill | Depends |
 |----|------|-------|---------|

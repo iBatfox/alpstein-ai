@@ -11,7 +11,7 @@
 
 | Document | Current path | Reason | Target tier |
 |----------|--------------|--------|-------------|
-| Alpstein AI Backlog | [`../../project-status/backlog.md`](../../project-status/backlog.md) | All P0 items shipped or superseded; contradicts `completed.md` | `project-status/historical/` |
+| Alpstein AI Backlog | [`../../project-status/historical/backlog.md`](../../project-status/historical/backlog.md) | All P0 items shipped or superseded; contradicts `completed.md` | `project-status/historical/` |
 
 ---
 
@@ -19,7 +19,7 @@
 
 | Document | Current path | Superseded by | Target tier |
 |----------|--------------|---------------|-------------|
-| T11.7 Prompt Builder design note | [`../../project-status/t11-prompt-builder-design.md`](../../project-status/t11-prompt-builder-design.md) | [`specs/architecture/prompt-builder-rules.md`](../../../specs/architecture/prompt-builder-rules.md) | `architecture/deprecated/` |
+| T11.7 Prompt Builder design note | [`t11-prompt-builder-design.md`](t11-prompt-builder-design.md) | [`specs/architecture/prompt-builder-rules.md`](../../../specs/architecture/prompt-builder-rules.md) | `architecture/deprecated/` |
 | Technical pre-sales behavior MVP | [`../technical-pre-sales-behavior-mvp.md`](../technical-pre-sales-behavior-mvp.md) | CIP-B intent path + [`conversation-intent-policy-mvp.md`](../conversation-intent-policy-mvp.md); legacy appendix still in code for non-demo businesses | `architecture/deprecated/` |
 
 ---
@@ -28,8 +28,8 @@
 
 | Document | Current path | Slice status | Target tier |
 |----------|--------------|--------------|-------------|
-| T11 AI orchestration plan | [`../../project-status/t11-ai-orchestration-plan.md`](../../project-status/t11-ai-orchestration-plan.md) | T11 done | `project-status/historical/` |
-| T12 lead/notification plan | [`../../project-status/t12-lead-notification-plan.md`](../../project-status/t12-lead-notification-plan.md) | T12 done | `project-status/historical/` |
+| T11 AI orchestration plan | [`../../project-status/historical/t11-ai-orchestration-plan.md`](../../project-status/historical/t11-ai-orchestration-plan.md) | T11 done | `project-status/historical/` |
+| T12 lead/notification plan | [`../../project-status/historical/t12-lead-notification-plan.md`](../../project-status/historical/t12-lead-notification-plan.md) | T12 done | `project-status/historical/` |
 | T13 n8n workflow plan | [`../../project-status/t13-n8n-workflow-plan.md`](../../project-status/t13-n8n-workflow-plan.md) | T13.1–T13.5 done; T13.6–T13.7 deferred | `project-status/historical/` |
 
 ---
