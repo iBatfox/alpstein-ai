@@ -31,3 +31,11 @@ venv/
 tmp/
 n8n/workflows/My_workflow.json
 schema_dbdesigner.sql
+
+# Runtime volumes / persistent data
+postgres_data/
+n8n_data/
+volumes/
+backups/
+*.dump
+*.sql.gz
