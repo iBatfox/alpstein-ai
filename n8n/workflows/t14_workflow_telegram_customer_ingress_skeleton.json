@@ -1,0 +1,396 @@
+{
+  "name": "alpstein-incoming-message-telegram",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "b1c2d3e4-1400-4000-8000-000000000001",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "alpstein-telegram-customer-trigger",
+      "credentials": {
+        "telegramApi": {
+          "name": "alpsteinai_0001bot"
+        }
+      },
+      "notesInFlow": true,
+      "notes": "T14.3: Customer bot only (alpsteinai_0001bot). Trigger On: message. MVP filtering in Normalize."
+    },
+    {
+      "parameters": {
+        "jsCode": "// T14.3 — Telegram Update → normalized webhook contract (private text only)\nconst update = $input.first().json;\n\nif (update.edited_message || update.channel_post || update.edited_channel_post) {\n  return [];\n}\n\nconst message = update.message;\nif (!message || typeof message !== 'object') {\n  return [];\n}\n\nif (message.from?.is_bot === true) {\n  return [];\n}\n\nconst chat = message.chat;\nif (!chat || chat.type !== 'private') {\n  return [];\n}\n\nconst text = message.text;\nif (!text || String(text).trim() === '') {\n  return [];\n}\n\nconst businessId =\n  typeof $env !== 'undefined' && $env.ALPSTEIN_TELEGRAM_BUSINESS_ID\n    ? $env.ALPSTEIN_TELEGRAM_BUSINESS_ID\n    : 'alpstein_ai_demo_001';\n\nconst chatId = String(chat.id);\nconst from = message.from;\nconst externalCustomerId = String(from.id);\nconst name = [from.first_name, from.last_name]\n  .filter(Boolean)\n  .join(' ')\n  .trim();\n\nfunction sanitizeRawPayload(value) {\n  if (value == null || typeof value !== 'object') {\n    return {};\n  }\n  const secretPattern = /^(token|secret|password|authorization|api[_-]?key)$/i;\n  if (Array.isArray(value)) {\n    return value.map((entry) =>\n      typeof entry === 'object' && entry !== null\n        ? sanitizeRawPayload(entry)\n        : entry\n    );\n  }\n  const out = {};\n  for (const [key, val] of Object.entries(value)) {\n    if (secretPattern.test(key)) {\n      out[key] = '[REDACTED]';\n    } else if (typeof val === 'object' && val !== null) {\n      out[key] = sanitizeRawPayload(val);\n    } else {\n      out[key] = val;\n    }\n  }\n  return out;\n}\n\nconst raw_payload = sanitizeRawPayload({\n  provider: 'telegram',\n  update_id: update.update_id,\n  chat_id: chatId,\n  chat_type: chat.type,\n  message_id: message.message_id,\n});\n\nconst timestamp = new Date(message.date * 1000).toISOString();\n\nreturn [\n  {\n    json: {\n      business_id: businessId,\n      channel: 'telegram',\n      customer: {\n        phone: null,\n        name: name || null,\n        email: null,\n        external_customer_id: externalCustomerId,\n      },\n      message: {\n        text: String(text).trim(),\n        external_message_id: `tg:${chatId}:${message.message_id}`,\n        timestamp,\n        raw_payload,\n      },\n      telegram_chat_id: chatId,\n    },\n  },\n];"
+      },
+      "id": "b1c2d3e4-1400-4000-8000-000000000002",
+      "name": "Normalize Telegram Incoming",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        280,
+        300
+      ],
+      "notesInFlow": true,
+      "notes": "T14.3: Drops bot/non-text/group/channel/edited. business_id default alpstein_ai_demo_001."
+    },
+    {
+      "parameters": {
+        "keepOnlySet": false,
+        "values": {
+          "string": [
+            {
+              "name": "operator_business_context",
+              "value": "Alpstein AI demo business.\nWe help businesses with AI assistants, CRM integrations, workflow automation, Telegram AI assistants, and customer communication systems.\nReply in the customer's language (German, English, Russian, and other supported languages).\nTone: calm, clear, concise, helpful.\nDo not ask for the customer's name unless they clearly need identification or want to book."
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b1c2d3e4-1400-4000-8000-00000000000b",
+      "name": "Add Business Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        420,
+        300
+      ],
+      "notesInFlow": true,
+      "notes": "T14-OC-3: Alpstein AI operator facts only. No barbershop domain."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_BASE_URL }}/api/v1/webhook/message",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Alpstein-Webhook-Token",
+              "value": "={{ $env.N8N_BACKEND_API_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { business_id: $json.business_id, channel: $json.channel, customer: $json.customer, message: $json.message, operator_business_context: $json.operator_business_context } }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "b1c2d3e4-1400-4000-8000-000000000003",
+      "name": "POST Backend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        700,
+        300
+      ],
+      "notesInFlow": true,
+      "notes": "T14.3+OC-3: POST includes operator_business_context. Excludes telegram_chat_id.",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// T14.3 — customer-safe reply text + chat id for Telegram Send\nconst backend = $input.first().json;\nconst normalize = $('Normalize Telegram Incoming').first().json;\nconst chatId = normalize.telegram_chat_id;\n\nconst SAFE_ERROR =\n  'Sorry, we could not process your message right now. Please try again in a moment.';\n\nif (backend.success !== true || !backend.data) {\n  return [\n    {\n      json: {\n        reply_to_customer: SAFE_ERROR,\n        telegram_chat_id: chatId,\n      },\n    },\n  ];\n}\n\nconst reply = (backend.data.reply_to_customer || '').trim();\nreturn [\n  {\n    json: {\n      reply_to_customer: reply || 'Thank you for your message.',\n      telegram_chat_id: chatId,\n    },\n  },\n];"
+      },
+      "id": "b1c2d3e4-1400-4000-8000-000000000004",
+      "name": "Shape Telegram Customer Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        200
+      ],
+      "notesInFlow": true,
+      "notes": "T14.3: reply_to_customer only — no backend envelope to Telegram."
+    },
+    {
+      "parameters": {
+        "jsCode": "// T14.3 — HTTP/transport failure: generic message only\nconst normalize = $('Normalize Telegram Incoming').first().json;\nreturn [\n  {\n    json: {\n      reply_to_customer:\n        'Sorry, our service is temporarily unavailable. Please try again later.',\n      telegram_chat_id: normalize.telegram_chat_id,\n    },\n  },\n];"
+      },
+      "id": "b1c2d3e4-1400-4000-8000-000000000005",
+      "name": "Format Telegram Backend Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.telegram_chat_id }}",
+        "text": "={{ $json.reply_to_customer }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "b1c2d3e4-1400-4000-8000-000000000006",
+      "name": "Telegram Send Message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1220,
+        300
+      ],
+      "notesInFlow": true,
+      "notes": "T14.3: Customer bot + chat_id from normalize. Not TELEGRAM_CHAT_ID.",
+      "continueOnFail": true,
+      "credentials": {
+        "telegramApi": {
+          "name": "alpsteinai_0001bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-notify-owner",
+              "leftValue": "={{ $('POST Backend').first().json.data.notify_owner }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "cond-notification-exists",
+              "leftValue": "={{ $('POST Backend').first().json.data.notification }}",
+              "rightValue": "",
+              "operator": {
+                "type": "object",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "cond-not-duplicate",
+              "leftValue": "={{ $('POST Backend').first().json.data.message.is_duplicate }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b1c2d3e4-1400-4000-8000-000000000007",
+      "name": "IF Notify Owner",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        960,
+        600
+      ],
+      "notesInFlow": true,
+      "notes": "T14.3 optional: T13.5 pattern; reads POST Backend only."
+    },
+    {
+      "parameters": {
+        "jsCode": "// T13.5 pattern — owner alert (Telegram ingress)\nconst backend = $('POST Backend').first().json;\nconst data = backend.data || {};\nconst notification = data.notification || {};\nconst normalized = $('Normalize Telegram Incoming').first().json;\n\nconst customerText = normalized?.message?.text?.trim() || null;\nconst customerName = normalized?.customer?.name || null;\nconst leadStatus = data.lead?.status || null;\nconst leadPriority = data.lead?.priority || null;\nconst convStatus = data.conversation?.status || null;\n\nconst type = notification.notification_type || 'system_error';\nconst reason = notification.reason || 'unknown';\nconst priority = notification.priority || 'normal';\n\nconst TYPE_LABELS = {\n  new_lead: 'New lead',\n  urgent_lead: 'Urgent lead',\n  human_handoff: 'Human handoff',\n  ai_failure: 'AI failure',\n  system_error: 'System alert',\n};\n\nconst lines = [\n  `[Alpstein] ${TYPE_LABELS[type] || TYPE_LABELS.system_error}`,\n  `Type: ${type}`,\n  `Priority: ${priority}`,\n  `Reason: ${reason}`,\n];\n\nif (customerName) {\n  lines.push(`Customer: ${customerName}`);\n}\nif (customerText) {\n  const snippet =\n    customerText.length > 280\n      ? customerText.slice(0, 277) + '...'\n      : customerText;\n  lines.push(`Message: ${snippet}`);\n}\nif (leadStatus) {\n  const lp = leadPriority ? ` (${leadPriority})` : '';\n  lines.push(`Lead: ${leadStatus}${lp}`);\n}\nif (convStatus) {\n  lines.push(`Conversation: ${convStatus}`);\n}\n\nreturn [\n  {\n    json: {\n      telegram_text: lines.join('\\n'),\n      notification_type: type,\n    },\n  },\n];"
+      },
+      "id": "b1c2d3e4-1400-4000-8000-000000000008",
+      "name": "Shape Owner Notification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        600
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "={{ $json.telegram_text }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "b1c2d3e4-1400-4000-8000-000000000009",
+      "name": "Telegram Owner Notify",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1440,
+        600
+      ],
+      "continueOnFail": true,
+      "credentials": {
+        "telegramApi": {
+          "name": "AlpsteinAIbot"
+        }
+      },
+      "notesInFlow": true,
+      "notes": "Owner bot only. TELEGRAM_CHAT_ID env — not customer chat."
+    },
+    {
+      "parameters": {
+        "content": "## Telegram customer ingress (Alpstein AI)\n\nTrigger → Normalize → Add Business Context → POST Backend → Shape → Send.\n\nbusiness_id: alpstein_ai_demo_001. Owner notify parallel from POST Backend.",
+        "height": 280,
+        "width": 480,
+        "color": 4
+      },
+      "id": "b1c2d3e4-1400-4000-8000-00000000000a",
+      "name": "Sticky Note T14.3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        40,
+        40
+      ]
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Normalize Telegram Incoming",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Telegram Incoming": {
+      "main": [
+        [
+          {
+            "node": "Add Business Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Business Context": {
+      "main": [
+        [
+          {
+            "node": "POST Backend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST Backend": {
+      "main": [
+        [
+          {
+            "node": "Shape Telegram Customer Reply",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "IF Notify Owner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ],
+      "error": [
+        [
+          {
+            "node": "Format Telegram Backend Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shape Telegram Customer Reply": {
+      "main": [
+        [
+          {
+            "node": "Telegram Send Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Telegram Backend Error": {
+      "main": [
+        [
+          {
+            "node": "Telegram Send Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Notify Owner": {
+      "main": [
+        [
+          {
+            "node": "Shape Owner Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shape Owner Notification": {
+      "main": [
+        [
+          {
+            "node": "Telegram Owner Notify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "t14-alpstein-ai-greeting-v1",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    {
+      "name": "alpstein",
+      "createdAt": "2026-05-25T00:00:00.000Z",
+      "updatedAt": "2026-05-25T00:00:00.000Z",
+      "id": "alpstein-tag"
+    },
+    {
+      "name": "t14",
+      "createdAt": "2026-05-25T00:00:00.000Z",
+      "updatedAt": "2026-05-25T00:00:00.000Z",
+      "id": "t14-tag"
+    }
+  ]
+}

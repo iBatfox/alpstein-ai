@@ -30,3 +30,4 @@ venv/
 # Runtime garbage / ad-hoc exports
 tmp/
 n8n/workflows/My_workflow.json
+schema_dbdesigner.sql

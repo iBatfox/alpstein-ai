@@ -1,0 +1,19 @@
+version: "3.8"
+
+services:
+  alpstein_n8n:
+    image: docker.n8n.io/n8nio/n8n:1.95.3
+    container_name: alpstein_n8n
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:15679:5678"
+    env_file:
+      - .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - alpstein_n8n_data:/home/node/.n8n
+
+volumes:
+  alpstein_n8n_data:
+    name: alpstein_n8n_data
