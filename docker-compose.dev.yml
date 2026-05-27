@@ -17,3 +17,8 @@ services:
   backend:
     ports:
       - "127.0.0.1:${BACKEND_HOST_PORT:-8000}:8000"
+
+  n8n:
+    ports:
+      # 15680 avoids collision with legacy alpstein_n8n on 127.0.0.1:15679
+      - "127.0.0.1:${N8N_HOST_PORT:-15680}:5678"

@@ -16,7 +16,7 @@
 
 # Next Steps
 
-## Recommended next task: **B2.7** (n8n compose) or **CIP-C** / **T14.5**
+## Recommended next task: **B2.8** (bootstrap profile) or **CIP-C** / **T14.5**
 
 ### Deployment portability (B2)
 
@@ -29,9 +29,10 @@
 | B2.4 | **done** | Readiness endpoint |
 | B2.5 | **done** | [`docker-entrypoint.sh`](../../backend/docker-entrypoint.sh) — [`T-b2.5-backend-entrypoint-contract.md`](../../tasks/done/T-b2.5-backend-entrypoint-contract.md) |
 | B2.6 | **done** | Root compose `backend` — [`T-b2.6-backend-compose-service.md`](../../tasks/done/T-b2.6-backend-compose-service.md) |
-| **B2.7** | **next** | n8n → `http://backend:8000` on compose network |
+| **B2.7** | **done** | n8n on `alpstein_internal` — [`n8n-compose.md`](../deployment/n8n-compose.md), [`T-b2.7-n8n-internal-compose-network.md`](../../tasks/done/T-b2.7-n8n-internal-compose-network.md) |
+| **B2.8** | **next** | Bootstrap profile (seed/SQL order) |
 
-Compose: [`postgres-compose.md`](../deployment/postgres-compose.md). Image + entrypoint: [`backend-image.md`](../deployment/backend-image.md).
+Compose: [`postgres-compose.md`](../deployment/postgres-compose.md), [`n8n-compose.md`](../deployment/n8n-compose.md). Image + entrypoint: [`backend-image.md`](../deployment/backend-image.md).
 
 **HF-1 (done):** History safety preamble in §7 — [`HF-1-history-safety-promptbuilder.md`](../../tasks/done/HF-1-history-safety-promptbuilder.md). Plan: [`Plan Context Freshness History Safety Policy.md`](../../tasks/done/Plan%20Context%20Freshness%20History%20Safety%20Policy.md).
 

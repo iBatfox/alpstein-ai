@@ -1,3 +1,7 @@
+# LEGACY Contabo standalone n8n — do not use for portable B2.7+ stack.
+# Portable path: repo root docker-compose.yml service `n8n` (BACKEND_BASE_URL=http://backend:8000).
+# See docs/deployment/n8n-compose.md and docs/ops/n8n-runtime-start.md (legacy section).
+
 version: "3.8"
 
 services:

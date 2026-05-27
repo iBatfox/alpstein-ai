@@ -2,11 +2,11 @@
 # Contract: docs/deployment/deployment-contract.md
 # CLI: docker-compose v1.29 — use `docker-compose` (hyphen), project `-p alpstein-ai`
 #
-#   docker-compose -p alpstein-ai up -d postgres backend
+#   docker-compose -p alpstein-ai up -d postgres backend n8n
 #   docker-compose -p alpstein-ai -f docker-compose.yml -f docker-compose.dev.yml up -d
 #
 # Does NOT use legacy host container backend_postgres / bitrix_app.
-# n8n service added in B2.7 (n8n/docker-compose.yml until then).
+# Portable n8n: service `n8n` on alpstein_internal (B2.7). Legacy host n8n: n8n/docker-compose.yml.
 
 version: "3.8"
 
@@ -67,6 +67,27 @@ services:
       start_period: 90s
     # No host ports in default file — dev overlay maps 127.0.0.1:8000 only.
 
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:1.95.3
+    container_name: alpstein_n8n_compose
+    restart: unless-stopped
+    env_file:
+      - ./n8n/.env
+    environment:
+      # Portable path — overrides legacy host-gateway value in n8n/.env when present.
+      BACKEND_BASE_URL: http://backend:8000
+    volumes:
+      - alpstein_n8n_data:/home/node/.n8n
+    networks:
+      - alpstein_internal
+    depends_on:
+      backend:
+        condition: service_healthy
+    expose:
+      - "5678"
+    # No host ports — dev overlay only (127.0.0.1:15680). No extra_hosts / host-gateway.
+    # Do not use container_name alpstein_n8n — reserved for legacy n8n/docker-compose.yml.
+
 networks:
   alpstein_internal:
     name: alpstein_internal
@@ -74,3 +95,5 @@ networks:
 volumes:
   alpstein_postgres_data:
     name: alpstein_postgres_data
+  alpstein_n8n_data:
+    name: alpstein_n8n_data

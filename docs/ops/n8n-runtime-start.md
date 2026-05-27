@@ -3,7 +3,31 @@
 
 > **Legacy host runbook (Contabo):** Uses `BACKEND_BASE_URL=http://172.20.0.1:8010` and host uvicorn on port **8010**. Portable target: [`deployment-contract.md`](../deployment/deployment-contract.md) — `http://backend:8000` on compose network (B2.7+). Env templates: `n8n/.env.example`, `backend/.env.example`.
 
-# Alpstein n8n — Runtime Start (T13.0-impl)
+---
+
+## Portable compose path (B2.7+) — not live Contabo
+
+Use **repo root** compose — **not** this directory’s `docker-compose.yml`.
+
+| Item | Value |
+|------|--------|
+| Compose | [`docker-compose.yml`](../../docker-compose.yml) service `n8n` |
+| Runbook | [`n8n-compose.md`](../deployment/n8n-compose.md) |
+| `BACKEND_BASE_URL` | `http://backend:8000` |
+| Container | `alpstein_n8n_compose` (avoids clash with legacy `alpstein_n8n`) |
+| Dev UI port | `127.0.0.1:15680` (overlay) — legacy uses **15679** |
+
+```bash
+cd /opt/alpstein-ai
+docker-compose -p alpstein-ai up -d postgres backend n8n
+docker exec alpstein_n8n_compose wget -qO- http://backend:8000/api/v1/health/ready
+```
+
+**Do not** run portable `n8n` alongside live `alpstein_n8n` on the same host without a cutover plan (shared volume name, Telegram webhook).
+
+---
+
+# Alpstein n8n — Runtime Start (T13.0-impl) — legacy host
 
 **Compose:** [`n8n/docker-compose.yml`](../../n8n/docker-compose.yml)  
 **Deployment plan:** [`n8n-deployment-plan.md`](n8n-deployment-plan.md)  

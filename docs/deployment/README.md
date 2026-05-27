@@ -22,12 +22,14 @@
 
 | File | Purpose |
 |------|---------|
-| [`docker-compose.yml`](../../docker-compose.yml) | `postgres` + `backend` (B2.6) — internal network only |
-| [`docker-compose.dev.yml`](../../docker-compose.dev.yml) | Dev-only `127.0.0.1` binds (postgres `15433`, backend `8000`) |
+| [`docker-compose.yml`](../../docker-compose.yml) | `postgres` + `backend` + `n8n` (B2.6–B2.7) — internal network only |
+| [`docker-compose.dev.yml`](../../docker-compose.dev.yml) | Dev-only `127.0.0.1` binds (postgres `15433`, backend `8000`, n8n `15680`) |
 | [`.env.example`](../../.env.example) | `POSTGRES_*`, backend vars for compose |
 
 | [`backend/Dockerfile`](../../backend/Dockerfile) | Backend image build context |
 
-n8n on compose network: **B2.7** per contract §12.
+| [`n8n-compose.md`](n8n-compose.md) | B2.7 n8n on `alpstein_internal` → `http://backend:8000` |
+
+Legacy host n8n: [`n8n/docker-compose.yml`](../../n8n/docker-compose.yml) + [`n8n-runtime-start.md`](../ops/n8n-runtime-start.md).
 
 **Python version (portable image):** 3.12 (`python:3.12-slim-bookworm`).

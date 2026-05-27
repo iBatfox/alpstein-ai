@@ -1,7 +1,8 @@
-# Postgres + backend compose (B2.2 / B2.6)
+# Postgres + backend + n8n compose (B2.2 / B2.6 / B2.7)
 
-**Contract:** [`deployment-contract.md`](deployment-contract.md) §7  
-**Compose:** [`docker-compose.yml`](../../docker-compose.yml) (`postgres` + `backend`)
+**Contract:** [`deployment-contract.md`](deployment-contract.md) §7–§8  
+**Compose:** [`docker-compose.yml`](../../docker-compose.yml) (`postgres` + `backend` + `n8n`)  
+**n8n detail:** [`n8n-compose.md`](n8n-compose.md)
 
 Dedicated Alpstein PostgreSQL — **not** the legacy `backend_postgres` / `bitrix_app` instance.
 

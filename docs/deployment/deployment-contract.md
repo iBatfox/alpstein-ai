@@ -506,7 +506,7 @@ Implementation order — **do not skip**. No Docker implementation before B2.0 i
 | **B2.4** | Readiness health | `GET /api/v1/health/ready` + tests | Revert backend commit |
 | **B2.5** | Backend entrypoint contract | **done** — `docker-entrypoint.sh`; see [`backend-image.md`](backend-image.md) | Revert entrypoint + image tag |
 | **B2.6** | Minimal compose | **done** — `postgres` + `backend`; see [`postgres-compose.md`](postgres-compose.md) | `docker-compose -p alpstein-ai down`; volume snapshot |
-| **B2.7** | n8n network integration | n8n uses `http://backend:8000`; drop host-gateway path | Prior n8n compose + export |
+| **B2.7** | n8n network integration | **done** — `n8n` on `alpstein_internal`; [`n8n-compose.md`](n8n-compose.md) | Revert to `baseline-b2.6-compose` |
 | **B2.8** | Bootstrap profile | Documented seed/SQL order; compose profile | DB volume restore |
 | **B2.9** | Clean-clone gate | `docs/audits/clean-clone-gate-*.md` pass transcript | Tag previous RDU |
 
@@ -559,8 +559,19 @@ Implementation order — **do not skip**. No Docker implementation before B2.0 i
 - [x] `ALPSTEIN_AI_DATABASE_URL` uses `postgres:5432` DNS (not host gateway)
 - [x] Readiness healthcheck `GET /api/v1/health/ready` (httpx in-container)
 - [x] Dev overlay `127.0.0.1:8000:8000` only; no public `0.0.0.0` bind
-- [x] No n8n service in root compose
+- [x] No n8n service in root compose (superseded by B2.7)
 - [ ] Operator verifies `docker-compose -p alpstein-ai up -d postgres backend` on clean clone
+
+### B2.7 exit criteria
+
+- [x] `n8n` service in root `docker-compose.yml` on `alpstein_internal`
+- [x] `BACKEND_BASE_URL=http://backend:8000` in portable path (`environment` override + `n8n/.env.example`)
+- [x] Legacy `172.20.0.1:8010` documented as Contabo-only (`n8n/docker-compose.yml`, `n8n-runtime-start.md`)
+- [x] No `extra_hosts` / host-gateway on portable n8n service
+- [x] `depends_on: backend` with readiness healthcheck
+- [x] No host port in default compose; dev overlay `15680` only
+- [x] Live `alpstein_n8n` legacy compose untouched
+- [ ] Operator verifies n8n → `GET http://backend:8000/api/v1/health/ready` on clean clone
 
 ---
 
@@ -608,7 +619,8 @@ Evidence: committed gate transcript in `docs/audits/`.
 | 2026-05-27 | B2.3 — `backend/Dockerfile`, `requirements-prod.txt`; [`backend-image.md`](backend-image.md) |
 | 2026-05-27 | B2.5 — `docker-entrypoint.sh` migrate-then-serve lifecycle |
 | 2026-05-27 | B2.6 — `backend` service in root compose; [`postgres-compose.md`](postgres-compose.md) |
+| 2026-05-27 | B2.7 — `n8n` service on `alpstein_internal`; [`n8n-compose.md`](n8n-compose.md) |
 
 ---
 
-*End of deployment contract. Next phase: B2.7 — n8n network integration.*
+*End of deployment contract. Next phase: B2.8 — bootstrap profile.*
