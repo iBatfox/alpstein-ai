@@ -1,3 +1,7 @@
+**Doc status:** runtime-derived  
+**Tier:** ops/production (pending move)  
+**Canonical anchor:** [`../architecture/canonical-runtime-architecture.md`](../architecture/canonical-runtime-architecture.md) §7
+
 # Workflow 1 — Test Webhook (T13.2–T13.5)
 
 **Workflow file:** [`n8n/workflows/t13_workflow1_test_webhook_skeleton.json`](../../n8n/workflows/t13_workflow1_test_webhook_skeleton.json)  
@@ -260,7 +264,7 @@ Telegram text includes: `notification_type`, `priority`, `reason`, customer name
 
 | Item | Task |
 |------|------|
-| Telegram **customer** Trigger + Send | **T14** — after [`post-t13-5-stabilization.md`](post-t13-5-stabilization.md) |
+| Telegram **customer** Trigger + Send | **T14.3** — [`n8n-workflow-telegram-customer-ingress.md`](n8n-workflow-telegram-customer-ingress.md); live test **T14.4** |
 | Detailed error branches (401 vs 404 vs 5xx) | **T13.6** |
 | HTTP retries | **T13.6** |
 | E2E checklist sign-off | **T13.7** |

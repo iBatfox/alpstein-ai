@@ -1,3 +1,7 @@
+**Doc status:** runtime-derived  
+**Tier:** architecture/runtime (pending move)  
+**Canonical anchor:** [`canonical-runtime-architecture.md`](canonical-runtime-architecture.md) §8 — dual-bot model **implemented**
+
 # Telegram channel credentials — production model (design)
 
 **Status:** architecture / planning only (post–T13.5 Gate 2)  
@@ -182,9 +186,11 @@ See [`tasks/todo/t14-telegram-customer-ingress.md`](../../tasks/todo/t14-telegra
 Telegram Trigger (client bot credential)
   → Normalize Telegram Incoming
   → POST Backend
-  → Shape Telegram Customer Reply
-  → Telegram Send Message (same client bot credential)
-  → (existing) IF notify_owner → Shape Owner Notification → Telegram Owner Notify (Alpstein credential)
+       ├─ (success) → Shape Telegram Customer Reply → Telegram Send Message (same client bot credential)
+       ├─ (success) → IF notify_owner → Shape Owner Notification → Telegram Owner Notify (Alpstein credential)
+       └─ (error)   → safe customer error text → Telegram Send Message
 ```
+
+Owner notify is parallel from POST Backend success — not after customer Send.
 
 **Prerequisite:** Complete [`post-t13-5-stabilization.md`](../ops/post-t13-5-stabilization.md) before T14.1.

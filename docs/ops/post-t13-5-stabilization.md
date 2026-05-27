@@ -1,3 +1,6 @@
+**Doc status:** archived  
+**Tier:** ops/archived (pending move)
+
 # Post–T13.5 stabilization (before T14)
 
 **Purpose:** Freeze the working test + owner-notify slice before live Telegram **customer** ingress.  

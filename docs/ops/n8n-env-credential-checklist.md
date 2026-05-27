@@ -1,3 +1,6 @@
+**Doc status:** canonical (ops)  
+**Tier:** ops/production (pending move)
+
 # n8n Environment & Credential Checklist (T13.1)
 
 **Purpose:** Pre-flight checklist before building n8n Workflow 1 (test webhook path).  
@@ -82,7 +85,7 @@ Required for **owner notification branch only** — **not** for customer Telegra
 | `TELEGRAM_BOT_TOKEN` | Bot API token (prefer n8n **Telegram API** credential, not env literal) | **T13.5** — owner notify |
 | `TELEGRAM_CHAT_ID` | Owner destination chat ID | **T13.5** — owner notify |
 
-- [ ] Credential name in UI: e.g. **`Telegram account`** — separate from any customer bot.
+- [ ] Credential name in UI: e.g. **`AlpsteinAIbot`** (owner) — separate from customer bot.
 - [ ] Never use this credential on **Telegram Trigger** for customer messages.
 
 ### 3b. Customer ingress (T14 — client-owned bot per business)
@@ -90,11 +93,19 @@ Required for **owner notification branch only** — **not** for customer Telegra
 | Name | Purpose | Required when |
 |------|---------|---------------|
 | n8n credential `telegram_customer_<business_external_id>` | Client bot token | **T14** — Trigger + Send |
+| `n8n/.env.telegram.customer` (gitignored) | One-time handoff for CLI import — **not** committed | **T14.2** import only |
 | Backend `tenant_channel_settings.metadata.credential_ref` | Reference label only — **no token** | **T14** (optional metadata) |
 
 - [ ] Client provides token via secure onboarding handoff — not repo/docs.
 - [ ] Token only in n8n encrypted credential store; rotation = update credential in n8n UI.
 - [ ] Workflow JSON: credential **name** binding in UI after import; no literals in git export.
+- [ ] **T14.2:** `getMe` on owner (`Telegram account`) and customer (`telegram_customer_demo_barbershop_001`) — `bot_id` / `username` must differ.
+- [ ] **T14.2:** Run `n8n/scripts/t14-import-customer-telegram-credential.sh` then `n8n/scripts/t14-verify-telegram-bots.sh` → `SEPARATION_VERIFIED=yes`.
+- [ ] Never set customer bot token in `TELEGRAM_CHAT_ID` or owner credential.
+
+**T14.2 runtime (2026-05-25):** owner `AlpsteinAIbot` (`@AlpsteinAibot`); customer `alpsteinai_0001bot` (`@alpsteinai_0001bot`); `SEPARATION_VERIFIED=yes` — see [`telegram-customer-ingress.md`](telegram-customer-ingress.md) § T14.2.
+
+**T14.3 workflow:** [`n8n-workflow-telegram-customer-ingress.md`](n8n-workflow-telegram-customer-ingress.md) — `alpstein-incoming-message-telegram`; env `ALPSTEIN_TELEGRAM_BUSINESS_ID` optional.
 
 **Test channel (T13.2–T13.4):** Telegram vars **not required.**
 
@@ -222,6 +233,6 @@ curl -sS -X POST "${BACKEND_BASE_URL}/api/v1/webhook/message" \
 | Document | Topic |
 |----------|--------|
 | [`t13-n8n-workflow-plan.md`](../project-status/t13-n8n-workflow-plan.md) | Full workflow design |
-| [`tasks/todo/t13-n8n-workflow-slice.md`](../../tasks/todo/t13-n8n-workflow-slice.md) | T13 task breakdown + T13.7 E2E |
+| [`tasks/done/t13-n8n-workflow-slice.md`](../../tasks/done/t13-n8n-workflow-slice.md) | T13 task breakdown + T13.7 E2E |
 | [`specs/architecture/n8n-architecture.md`](../../specs/architecture/n8n-architecture.md) | n8n role and boundaries |
 | [`specs/architecture/deployment.md`](../../specs/architecture/deployment.md) | Docker services, domains |
