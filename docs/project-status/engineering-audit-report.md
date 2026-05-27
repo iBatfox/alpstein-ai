@@ -49,8 +49,8 @@ The primary live integration path proven in ops docs is **Telegram customer ingr
 ### Biggest risks
 
 1. **Documentation drift** — `current-state.md`, `next-steps.md`, `engineering-archive.md`, and `backlog.md` contradict runtime (e.g. CIP marked “not implemented” in next-steps while CIP-B is done).
-2. **History contamination** — no History Safety / Context Freshness implementation; stale `ai` rows can override updated operator/tenant context in model behavior.
-3. **Split-brain pre-sales behavior** — `alpstein_ai_demo_001` uses intent path; other businesses still get full `PRE_SALES_TASK_APPENDIX` (~54 lines every turn).
+2. **History contamination** — HF-1 mitigates stale `ai` rows; LLM may still err — not a versioning system.
+3. **Split-brain pre-sales behavior** — **resolved (P0 + P1):** Alpstein demo uses charter + intent; non-Alpstein uses core task + generic greeting only; legacy appendix removed from codebase.
 4. **Langfuse tag drift** — demo tag still keyed to `demo_barbershop_001` constant, not `alpstein_ai_demo_001`; intent metadata (CIP-C) missing.
 5. **Incomplete channel/attribution** — ATTR-2 validation only; no persistence or Prompt Builder block.
 6. **Telegram ops gap** — T14.5 regression and T14.6 export scrub not signed off; workflow export `active: false`.
@@ -120,11 +120,11 @@ The primary live integration path proven in ops docs is **Telegram customer ingr
 | System | Status |
 |--------|--------|
 | Platform `prompt_templates` + task registry | **Implemented** |
-| `PRE_SALES_TASK_APPENDIX` (legacy, all non-intent businesses) | **Implemented** |
 | `PRE_SALES_CORE_CHARTER` + intent slices (Alpstein demo only) | **Implemented** (CIP-B) |
+| Non-Alpstein §2 (core task + generic greeting only) | **Implemented** (P0 + P1) |
 | `GreetingPolicyService` (first/follow-up/soft_return + language) | **Implemented** |
 | `ConversationIntentService` (heuristics) | **Implemented** (CIP-A); scoped to one `business_id` |
-| History safety / context freshness | **Spec-only** (plan in `tasks/done/Plan Context Freshness…`) |
+| History safety / context freshness | **Implemented** (HF-1) |
 | Lead signal keywords (urgent/handoff) | **Implemented**; **not** tied to intent |
 
 ### Orchestration
@@ -230,7 +230,7 @@ reply_to_customer (registry)
 **Otherwise:**
 
 ```text
-reply_to_customer + PRE_SALES_TASK_APPENDIX (full) + greeting
+reply_to_customer + generic greeting only (no pre-sales charter or intent)
 ```
 
 Evidence: `prompt_builder_service._build_task_instructions_body`, `conversation_intent_policy.py`.

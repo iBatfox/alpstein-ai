@@ -18,13 +18,8 @@ from app.schemas.greeting import GreetingMode, GreetingPolicy
 from app.schemas.knowledge import KnowledgeRetrievalResult
 from app.services.greeting_prompt_instructions import build_greeting_instruction_block
 from app.services.intent_prompt_instructions import build_intent_instruction_block
-from app.services.pre_sales_prompt_instructions import (
-    PRE_SALES_CORE_CHARTER,
-    PRE_SALES_TASK_APPENDIX,
-)
+from app.services.pre_sales_prompt_instructions import PRE_SALES_CORE_CHARTER
 from app.services.prompt_builder_service import (
-    PLATFORM_TASK_REGISTRY,
-    REPLY_TO_CUSTOMER_TASK,
     PromptBuilderService,
     _build_task_instructions_body,
 )
@@ -72,24 +67,6 @@ def _intent_body(intent: ConversationIntent) -> str:
     return build_intent_instruction_block(intent)
 
 
-def _pre_cip_baseline_task_body(*, with_greeting: bool = True) -> str:
-    parts = [
-        PLATFORM_TASK_REGISTRY[REPLY_TO_CUSTOMER_TASK],
-        PRE_SALES_TASK_APPENDIX,
-    ]
-    if with_greeting:
-        parts.append(
-            build_greeting_instruction_block(
-                GreetingPolicy(
-                    mode=GreetingMode.FIRST_CONTACT,
-                    reply_language_code="ru",
-                    reply_language_name="Russian",
-                )
-            )
-        )
-    return "\n\n".join(parts)
-
-
 def _alpstein_intent_task_body(
     intent: ConversationIntent,
     *,
@@ -132,7 +109,7 @@ def test_task_instructions_contain_no_hardcoded_contact_values(
         assert fragment not in task
 
 
-def test_legacy_appendix_has_no_hardcoded_contact_values(alpstein_configuration):
+def test_non_alpstein_path_has_no_hardcoded_contact_values(alpstein_configuration):
     prompt = PromptBuilderService().build_reply_to_customer(
         configuration=alpstein_configuration,
         knowledge=KnowledgeRetrievalResult(snippets=()),
@@ -187,7 +164,7 @@ def test_implementation_interest_uses_operator_contact_when_provided(
     assert "do not invent contact" in task.lower()
 
 
-def test_legacy_appendix_absent_when_alpstein_product_behavior_enabled(alpstein_configuration):
+def test_presales_header_absent_when_alpstein_product_behavior_enabled(alpstein_configuration):
     resolution = ConversationIntentResolution(
         intent=ConversationIntent.PRICING_INTEREST,
         matched_rule="pricing_interest:ru_price",
@@ -205,15 +182,6 @@ def test_legacy_appendix_absent_when_alpstein_product_behavior_enabled(alpstein_
     assert _LEGACY_APPENDIX_HEADER not in task
     assert PRE_SALES_CORE_CHARTER in task
     assert task.count("CONVERSATION INTENT (active turn):") == 1
-
-
-def test_section2_smaller_than_pre_cip_baseline_with_greeting():
-    baseline = len(_pre_cip_baseline_task_body(with_greeting=True))
-    intent_path = len(
-        _alpstein_intent_task_body(ConversationIntent.PRICING_INTEREST, with_greeting=True)
-    )
-    assert intent_path < baseline
-    assert intent_path < baseline * 0.85
 
 
 def test_non_alpstein_path_excludes_presales_and_alpstein_greeting(alpstein_configuration):
@@ -238,7 +206,7 @@ def test_non_alpstein_path_excludes_presales_and_alpstein_greeting(alpstein_conf
     assert "I am your Alpstein AI assistant" not in task
     assert "technical pre-sales consultant" not in task
     assert "Do not use Alpstein AI product messaging" in task
-    assert len(task) < len(PRE_SALES_TASK_APPENDIX)
+    assert len(task) < len(PRE_SALES_CORE_CHARTER)
 
 
 @pytest.mark.parametrize(

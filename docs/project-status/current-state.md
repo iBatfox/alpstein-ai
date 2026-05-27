@@ -57,7 +57,7 @@ Specification-driven MVP with **backend AI orchestration complete**, **n8n test 
 - `operator_business_context` on webhook → PromptBuilder overlay (`T14-OC-2`)
 - AI stack: Configuration → Knowledge → PromptBuilder → Gateway → PromptRun → orchestration + fallback + duplicate guard
 - **Greeting:** `GreetingPolicyService` + greeting blocks in §2 task_instructions
-- **Intent (partial):** `ConversationIntentService` + intent slices for `alpstein_ai_demo_001` only; legacy `PRE_SALES_TASK_APPENDIX` for other businesses
+- **Intent (partial):** `ConversationIntentService` + intent slices for `alpstein_ai_demo_001` only; non-Alpstein tenants use core task + generic greeting only (no pre-sales appendix)
 - **Langfuse (dev):** `LangfuseTracingService` on orchestration; greeting tags; intent metadata constants exist but **runtime export not wired (CIP-C)**
 - pytest: **308** test functions in `backend/tests/` (as-of 2026-05-27; run `pytest` in venv to verify green)
 
@@ -112,7 +112,7 @@ Specification-driven MVP with **backend AI orchestration complete**, **n8n test 
 | PromptBuilder 8-section assembly | **implemented** |
 | Greeting orchestration | **implemented** |
 | Intent policy (`alpstein_ai_demo_001`) | **partial** (one business) |
-| Legacy pre-sales appendix (other businesses) | **implemented** (fallback path) |
+| Legacy pre-sales appendix | **removed** (P1); non-Alpstein uses core task + generic greeting only |
 | Operator context overlay | **implemented** |
 | History Safety | **spec-only** |
 | Langfuse intent metadata at runtime | **planned** (CIP-C) |

@@ -69,8 +69,6 @@ VARIABLE_SECTION_TRIM_ORDER: tuple[str, ...] = (
     "conversation_history",
 )
 
-_LEGACY_APPENDIX_HEADER = "TECHNICAL PRE-SALES BEHAVIOR (platform authority):"
-
 
 def _build_task_instructions_body(
     *,

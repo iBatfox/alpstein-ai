@@ -16,7 +16,7 @@ Single gate: `alpstein_product_behavior_enabled_for_business()` in `conversation
 | `alpstein_ai_demo_001` | Core task + pre-sales charter + intent slice + Alpstein greeting |
 | All others | Core task + generic greeting only |
 
-`PRE_SALES_TASK_APPENDIX` no longer injected at runtime (constant retained for tests/docs only).
+`PRE_SALES_TASK_APPENDIX` removed from codebase in P1; Alpstein uses CIP path only.
 
 ## Verify
 

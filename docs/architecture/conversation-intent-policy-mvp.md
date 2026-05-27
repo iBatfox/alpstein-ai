@@ -13,13 +13,13 @@
 | Document / code | Role |
 |-----------------|------|
 | [`greeting-orchestration-mvp.md`](greeting-orchestration-mvp.md) | Conversation **lifecycle** greeting (first / follow-up / soft return) — **keep separate** |
-| [`technical-pre-sales-behavior-mvp.md`](technical-pre-sales-behavior-mvp.md) | Describes today’s always-on `PRE_SALES_TASK_APPENDIX` — **to be refactored** per this spec |
+| [`technical-pre-sales-behavior-mvp.md`](technical-pre-sales-behavior-mvp.md) | Historical pre-CIP design — **superseded** by charter + intent (P0/P1) |
 | [`prompt-builder-rules.md`](../../specs/architecture/prompt-builder-rules.md) | Canonical section ordering |
-| `backend/app/services/pre_sales_prompt_instructions.py` | Current monolithic appendix (~54 lines, every turn) |
+| `backend/app/services/pre_sales_prompt_instructions.py` | `PRE_SALES_CORE_CHARTER` only; legacy appendix **removed** (P1) |
 
 **Scope of this document:** architecture and behavior contract only.
 
-**Implemented (CIP-B):** `ConversationIntentService` wired in `AiReplyOrchestrationService` for `alpstein_ai_demo_001` only; §2 uses `PRE_SALES_CORE_CHARTER` + one intent slice; legacy `PRE_SALES_TASK_APPENDIX` retained for other businesses.
+**Implemented (CIP-B + P0/P1):** `ConversationIntentService` wired in `AiReplyOrchestrationService` for `alpstein_ai_demo_001` only; §2 uses `PRE_SALES_CORE_CHARTER` + one intent slice; non-Alpstein businesses use core task + generic greeting only; `PRE_SALES_TASK_APPENDIX` removed from codebase (P1).
 
 **Still pending:** CIP-C Langfuse metadata, CIP-D live smoke, DB/tenant content edits.
 

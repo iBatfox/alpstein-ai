@@ -14,10 +14,7 @@ from app.schemas.conversation_context import ConversationHistory, ConversationHi
 from app.schemas.conversation_intent import ConversationIntent, ConversationIntentResolution
 from app.schemas.greeting import GreetingMode, GreetingPolicy
 from app.schemas.knowledge import KnowledgeRetrievalResult
-from app.services.pre_sales_prompt_instructions import PRE_SALES_TASK_APPENDIX
 from app.services.prompt_builder_service import (
-    PLATFORM_TASK_REGISTRY,
-    REPLY_TO_CUSTOMER_TASK,
     PromptBuilderService,
     _build_task_instructions_body,
 )
@@ -131,7 +128,7 @@ def test_non_alpstein_excludes_alpstein_contamination(barbershop_configuration):
     assert "Do not use Alpstein AI product messaging" in task
 
 
-def test_non_alpstein_task_body_smaller_than_legacy_appendix_path():
+def test_non_alpstein_task_body_smaller_than_alpstein_intent_path():
     generic = _build_task_instructions_body(
         alpstein_product_behavior_enabled=False,
         conversation_intent=None,
@@ -141,11 +138,19 @@ def test_non_alpstein_task_body_smaller_than_legacy_appendix_path():
             reply_language_name="English",
         ),
     )
-    legacy = (
-        f"{PLATFORM_TASK_REGISTRY[REPLY_TO_CUSTOMER_TASK]}\n\n"
-        f"{PRE_SALES_TASK_APPENDIX}"
+    alpstein = _build_task_instructions_body(
+        alpstein_product_behavior_enabled=True,
+        conversation_intent=ConversationIntentResolution(
+            intent=ConversationIntent.TECHNICAL_INTEREST,
+            matched_rule="test",
+        ),
+        greeting_policy=GreetingPolicy(
+            mode=GreetingMode.FOLLOW_UP,
+            reply_language_code="en",
+            reply_language_name="English",
+        ),
     )
-    assert len(generic) < len(legacy)
+    assert len(generic) < len(alpstein)
 
 
 def test_greeting_lifecycle_works_for_non_alpstein(barbershop_configuration):

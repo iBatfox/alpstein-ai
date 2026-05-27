@@ -146,15 +146,17 @@ Canonical section order ([`assembled_prompt.py`](../../backend/app/schemas/assem
 Built by `_build_task_instructions_body` ([`prompt_builder_service.py`](../../backend/app/services/prompt_builder_service.py)):
 
 1. Base `reply_to_customer` task registry text (always).
-2. **Intent path** (`intent_policy_enabled=True`, only `alpstein_ai_demo_001`):
+2. **Alpstein product path** (`alpstein_product_behavior_enabled=True`, only `alpstein_ai_demo_001`):
    - `PRE_SALES_CORE_CHARTER` + one `build_intent_instruction_block(intent)` slice.
    - **Status:** **implemented**
-3. **Legacy path** (all other businesses):
-   - Full `PRE_SALES_TASK_APPENDIX`.
-   - **Status:** **deprecated but still active** (fallback for non-demo businesses)
-4. **Greeting block** (when `GreetingPolicy` resolved):
-   - Appended via `build_greeting_instruction_block`.
+3. **Non-Alpstein path** (all other businesses):
+   - Core task + generic greeting block only; no pre-sales charter or intent slices.
    - **Status:** **implemented**
+4. **Greeting block** (when `GreetingPolicy` resolved):
+   - Appended via `build_greeting_instruction_block` (`alpstein_greeting` flag selects intro variant).
+   - **Status:** **implemented**
+
+`PRE_SALES_TASK_APPENDIX` was removed from the codebase in P1 (2026-05-27); it is not assembled at runtime.
 
 ### §3 Tenant business context
 
@@ -343,14 +345,13 @@ Ideal behaviors described only in `docs/architecture/conversation-intent-policy-
 
 | Risk | Detail |
 |------|--------|
-| Legacy appendix on non-Alpstein businesses | Full `PRE_SALES_TASK_APPENDIX` still injected — larger, brochure-adjacent tone |
 | History vs operator context | HF-1 preamble instructs model to prefer current operator/tenant context over stale `ai` lines; LLM may still err — not a versioning system |
 | Langfuse demo tag | Tag `alpstein_ai_demo_001` applied when `business_external_id == demo_barbershop_001` ([`langfuse_tracing_service.py`](../../backend/app/services/langfuse_tracing_service.py)) — misleading trace labels |
 | Single-business intent | Other tenants do not get intent slices; behavior differs by `external_id` |
 
 ### Non-Alpstein tenant behavior
 
-- Any business except `alpstein_ai_demo_001`: legacy appendix + greeting; no intent slices.
+- Any business except `alpstein_ai_demo_001`: core task + generic greeting only; no pre-sales charter, no intent slices, no Alpstein product intro.
 - Multi-tenant data model supports multiple tenants; production rollout rules beyond demo seeds are **not** encoded in runtime policy services.
 
 ---
@@ -375,7 +376,7 @@ Ideal behaviors described only in `docs/architecture/conversation-intent-policy-
 |------|---------------|-----------------|----------|-------------------|
 | **CIP-C Langfuse intent metadata** | Constants only; not in Langfuse metadata | `conversation-intent-policy-mvp.md` § CIP-C | **Important** | `alpstein-backend-engineer` |
 | **ATTR persistence** | Schema validates; no DB write | Attribution design docs | **Important** | `alpstein-backend-engineer` + `alpstein-database-architect` |
-| **Legacy appendix path** | Removed from runtime; non-Alpstein uses minimal §2; Alpstein uses CIP charter + intent | Intent policy doc | **Resolved** (P0) | — |
+| **Legacy appendix path** | Removed from codebase (P1); non-Alpstein uses minimal §2; Alpstein uses CIP charter + intent | Intent policy doc | **Resolved** (P0 + P1) | — |
 | **Langfuse demo tag** | Tags `alpstein_ai_demo_001` when business is `demo_barbershop_001` | `langfuse-tracing.md` may imply Alpstein demo tag matches business | **Important** | `alpstein-backend-engineer` (CIP-C) |
 | **n8n repo vs runtime** | Repo exports `active: false`; runtime id `2lMuaSWD1XFOXLEK` deactivated per ops | Some status docs historically said “missing n8n” | **Important** | `alpstein-n8n-integration-engineer` (T14.6) |
 | **Intent in specs** | CIP behavior in `docs/architecture/` | `prompt-builder-rules.md` may not list intent §2 amendment | **Minor** | `alpstein-api-designer` / spec task |
@@ -461,13 +462,12 @@ Not part of canonical runtime today:
 
 Unresolved — require human decision, not archivist resolution:
 
-1. **Legacy appendix retirement** — when/how to disable `PRE_SALES_TASK_APPENDIX` for remaining demo businesses.
-2. **Business-aware prompt assembly** — extend intent policy beyond `alpstein_ai_demo_001` vs keep single-business MVP.
-3. **Langfuse metadata wiring** — CIP-C scope and priority.
-4. **Active workflow export freeze** — T14.6 gate: which runtime id becomes repo canonical.
-5. **Multi-tenant rollout rules** — how new businesses get intent policy, operator context, and seed data without contamination.
-6. **Langfuse tag semantics** — fix barbershop→Alpstein tag mapping or document as intentional.
-7. **Attribution persistence scope** — ATTR-3 column design and write path ownership.
+1. **Business-aware prompt assembly** — extend intent policy beyond `alpstein_ai_demo_001` vs keep single-business MVP.
+2. **Langfuse metadata wiring** — CIP-C scope and priority.
+3. **Active workflow export freeze** — T14.6 gate: which runtime id becomes repo canonical.
+4. **Multi-tenant rollout rules** — how new businesses get intent policy, operator context, and seed data without contamination.
+5. **Langfuse tag semantics** — fix barbershop→Alpstein tag mapping or document as intentional.
+6. **Attribution persistence scope** — ATTR-3 column design and write path ownership.
 
 ---
 

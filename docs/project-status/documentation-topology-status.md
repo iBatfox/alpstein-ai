@@ -103,7 +103,7 @@ Verified against code; must stay aligned with canonical map.
 | Cluster | Members | Recommendation |
 |---------|---------|----------------|
 | Telegram ingress | `ops/telegram-customer-ingress.md`, `ops/n8n-workflow-telegram-customer-ingress.md` | Keep workflow doc canonical; mapping as appendix or merge Phase 1.5 |
-| Pre-sales behavior | `technical-pre-sales-behavior-mvp.md`, `conversation-intent-policy-mvp.md`, code `PRE_SALES_TASK_APPENDIX` | Deprecate technical-pre-sales doc; map §5 documents both paths |
+| Pre-sales behavior | `technical-pre-sales-behavior-mvp.md`, `conversation-intent-policy-mvp.md`, `PRE_SALES_CORE_CHARTER` + intent slices | Deprecate technical-pre-sales doc; map §5 documents Alpstein vs non-Alpstein §2 paths |
 | Project snapshot | `current-state.md`, `engineering-archive.md`, `canonical-runtime-architecture.md` | **Map** = architecture; **current-state** = snapshot; **archive** = history |
 | T13 task breakdown | `tasks/done/t13-n8n-workflow-slice.md`, `project-status/t13-n8n-workflow-plan.md` | Plan → historical/; done task stays in `tasks/done/` |
 | Test webhook docs | `n8n-workflow1-test-webhook.md`, `t13-n8n-workflow-plan.md` | Cross-link only; archive plan |
