@@ -5,6 +5,8 @@
 
 Living project status vs historical record.
 
+**START HERE →** [`../architecture/canonical-runtime-architecture.md`](../architecture/canonical-runtime-architecture.md)
+
 ---
 
 ## Current tier (living documents)
@@ -18,6 +20,17 @@ Living project status vs historical record.
 | [`documentation-topology-status.md`](documentation-topology-status.md) | canonical | Doc structure inventory |
 
 **Runtime architecture (primary):** [`../architecture/canonical-runtime-architecture.md`](../architecture/canonical-runtime-architecture.md)
+
+## How to use status docs safely (AI/engineer navigation)
+
+When anything looks inconsistent, resolve in this order:
+
+1. Runtime code (`backend/`, `n8n/workflows/`)
+2. Orchestration layer (backend services + n8n normalize + ops runbooks)
+3. Canonical runtime map (`../architecture/canonical-runtime-architecture.md`)
+4. Current status docs (this folder: `current-state`, `completed`, `next-steps`)
+5. Specs (`specs/`)
+6. Historical / deprecated (`historical/`, archived plans)
 
 ---
 

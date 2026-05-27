@@ -9,6 +9,8 @@
 
 **[`canonical-runtime-architecture.md`](canonical-runtime-architecture.md)**
 
+**START HERE →** [`canonical-runtime-architecture.md`](canonical-runtime-architecture.md)
+
 - **Tier:** canonical
 - **Scope:** Actual runtime architecture only (backend, n8n, PromptBuilder, DB, Telegram, observability)
 - **Use when:** Onboarding engineers, auditing drift, resolving doc conflicts
@@ -20,10 +22,11 @@ All other architecture docs in this folder are **supporting** — verify against
 
 ## Runtime truth hierarchy (architecture)
 
-1. [`canonical-runtime-architecture.md`](canonical-runtime-architecture.md)
-2. Runtime code (`backend/app/services/`, `n8n/workflows/`)
-3. Runtime-derived docs below (behavior detail)
-4. [`specs/architecture/`](../../specs/architecture/) — contract; drift → map §12
+1. Runtime code (`backend/app/services/`, `n8n/workflows/`)
+2. Backend orchestration + prompt assembly entrypoints (services) and n8n workflow shapes (how code is exercised)
+3. [`canonical-runtime-architecture.md`](canonical-runtime-architecture.md) (canonical runtime map)
+4. Runtime-derived docs below (behavior detail; must match the map)
+5. [`specs/architecture/`](../../specs/architecture/) — contract; drift → map §12
 
 ---
 

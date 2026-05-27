@@ -10,6 +10,8 @@ This index defines **where to read** and **what tier of truth** each area repres
 
 ## Start here
 
+**START HERE →** [`architecture/canonical-runtime-architecture.md`](architecture/canonical-runtime-architecture.md)
+
 | Question | Read first |
 |----------|------------|
 | What is the **actual runtime architecture** today? | [`architecture/canonical-runtime-architecture.md`](architecture/canonical-runtime-architecture.md) |
@@ -26,8 +28,8 @@ This index defines **where to read** and **what tier of truth** each area repres
 When documents conflict, trust in this order:
 
 1. **Runtime code** — `backend/`, `n8n/workflows/`
-2. **Canonical runtime map** — [`architecture/canonical-runtime-architecture.md`](architecture/canonical-runtime-architecture.md)
-3. **Accepted tasks** — `tasks/done/`
+2. **Orchestration layer** — backend services (`WebhookMessageService`, `AiReplyOrchestrationService`, `PromptBuilderService`) + n8n normalize/runbooks (how code is used in ops)
+3. **Canonical runtime map** — [`architecture/canonical-runtime-architecture.md`](architecture/canonical-runtime-architecture.md)
 4. **Project status (current tier)** — `project-status/current-state.md`, `completed.md`, `next-steps.md`
 5. **Ops runbooks** — `docs/ops/` (production paths)
 6. **Runtime-derived architecture docs** — `docs/architecture/*.md` (behavior detail; verify against map)
