@@ -375,7 +375,7 @@ Ideal behaviors described only in `docs/architecture/conversation-intent-policy-
 |------|---------------|-----------------|----------|-------------------|
 | **CIP-C Langfuse intent metadata** | Constants only; not in Langfuse metadata | `conversation-intent-policy-mvp.md` § CIP-C | **Important** | `alpstein-backend-engineer` |
 | **ATTR persistence** | Schema validates; no DB write | Attribution design docs | **Important** | `alpstein-backend-engineer` + `alpstein-database-architect` |
-| **Legacy appendix path** | Active for non-`alpstein_ai_demo_001` | Intent policy doc implies replacement | **Important** | Product + `alpstein-conversation-designer` |
+| **Legacy appendix path** | Removed from runtime; non-Alpstein uses minimal §2; Alpstein uses CIP charter + intent | Intent policy doc | **Resolved** (P0) | — |
 | **Langfuse demo tag** | Tags `alpstein_ai_demo_001` when business is `demo_barbershop_001` | `langfuse-tracing.md` may imply Alpstein demo tag matches business | **Important** | `alpstein-backend-engineer` (CIP-C) |
 | **n8n repo vs runtime** | Repo exports `active: false`; runtime id `2lMuaSWD1XFOXLEK` deactivated per ops | Some status docs historically said “missing n8n” | **Important** | `alpstein-n8n-integration-engineer` (T14.6) |
 | **Intent in specs** | CIP behavior in `docs/architecture/` | `prompt-builder-rules.md` may not list intent §2 amendment | **Minor** | `alpstein-api-designer` / spec task |
