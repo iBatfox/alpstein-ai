@@ -114,9 +114,9 @@ docker run --rm --network alpstein_internal curlimages/curl:8.5.0 -sf \
 
 ---
 
-## B2.8 drift (remaining)
+## Bootstrap (B2.8)
 
-- Bootstrap profile (seed + demo SQL) for webhook smoke on fresh DB
+Dev seed is **not** part of n8n startup. For fresh-DB webhook smoke, run [`bootstrap-profile.md`](bootstrap-profile.md) after `backend` is healthy. n8n workflows are still imported/activated manually (no change in B2.8).
 - Clean-clone gate transcript (B2.9)
 - Optional: cutover runbook from legacy `alpstein_n8n` → `alpstein_n8n_compose` (volume rebind, Telegram webhook re-register)
 

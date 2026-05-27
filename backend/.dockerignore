@@ -14,7 +14,6 @@ htmlcov
 .env.*
 !.env.example
 tests
-scripts
 *.md
 .git
 .gitignore

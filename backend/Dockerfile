@@ -30,9 +30,11 @@ RUN pip install -r requirements-prod.txt
 COPY alembic.ini .
 COPY alembic ./alembic
 COPY app ./app
+COPY scripts ./scripts
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
+COPY docker-bootstrap.sh /app/docker-bootstrap.sh
 
-RUN chmod +x /app/docker-entrypoint.sh \
+RUN chmod +x /app/docker-entrypoint.sh /app/docker-bootstrap.sh \
     && chown -R alpstein:alpstein /app
 
 USER alpstein

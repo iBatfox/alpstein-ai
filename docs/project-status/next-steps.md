@@ -16,7 +16,7 @@
 
 # Next Steps
 
-## Recommended next task: **B2.8** (bootstrap profile) or **CIP-C** / **T14.5**
+## Recommended next task: **B2.9** (clean-clone gate) or **CIP-C** / **T14.5**
 
 ### Deployment portability (B2)
 
@@ -30,7 +30,8 @@
 | B2.5 | **done** | [`docker-entrypoint.sh`](../../backend/docker-entrypoint.sh) — [`T-b2.5-backend-entrypoint-contract.md`](../../tasks/done/T-b2.5-backend-entrypoint-contract.md) |
 | B2.6 | **done** | Root compose `backend` — [`T-b2.6-backend-compose-service.md`](../../tasks/done/T-b2.6-backend-compose-service.md) |
 | **B2.7** | **done** | n8n on `alpstein_internal` — [`n8n-compose.md`](../deployment/n8n-compose.md), [`T-b2.7-n8n-internal-compose-network.md`](../../tasks/done/T-b2.7-n8n-internal-compose-network.md) |
-| **B2.8** | **next** | Bootstrap profile (seed/SQL order) |
+| B2.8 | **done** | [`bootstrap-profile.md`](../deployment/bootstrap-profile.md) — [`T-b2.8-bootstrap-dev-seed-profile.md`](../../tasks/done/T-b2.8-bootstrap-dev-seed-profile.md) |
+| **B2.9** | **next** | Clean-clone gate transcript |
 
 Compose: [`postgres-compose.md`](../deployment/postgres-compose.md), [`n8n-compose.md`](../deployment/n8n-compose.md). Image + entrypoint: [`backend-image.md`](../deployment/backend-image.md).
 

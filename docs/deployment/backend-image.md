@@ -169,6 +169,10 @@ RBU: image digest + entrypoint script revision.
 
 Environment interpolated from repo root `.env` (see `.env.example`): `ALPSTEIN_AI_DATABASE_URL`, `ALPSTEIN_AI_ENVIRONMENT`, `N8N_BACKEND_API_TOKEN`, `OPENAI_API_KEY`.
 
+## Bootstrap (B2.8)
+
+Same image; one-shot entrypoint `/app/docker-bootstrap.sh` via compose profile `bootstrap` — see [`bootstrap-profile.md`](bootstrap-profile.md). Image includes `scripts/` for seed + SQL only (not used by normal entrypoint).
+
 ## Out of scope
 
 - n8n service in root compose (**B2.7**)

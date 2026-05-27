@@ -114,6 +114,12 @@ docker inspect --format='{{.State.Health.Status}}' alpstein_backend
 
 Migrations run automatically on backend start (`docker-entrypoint.sh` → `alembic upgrade head`).
 
+**Dev seed (optional):** not part of normal `up`. See [`bootstrap-profile.md`](bootstrap-profile.md).
+
+```bash
+docker-compose -p alpstein-ai --profile bootstrap run --rm backend-bootstrap
+```
+
 ---
 
 ## Rollback

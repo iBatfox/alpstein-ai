@@ -17,6 +17,7 @@
 
 | [`postgres-compose.md`](postgres-compose.md) | B2.2+ Postgres + B2.6 backend compose ops |
 | [`backend-image.md`](backend-image.md) | B2.3–B2.6 Backend image + entrypoint + compose |
+| [`bootstrap-profile.md`](bootstrap-profile.md) | B2.8 optional dev seed profile |
 
 ## Compose (git-tracked)
 

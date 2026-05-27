@@ -507,7 +507,7 @@ Implementation order — **do not skip**. No Docker implementation before B2.0 i
 | **B2.5** | Backend entrypoint contract | **done** — `docker-entrypoint.sh`; see [`backend-image.md`](backend-image.md) | Revert entrypoint + image tag |
 | **B2.6** | Minimal compose | **done** — `postgres` + `backend`; see [`postgres-compose.md`](postgres-compose.md) | `docker-compose -p alpstein-ai down`; volume snapshot |
 | **B2.7** | n8n network integration | **done** — `n8n` on `alpstein_internal`; [`n8n-compose.md`](n8n-compose.md) | Revert to `baseline-b2.6-compose` |
-| **B2.8** | Bootstrap profile | Documented seed/SQL order; compose profile | DB volume restore |
+| **B2.8** | Bootstrap profile | **done** — profile `bootstrap`; [`bootstrap-profile.md`](bootstrap-profile.md) | DB volume restore |
 | **B2.9** | Clean-clone gate | `docs/audits/clean-clone-gate-*.md` pass transcript | Tag previous RDU |
 
 **Freeze rule (from remediation plan):** During B2.2–B2.8, no unrelated backend feature work, migration edits, or n8n behavior changes unless exported and reconciled immediately.
@@ -620,7 +620,17 @@ Evidence: committed gate transcript in `docs/audits/`.
 | 2026-05-27 | B2.5 — `docker-entrypoint.sh` migrate-then-serve lifecycle |
 | 2026-05-27 | B2.6 — `backend` service in root compose; [`postgres-compose.md`](postgres-compose.md) |
 | 2026-05-27 | B2.7 — `n8n` service on `alpstein_internal`; [`n8n-compose.md`](n8n-compose.md) |
+| 2026-05-27 | B2.8 — profile `bootstrap`; [`bootstrap-profile.md`](bootstrap-profile.md) |
+
+### B2.8 exit criteria
+
+- [x] Compose profile `bootstrap` — service `backend-bootstrap` (not in default `up`)
+- [x] `docker-bootstrap.sh` refuses `production` / non-dev environments
+- [x] Seed order: `seed_dev_ai_configuration.py` → `demo_business_separation.sql` → `update_alpstein_pre_sales_behavior.sql`
+- [x] Same backend image; depends on `backend` healthy
+- [x] No n8n workflow activation
+- [ ] Operator clean-clone bootstrap smoke documented in B2.9 gate
 
 ---
 
-*End of deployment contract. Next phase: B2.8 — bootstrap profile.*
+*End of deployment contract. Next phase: B2.9 — clean-clone gate.*
