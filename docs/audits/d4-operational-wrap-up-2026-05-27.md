@@ -225,12 +225,21 @@ Operators may rely on the following **when using the portable compose project** 
 
 ---
 
-## 10. Document maintenance
+## 10. Technical debt closed (E0)
+
+| ID | Resolution |
+|----|------------|
+| **TD-D4-n8n-script-layout** | **Closed** — ownership documented in [`repository-layout-n8n-scripts.md`](../ops/repository-layout-n8n-scripts.md). No file moves: `scripts/n8n/` = workflow JSON gates; `n8n/scripts/` = live n8n container ops; `scripts/verify/` = cross-cutting harnesses. |
+
+---
+
+## 11. Document maintenance
 
 | Action | Owner |
 |--------|-------|
 | Append D4 bullets to `completed.md` | Archivist (this sweep) |
 | Patch `current-state.md` / `next-steps.md` | Archivist (this sweep) |
+| E0 n8n script layout note | Archivist (E0) |
 | Human review before git commit | Operator |
 
 **Report status:** Draft for review — **not committed** per project rules.

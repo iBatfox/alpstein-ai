@@ -1,7 +1,8 @@
 # n8n workflow exports (canonical)
 
 **Governance:** [`docs/ops/n8n-runtime-export-parity.md`](../../docs/ops/n8n-runtime-export-parity.md)  
-**Env/credentials:** [`docs/ops/n8n-env-credential-checklist.md`](../../docs/ops/n8n-env-credential-checklist.md)
+**Env/credentials:** [`docs/ops/n8n-env-credential-checklist.md`](../../docs/ops/n8n-env-credential-checklist.md)  
+**Repo layout (scripts):** [`docs/ops/repository-layout-n8n-scripts.md`](../../docs/ops/repository-layout-n8n-scripts.md) — export gate lives in `scripts/n8n/`; runtime scripts in `../scripts/`
 
 Repo exports describe **topology and expressions**. Runtime activation, credentials, and Telegram webhooks are **operator-bound** after import.
 

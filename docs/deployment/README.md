@@ -40,4 +40,6 @@
 
 Legacy host n8n: [`n8n/docker-compose.yml`](../../n8n/docker-compose.yml) + [`n8n-runtime-start.md`](../ops/n8n-runtime-start.md).
 
+**Script layout (n8n vs repo verify):** [`repository-layout-n8n-scripts.md`](../ops/repository-layout-n8n-scripts.md) — `n8n/` = runtime + exports; `scripts/n8n/` = export gates; `scripts/verify/` = cross-cutting harnesses.
+
 **Python version (portable image):** 3.12 (`python:3.12-slim-bookworm`).

@@ -82,6 +82,14 @@ Plan reference: [`tasks/todo/t14-telegram-customer-ingress.md`](../../tasks/todo
 
 ---
 
+## Repository hygiene (E0)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| **E0** n8n script layout | **done** (docs) | [`repository-layout-n8n-scripts.md`](../ops/repository-layout-n8n-scripts.md) — **TD-D4-n8n-script-layout** closed; no file moves |
+
+---
+
 ## Deferred (does not block Phase E planning)
 
 T13.6 retries/errors, T13.7 full E2E, ATTR-3 attribution persistence, WhatsApp ingress, Kubernetes, CRM expansion, legacy host decommission.

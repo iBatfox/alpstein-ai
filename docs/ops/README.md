@@ -9,6 +9,19 @@ Runbooks describe **how to operate** the runtime described in [`../architecture/
 
 **Operational SoT (post-D4):** Portable Docker Compose backend (`http://backend:8000`) — not stale host `:8010`. Policy: [`operational-ingress-policy.md`](operational-ingress-policy.md). Wrap-up: [`../audits/d4-operational-wrap-up-2026-05-27.md`](../audits/d4-operational-wrap-up-2026-05-27.md).
 
+**Repository layout (n8n scripts):** [`repository-layout-n8n-scripts.md`](repository-layout-n8n-scripts.md) — E0 / **TD-D4-n8n-script-layout** closed.
+
+---
+
+## Repository paths (scripts vs `n8n/`)
+
+| Path | Purpose |
+|------|---------|
+| [`n8n/`](../../n8n/) | n8n runtime unit: compose, env examples, [`workflows/`](../../n8n/workflows/) exports |
+| [`n8n/scripts/`](../../n8n/scripts/) | Operator scripts that need a **live n8n container** |
+| [`scripts/n8n/`](../../scripts/n8n/) | Repo **workflow JSON** gates (e.g. `export-scrub.sh` — no n8n runtime) |
+| [`scripts/verify/`](../../scripts/verify/) | **Cross-cutting** verification harnesses (e.g. D3 backend trace) |
+
 ---
 
 ## Production runbooks (current paths)
