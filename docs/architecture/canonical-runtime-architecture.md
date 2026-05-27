@@ -212,8 +212,8 @@ Built by `_build_task_instructions_body` ([`prompt_builder_service.py`](../../ba
 | **History handling** | §7 loads 10–20 recent messages; HF-1 preamble in §7 marks history as dialogue-only; `ai` sender labeled non-authoritative for business facts; current context sections override stale assistant turns | **implemented** |
 | **Lead qualification** | Every non-duplicate message creates or updates a lead; not LLM-based | **implemented** |
 | **notify_owner relation** | `NotificationPolicyService`: urgent > handoff > ai_failure > new_lead; duplicates suppress; lead_updated-only suppresses | **implemented** |
-| **Pricing behavior** | Intent slice `pricing_interest` when matched (Alpstein demo); legacy appendix pricing rules for other businesses | **partial** |
-| **Off-topic behavior** | Intent `off_topic` + instruction block (Alpstein demo); legacy appendix redirect rules otherwise | **partial** |
+| **Pricing behavior** | Intent slice `pricing_interest` when matched (Alpstein demo only); non-Alpstein relies on core task + tenant/operator context | **partial** |
+| **Off-topic behavior** | Intent `off_topic` + instruction block (Alpstein demo only); non-Alpstein relies on core task | **partial** |
 | **Unsupported systems** | Dedicated intent + block when named ERP/CRM without feasibility framing | **implemented** (Alpstein demo) |
 
 Ideal behaviors described only in `docs/architecture/conversation-intent-policy-mvp.md` but not coded (e.g. CIP-C Langfuse fields, CIP-D live smoke) are **not** runtime truth.
@@ -328,7 +328,7 @@ Ideal behaviors described only in `docs/architecture/conversation-intent-policy-
 | external_id | Role | Intent policy | Typical path |
 |-------------|------|---------------|--------------|
 | `alpstein_ai_demo_001` | Alpstein AI product demo | **enabled** | Telegram ingress (n8n default) |
-| `demo_barbershop_001` | Legacy barbershop seed | **disabled** (legacy appendix) | Test webhook default, many unit tests |
+| `demo_barbershop_001` | Legacy barbershop seed | **disabled** (product behavior) | Test webhook default, many unit tests |
 
 ### Hardcoded gates
 

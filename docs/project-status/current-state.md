@@ -10,7 +10,7 @@
 
 Specification-driven MVP with **backend AI orchestration complete**, **n8n test + Telegram ingress workflows implemented** (ops maturity partial), and **conversational behavior extensions** (greeting, intent for one demo business, operator context) shipped in backend.
 
-**Primary open engineering:** CIP-C Langfuse intent metadata, T14.5–T14.6 Telegram regression/export gate, ATTR-3 attribution persistence. HF-1 History Safety **implemented** in PromptBuilder (refresh canonical map if §5.7 still says planned).
+**Primary open engineering:** CIP-C Langfuse intent metadata, T14.5–T14.6 Telegram regression/export gate, ATTR-3 attribution persistence.
 
 ---
 
@@ -25,7 +25,6 @@ Specification-driven MVP with **backend AI orchestration complete**, **n8n test 
 
 ### Spec-only / drift notes
 
-- **History Safety / Context Freshness** — plan in `tasks/done/Plan Context Freshness History Safety Policy.md`; **not** in PromptBuilder runtime
 - **Conversation Intent Policy** — behavior doc at `docs/architecture/conversation-intent-policy-mvp.md`; CIP-A/B **implemented** for `alpstein_ai_demo_001` only; CIP-C/D open
 - **Attribution persistence (ATTR-3+)** — ATTR-2 schema **implemented**; persistence **planned**
 
@@ -57,14 +56,14 @@ Specification-driven MVP with **backend AI orchestration complete**, **n8n test 
 - `operator_business_context` on webhook → PromptBuilder overlay (`T14-OC-2`)
 - AI stack: Configuration → Knowledge → PromptBuilder → Gateway → PromptRun → orchestration + fallback + duplicate guard
 - **Greeting:** `GreetingPolicyService` + greeting blocks in §2 task_instructions
-- **Intent (partial):** `ConversationIntentService` + intent slices for `alpstein_ai_demo_001` only; non-Alpstein tenants use core task + generic greeting only (no pre-sales appendix)
+- **Intent (partial):** `ConversationIntentService` + intent slices for `alpstein_ai_demo_001` only; non-Alpstein tenants use core task + generic greeting only (P0 + P1; no legacy appendix)
+- **History Safety (HF-1):** §7 preamble + non-authoritative `ai` labels in `PromptBuilderService` — **implemented**
 - **Langfuse (dev):** `LangfuseTracingService` on orchestration; greeting tags; intent metadata constants exist but **runtime export not wired (CIP-C)**
 - pytest: **308** test functions in `backend/tests/` (as-of 2026-05-27; run `pytest` in venv to verify green)
 
 ### Missing / deferred
 
 - T10-F3 — concurrent duplicate `external_message_id` `IntegrityError` race (optional)
-- HF-1 — History Safety instruction in §7 conversation_history — **implemented** (`history_safety_prompt_instructions.py`)
 - repositories layer (**deferred** MVP)
 - ATTR-3+ attribution persistence
 
@@ -114,7 +113,7 @@ Specification-driven MVP with **backend AI orchestration complete**, **n8n test 
 | Intent policy (`alpstein_ai_demo_001`) | **partial** (one business) |
 | Legacy pre-sales appendix | **removed** (P1); non-Alpstein uses core task + generic greeting only |
 | Operator context overlay | **implemented** |
-| History Safety | **spec-only** |
+| History Safety (HF-1) | **implemented** |
 | Langfuse intent metadata at runtime | **planned** (CIP-C) |
 | AI Gateway (sole OpenAI HTTP) | **implemented** |
 
@@ -134,4 +133,4 @@ Specification-driven MVP with **backend AI orchestration complete**, **n8n test 
 
 **Implemented (backend + partial ops):** webhook + auth, AI reply, leads, notification flags, test webhook path, Telegram customer ingress with greeting/intent for Alpstein demo business.
 
-**Not closed:** HF-1 history safety, CIP-C observability, T14.5–T14.6 Telegram gates, ATTR persistence, production hardening (T10-F3, T13.6).
+**Not closed:** CIP-C observability, T14.5–T14.6 Telegram gates, ATTR persistence, production hardening (T10-F3, T13.6).
