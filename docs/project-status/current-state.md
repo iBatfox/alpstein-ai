@@ -10,7 +10,7 @@
 
 Specification-driven MVP with **backend AI orchestration complete**, **n8n test + Telegram ingress workflows implemented** (ops maturity partial), and **conversational behavior extensions** (greeting, intent for one demo business, operator context) shipped in backend.
 
-**Primary open engineering:** CIP-C Langfuse intent metadata, T14.5–T14.6 Telegram regression/export gate, ATTR-3 attribution persistence. **Phase B portable compose:** complete (B2.9 gate passed 2026-05-27).
+**Primary open engineering:** CIP-C Langfuse intent metadata, **C5/T14.5** Telegram regression, ATTR-3 attribution persistence. **Phase B portable compose:** complete (B2.9). **Phase C1** parity policy + **C2/T14.6** export scrub gate — done.
 
 ---
 
@@ -97,7 +97,8 @@ Specification-driven MVP with **backend AI orchestration complete**, **n8n test 
 ### Missing / partial
 
 - T14.5 owner-notify + duplicate regression on Telegram path
-- T14.6 scrubbed export + repo source-of-truth gate
+- C1 runtime/export parity policy — [`n8n-runtime-export-parity.md`](../ops/n8n-runtime-export-parity.md)
+- C2/T14.6 export scrub gate — [`scripts/n8n/export-scrub.sh`](../../scripts/n8n/export-scrub.sh) (G-EXP-2)
 - T13.6 retries/errors, T13.7 full E2E (**deferred**)
 - WhatsApp ingress (**deferred**)
 - operator contact block in n8n `operator_business_context` (ops follow-up per pre-sales contact ownership)

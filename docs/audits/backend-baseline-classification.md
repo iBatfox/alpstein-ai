@@ -1760,4 +1760,484 @@ Operational readiness checks still required post-import:
 - Core startup graph is now baseline-complete once `main.py` is tracked.
 - Docker portability phase should focus on environment bootstrapping (dependency install, env wiring, startup health checks), not further runtime architecture changes.
 
+---
+## Phase C Step C3 — Rollback discipline audit (alpstein-reviewer)
+
+**Phase:** C3 — Rollback discipline  
+**Context:** PHASE A/B complete; C1 export parity + C2 G-EXP-2 scrub gate complete; portable compose track B2.0–B2.9 complete.  
+**Primary contract:** [`docs/deployment/deployment-contract.md`](../deployment/deployment-contract.md) §11 RDU/RBU  
+**n8n policy:** [`docs/ops/n8n-runtime-export-parity.md`](../ops/n8n-runtime-export-parity.md)
+
+### Review summary
+**Pass with notes (rollback is operationally understood only when executed as atomic RBU, not as “git tag only”).**  
+Rollback anchors exist and portable startup is deterministic, but **production-like recovery cannot be guaranteed** without rehearsed downgrade paths, volume snapshots, n8n re-import discipline, and post-rollback verification gates. Partial rollback is explicitly invalid.
+
+---
+
+## 1. Rollback discipline audit
+
+### 1.1 What “rollback” means in this stack
+
+| Term | Definition |
+|------|------------|
+| **RDU** (reproducible deployment unit) | Identified release: git commit/tag + alembic head + canonical n8n export(s) + env template version + compose hash |
+| **RBU** (rollback unit) | Atomic recovery bundle: git tag/commit + target alembic revision + n8n export version + env re-apply + optional volume snapshot IDs |
+| **Code rollback** | `git checkout <tag>` + rebuild images + redeploy compose |
+| **Data rollback** | Postgres volume restore and/or rehearsed `alembic downgrade` — **not** implied by code rollback alone |
+| **n8n rollback** | Deactivate → re-import prior export → re-bind credentials → restart → activate one workflow → update registry |
+
+### 1.2 Git tag rollback integrity
+
+**Known anchors (verified in repo):**
+
+| Tag | Typical use |
+|-----|-------------|
+| `baseline-pre-b2.5` | Pre migrate-then-serve entrypoint |
+| `baseline-b2.5-entrypoint` | Entrypoint contract only |
+| `baseline-b2.6-compose` | Postgres + backend compose (no n8n service) |
+| `baseline-b2.7-n8n-network` | + portable n8n on `alpstein_internal` |
+| `baseline-b2.8-bootstrap` | + compose profile `bootstrap` |
+| `baseline-b2.9-clean-clone-gate` | Gate evidence + portable path acceptance |
+| `baseline-c2-export-scrub-gate` | **Planned** — tag after C2 commit accepted (not yet in `git tag -l` at audit time) |
+
+**Integrity rules:**
+
+1. Tag must point to a **single commit** that passed the gates valid for that era (B2.9 for portable stack; C2 for export scrub).
+2. Tag alone does **not** roll back volumes, n8n SQLite, or secrets.
+3. After `git checkout <tag>`, **rebuild** `alpstein-ai-backend:local` — do not assume old image layers match tag without rebuild.
+4. Record tag + `alembic current` + `docker compose config` hash in release notes.
+
+**Risks:**
+
+| Risk | Severity | Note |
+|------|----------|------|
+| Tag without gate transcript | Important | Tag is pointer only; operator must re-run verification checklist |
+| Checking out older tag on live DB at newer revision | **Critical** | Backend may fail startup or behave inconsistently until downgrade or volume restore |
+| Missing `baseline-c2-export-scrub-gate` | Suggestion | Create after C2 merge for export-governance rollback point |
+
+### 1.3 Docker compose rollback reproducibility
+
+**Portable stack** (`docker-compose.yml`, project `-p alpstein-ai`):
+
+| Component | Rollback mechanism | Reversible? |
+|-----------|-------------------|-------------|
+| Compose file | `git checkout` tag | Yes (with rebuild) |
+| `alpstein_postgres_data` | Persists across `down` | **Data not reverted** by compose rollback |
+| `alpstein_n8n_data` | Persists; holds credentials + workflow IDs | **State not reverted** by git alone |
+| Backend image | Rebuild from checked-out tree | Yes |
+| n8n image pin | `docker.n8n.io/n8nio/n8n:1.95.3` in compose | Pin change requires explicit RBU |
+| Networks/volumes names | Fixed names (`alpstein_internal`, etc.) | Stable across tags — good for ops, bad for side-by-side old/new |
+
+**Rollback procedure (compose):**
+
+```bash
+# 1) Stop (volumes persist)
+docker-compose -p alpstein-ai down
+
+# 2) Code rollback
+git checkout <RBU-tag>
+docker-compose -p alpstein-ai build backend
+
+# 3) Redeploy
+docker-compose -p alpstein-ai up -d postgres backend n8n
+
+# 4) Optional fresh data (DESTRUCTIVE)
+docker-compose -p alpstein-ai down -v   # only after snapshot/backup
+```
+
+**Not reversible without volume backup:** rows in `messages`, `leads`, `prompt_runs`, n8n execution history, Telegram webhook registration on wrong active workflow.
+
+### 1.4 Backend/runtime compatibility risks
+
+| Risk | After rollback to older tag |
+|------|----------------------------|
+| Newer DB schema than code expects | Startup/migration errors or silent query failures |
+| Older code than DB schema | Missing tables/columns at runtime |
+| Entrypoint always runs `alembic upgrade head` | Rolls **forward** on start to migrations in checked-out tree — not backward |
+| Langfuse package required at import | Clean clone must install `langfuse` even if tracing disabled |
+| Bootstrap profile re-run | **Adds** demo data; does not undo prior bootstrap |
+
+**Critical truth:** Rolling back **code** to tag T while keeping Postgres volume at revision **0007** only works if tag T’s code is compatible with **0007** schema. Rolling back to pre-`0007` code requires **`alembic downgrade`** to `0006` or volume restore — not automatic.
+
+### 1.5 Migration rollback limitations
+
+**Chain:** `0001` … `0007` (all revisions include `downgrade()` implementations).
+
+| Scenario | Safe? | Notes |
+|----------|-------|-------|
+| `alembic downgrade -1` on empty test DB | Rehearsal only | Validates downgrade scripts exist |
+| Downgrade on DB with production-like data | **Risky** | Dropping `leads` / `prompt_runs` **deletes data** |
+| Downgrade after columns referenced by app | **Unsafe** without coordinated code rollback |
+| Renumbering migration files | **Forbidden** on DB that already applied old IDs |
+| Forward-only deploy policy | **Recommended default** | Document target revision; snapshot before upgrade |
+
+**Cannot safely rollback after migrations if:**
+
+- Application code at new head wrote to new tables (`leads`, `prompt_runs`, AI config tables).
+- Downgrade would drop those tables and lose rows.
+- No rehearsed downgrade path or snapshot taken before upgrade.
+
+**Manual recovery:** restore `alpstein_postgres_data` from snapshot taken at RDU tag time.
+
+### 1.6 n8n export rollback consistency
+
+**Atomic RBU-n8n** (from parity doc):
+
+```text
+git tag/commit
++ canonical export filename + versionId
++ runtime-registry.md workflow ID (pre-rollback)
++ optional backups/*.json
++ credential re-bind (names only)
+```
+
+| Action | Reversible via git? | Manual steps |
+|--------|---------------------|--------------|
+| Topology rollback | Yes (import previous export) | Deactivate → import → bind → restart → activate |
+| Activation-only rollback | Partial | Use registry “known-good” ID |
+| Execution history | **No** | n8n SQLite not in git |
+| Telegram duplicate active workflows | **No** | Operator must deactivate extras |
+| `BACKEND_BASE_URL` drift | **No** | Fix env + restart n8n |
+
+**C2 contribution:** `scripts/n8n/export-scrub.sh` (G-EXP-2) blocks bad exports before commit; rollback of **workflow logic** still requires runtime import, not script alone.
+
+### 1.7 Runtime registry rollback integrity
+
+[`n8n/workflows/runtime-registry.md`](../../n8n/workflows/runtime-registry.md) maps **git export → host workflow UUID**.
+
+| Failure mode | Effect |
+|--------------|--------|
+| Registry not updated after import | Rollback targets wrong workflow ID |
+| Stale Contabo IDs on portable host | Wrong deactivate/activate |
+| Multiple rows for same bot | Telegram 403 / duplicate processing |
+
+**Rollback rule:** restore registry row from git history at RBU tag, then match runtime via n8n UI before activate.
+
+### 1.8 Bootstrap compatibility risks
+
+| Item | Rollback behavior |
+|------|-------------------|
+| `docker-compose --profile bootstrap` | **Idempotent-ish** seed; re-run may conflict if demo rows exist |
+| SQL scripts in bootstrap | Mutate data; **not undone** by code rollback |
+| `ALPSTEIN_AI_ENVIRONMENT=production` | Bootstrap **refused** (by design) |
+| B2.8 rollback per docs | **Volume restore** — not compose down alone |
+
+### 1.9 Environment drift risks
+
+| Drift source | Rollback impact |
+|--------------|-----------------|
+| `.env` not in git | Must re-apply secrets from vault; templates from tag |
+| `N8N_ENCRYPTION_KEY` change | n8n volume unreadable — **requires volume backup** |
+| `OPENAI_API_KEY` / Langfuse keys | AI/tracing behavior changes; not code rollback |
+| Legacy host `172.20.0.1:8010` vs portable `http://backend:8000` | Wrong backend if mixed on one n8n instance |
+| Operator UI edits on Contabo | Silent drift until export + registry update |
+
+### 1.10 Rollback verification procedures (summary)
+
+See **§4 Recovery gates** and **§4 Rollback verification checklist** below.
+
+---
+
+## 2. Operational rollback policy
+
+### 2.1 Principles
+
+1. **Atomic RBU only** — never roll back “backend only” while leaving n8n/DB at newer effective state for production verification.
+2. **Snapshot before upgrade** — Postgres volume (and n8n volume before credential/Telegram changes) before non-disposable environment changes.
+3. **Forward migrations default** — treat `alembic downgrade` as exception requiring rehearsal ticket.
+4. **n8n activation is operator action** — repo exports stay `active: false`; rollback activation uses registry IDs.
+5. **Secrets never rolled back via git** — re-apply from secure store aligned to env templates at tag.
+6. **Record evidence** — gate transcript or checklist signed per RBU.
+
+### 2.2 Layer policy matrix
+
+| Layer | Default rollback | Data handling | Verification minimum |
+|-------|------------------|---------------|----------------------|
+| Backend code/image | Git tag + rebuild | Keep volume | Liveness + readiness + one webhook |
+| Alembic | Forward at startup to tag’s head; downgrade only if rehearsed | Snapshot before downgrade | `alembic current` matches expectation |
+| Postgres data | Volume restore | **Primary** for production | Migrations + seed if dev |
+| n8n workflows | Re-import export + registry | SQLite volume optional restore | G-EXP-2 on export + G-EXP-6 + smoke |
+| Secrets | Rotate/re-apply | N/A | Health + auth failures expected if wrong |
+| Bootstrap | Do not auto-run on rollback | Volume restore if demo reset needed | Business rows query |
+
+### 2.3 What rollback does **not** fix (contractual)
+
+From deployment contract §11.3 + parity doc:
+
+- Polluted `messages` history / duplicate processing artifacts
+- Lost `N8N_ENCRYPTION_KEY` without volume backup
+- Telegram webhook conflicts from multiple active workflows
+- n8n execution history
+- Owner notification delivery already sent (external side effect)
+
+---
+
+## 3. Rollback-safe release procedure
+
+### 3.1 Before release (RDU creation)
+
+1. Identify git commit; create **annotated tag** `baseline-<phase>-<name>`.
+2. Record `alembic heads` (expect `0007`).
+3. Run `scripts/n8n/export-scrub.sh` — commit only on pass (G-EXP-2).
+4. Update `runtime-registry.md` if workflows activated on target host.
+5. Snapshot volumes if environment is not disposable:
+   - `docker run --rm -v alpstein_postgres_data:... postgres:15 pg_dump ...` or volume-level backup
+   - n8n volume before Telegram/credential changes
+6. Archive RDU record: tag + compose hash + export `versionId` + gate transcript pointer.
+
+### 3.2 Rollback execution (RBU)
+
+```text
+1. Declare incident RBU id (tag + volumes + exports)
+2. docker-compose -p alpstein-ai down
+3. git checkout <RBU-tag>
+4. Restore postgres volume OR rehearse alembic downgrade (only if planned)
+5. docker-compose build backend && docker-compose up -d postgres backend
+6. Wait: migrations + readiness healthy
+7. n8n: deactivate current workflows (registry + UI)
+8. import previous canonical export(s); re-bind credentials
+9. docker-compose up -d n8n (or restart)
+10. Activate ONE workflow per bot; update registry
+11. Run recovery gates R1–R7 (§5)
+12. Document outcome; new tag if stack is healthy baseline
+```
+
+### 3.3 After rollback
+
+- Do **not** delete RBU tag.
+- File short incident note: what was rolled back, what was **not** rolled back (data/history).
+- If downgrade was used: document data loss scope.
+
+---
+
+## 4. Rollback verification checklist
+
+Operator checklist after RBU deploy (tick all):
+
+| ID | Check | Pass criteria |
+|----|--------|---------------|
+| V1 | Git state | `git describe --tags` = intended RBU tag |
+| V2 | Images rebuilt | `docker-compose build backend` from tag tree |
+| V3 | Postgres healthy | `pg_isready` via compose healthcheck |
+| V4 | Alembic revision | `alembic current` matches RBU target (usually tag head) |
+| V5 | Liveness | `GET /api/v1/health` → 200 |
+| V6 | Readiness | `GET /api/v1/health/ready` → 200 |
+| V7 | Webhook smoke | `POST /api/v1/webhook/message` → `success: true` (token + seeded business) |
+| V8 | n8n → backend | From n8n container: readiness 200 at `BACKEND_BASE_URL` |
+| V9 | G-EXP-2 | `scripts/n8n/export-scrub.sh` exit 0 on exports at tag |
+| V10 | G-EXP-3 | `runtime-registry.md` matches live workflow IDs |
+| V11 | G-EXP-4 | Exactly one active Telegram workflow per bot (if applicable) |
+| V12 | No duplicate Telegram 403 | Webhook set once per bot |
+
+**B2.9 gate mapping:** V3–V6 ≈ G2–G4; V7 ≈ G5 (manual); V8 ≈ G6.
+
+---
+
+## 5. Recovery gates definition
+
+Formal gates (use in incident/runbooks):
+
+| Gate | Name | Blocks release/close | Failure means |
+|------|------|----------------------|---------------|
+| **R1** | Tag integrity | RBU start | Wrong commit/tag checked out |
+| **R2** | Schema compatibility | Backend start | Migration/DB mismatch |
+| **R3** | Core health | Traffic restore | Stack not actually up |
+| **R4** | Readiness | n8n dependency | DB pool / deps broken |
+| **R5** | Webhook path | Customer ingress | Business/AI path broken |
+| **R6** | n8n parity | Automation confidence | Wrong workflow active or export drift |
+| **R7** | Registry truth | Repeat rollback | Wrong UUID documented |
+
+**Gate failure handling:**
+
+| Gate failed | Likely action |
+|-------------|---------------|
+| R1–R2 | Stop; fix git/DB strategy (restore snapshot or rehearse downgrade) |
+| R3–R4 | Fix compose/env/DB connectivity |
+| R5 | Seed/bootstrap/token/AI config |
+| R6–R7 | n8n operator procedure; do not declare RBU complete |
+
+---
+
+## 6. Database rollback limitations document
+
+### 6.1 Reversible (with rehearsal or empty DB)
+
+- `alembic upgrade head` / `downgrade` scripts exist for all `0001`–`0007`.
+- Empty volume + tag checkout + `up` + bootstrap profile → full dev stack replay (B2.9 path).
+
+### 6.2 NOT reversible without data loss
+
+- Downgrade from `0007` → `0006` on DB with leads rows → **drops `leads` table and data**.
+- Downgrade across `0006` (AI config, `prompt_runs`) → loses audit and config tables.
+- Any rollback removing `messages` uniqueness index era → idempotency behavior change.
+
+### 6.3 Requires manual recovery
+
+- Partial business seed / SQL bootstrap scripts applied manually.
+- Wrong tenant/business rows after bad seed.
+- n8n credential bindings (names in export, secrets in vault).
+
+### 6.4 Requires backup restore
+
+- Production Postgres at revision N when code needs N−k.
+- Corrupt or lost `alpstein_postgres_data`.
+- n8n volume when `N8N_ENCRYPTION_KEY` lost or volume wiped.
+- Point-in-time recovery for legal/audit retention.
+
+### 6.5 Cannot safely rollback after migrations (operational rule)
+
+**Rule:** Once revision **0007** is applied in an environment with live traffic:
+
+- Do **not** roll back code to `baseline-b2.6-compose` without either:
+  - **(A)** volume restore to pre-0007 snapshot, or
+  - **(B)** rehearsed downgrade to `0006` accepting **loss** of `leads` + related data, or
+  - **(C)** new disposable environment (clean volume) for verification only.
+
+**Startup coupling:** `docker-entrypoint.sh` always runs `alembic upgrade head` for the **checked-out** tree — it will not downgrade automatically on code rollback.
+
+---
+
+## 7. Runtime rollback matrix
+
+| Artifact | Rollback method | Auto on `git checkout`? | Data loss risk | Verification |
+|----------|-----------------|-------------------------|----------------|--------------|
+| `backend/app/**` | Git tag | N/A (source) | None | Tests / smoke |
+| Backend Docker image | Rebuild | No | None | Health |
+| `docker-compose.yml` | Git tag | No | None | `compose config` |
+| Postgres volume | Snapshot restore / `down -v` | No | **High** if `-v` | Migrations |
+| Alembic revision | `upgrade` on start; `downgrade` manual | Partial | Downgrade: high | `alembic current` |
+| Bootstrap seed | Re-run profile or restore volume | No | Duplicate/conflict | SQL query |
+| n8n export JSON | Git + re-import | No | None | G-EXP-2 |
+| n8n runtime IDs | Registry-guided import | No | None | G-EXP-3 |
+| n8n SQLite volume | Snapshot restore | No | Restore or lose creds | UI + smoke |
+| `.env` secrets | Manual re-apply | No | N/A | Auth + AI |
+| Telegram webhooks | Deactivate/activate | No | None | HTTP 200 |
+| Langfuse traces | Not in scope | No | N/A | Optional |
+
+---
+
+## 8. Failure / recovery scenarios
+
+| # | Scenario | Symptoms | Recovery path | Rollback guaranteed? |
+|---|----------|----------|---------------|----------------------|
+| F1 | Code rolled back; DB still at 0007 | Missing columns or logic errors | Restore DB snapshot or use tag matching 0007 | **No** until DB aligned |
+| F2 | `alembic downgrade` on live DB | Data loss in dropped tables | Restore from snapshot; accept loss | **No** |
+| F3 | n8n wrong workflow active | Duplicate replies / 403 Telegram | Deactivate all; activate one per registry | Manual |
+| F4 | Lost `N8N_ENCRYPTION_KEY` | n8n cannot decrypt creds | Restore `alpstein_n8n_data` backup | **Only with backup** |
+| F5 | Export scrub failure at tag | Secrets in git export | Fix export; re-run G-EXP-2; new commit | Yes before deploy |
+| F6 | Partial compose rollback (backend only) | n8n points at wrong URL/version | Full RBU including n8n + registry | **No** |
+| F7 | `down -v` without backup | Empty DB | `alembic upgrade` + bootstrap profile | Fresh env only |
+| F8 | Migration fails on start | Backend exits; no uvicorn | Fix DB URL/password; fix revision drift | Fix-forward |
+| F9 | Readiness fails after rollback | n8n won't start | Fix postgres/pool/deps | Fix-forward |
+| F10 | Registry stale | Rollback activate wrong ID | Git history of `runtime-registry.md` | Manual |
+
+---
+
+## 9. Recommended rollback tagging discipline
+
+### 9.1 Tag naming
+
+```text
+baseline-<track>-<milestone>[-qualifier]
+```
+
+Examples: `baseline-b2.9-clean-clone-gate`, `baseline-c2-export-scrub-gate`, `baseline-c3-rollback-discipline`.
+
+### 9.2 When to tag (mandatory)
+
+| Event | Tag? |
+|-------|------|
+| B2.x portable milestone | Yes (existing) |
+| C2 export scrub gate accepted | **Yes** — `baseline-c2-export-scrub-gate` |
+| Before alembic revision bump affecting prod | **Yes** + volume snapshot |
+| Before n8n Telegram production activate | Yes + registry update |
+| C3 policy accepted | Suggested: `baseline-c3-rollback-discipline` (docs-only) |
+
+### 9.3 Annotated tag message must include
+
+- RDU/RBU id
+- Alembic head
+- Canonical n8n export `versionId`(s)
+- Gate transcript path (e.g. clean-clone, G-EXP-2 log)
+- Known limitations (e.g. “G5 not run”)
+
+### 9.4 Do not tag
+
+- Mid-incident dirty tree
+- Local `.env` experiments
+- Contabo-only hotfix without export in git
+
+---
+
+## 10. Suggested implementation tasks (if needed)
+
+| Task ID | Scope | Priority | Notes |
+|---------|--------|----------|-------|
+| **T-C3.1** | Create annotated tag `baseline-c2-export-scrub-gate` | High | Closes planned anchor gap |
+| **T-C3.2** | Add `docs/ops/rollback-runbook.md` (extract from this audit) | Medium | Operator-facing; link contract §11 |
+| **T-C3.3** | Rehearse `alembic downgrade` 0007→0006 on disposable volume | Medium | Evidence whether downgrade is viable |
+| **T-C3.4** | Document volume snapshot commands in rollback runbook | High | Postgres + n8n |
+| **T-C3.5** | Post-rollback gate script (health + readiness + optional webhook) | Low | Automate V5–V7 |
+| **T-C3.6** | Portable G5 extension (C6): import + webhook in gate transcript | Medium | Closes B2.9 gap |
+| **T-C3.7** | Contabo duplicate Telegram workflow cleanup | Ops | Registry hygiene |
+
+**Out of scope (per C3 charter):** Kubernetes, new infra, observability stack, workflow logic changes, architecture redesign.
+
+---
+
+## 11. Blockers before ingress files (post-C3 state)
+
+For reference after prerequisites complete:
+
+### 11.1 Before `webhook_message_service.py` / full ingress
+
+- RBU prerequisites: tag at or after `baseline-b2.9-clean-clone-gate` + C2 export governance tag when workflows change.
+- Postgres at expected revision; bootstrap only on dev.
+
+### 11.2 Before `webhook.py`
+
+- `webhook_message_service.py` import-safe at target tag.
+- Module-level `WebhookMessageService()` succeeds.
+
+### 11.3 Before `main.py`
+
+- `webhook.py` import-safe.
+- Recovery gates R3–R5 pass on target environment.
+
+---
+
+## 12. GO / NO-GO — rollback discipline phase
+
+| Question | Decision |
+|----------|----------|
+| Are rollback anchors sufficient for portable stack? | **GO** (B2.5–B2.9 + contract) |
+| Is `git tag only` sufficient for production recovery? | **NO-GO** |
+| Is atomic RBU policy defined? | **GO** (this audit + contract §11) |
+| Is C2 export scrub part of rollback discipline? | **GO** (G-EXP-2) |
+| Can downgrade be assumed safe without rehearsal? | **NO-GO** |
+| Ready for Docker portability **operations** (not new architecture)? | **GO with notes** — env/snapshot/runbook discipline still operator-dependent |
+
+**Operational truth:** Move from “we have tags” to “rollback behavior is understood and reproducible” requires **using** RBU procedure + verification checklist on a disposable environment before claiming production rollback guarantee.
+
+---
+
+## Specs consulted
+
+- [`docs/deployment/deployment-contract.md`](../deployment/deployment-contract.md)
+- [`docs/ops/n8n-runtime-export-parity.md`](../ops/n8n-runtime-export-parity.md)
+- [`docs/audits/clean-clone-gate-2026-05-27.md`](clean-clone-gate-2026-05-27.md)
+- [`docs/deployment/bootstrap-profile.md`](../deployment/bootstrap-profile.md)
+- [`docs/ops/database-recovery.md`](../ops/database-recovery.md)
+- [`n8n/workflows/runtime-registry.md`](../../n8n/workflows/runtime-registry.md)
+- [`docker-compose.yml`](../../docker-compose.yml)
+- [`backend/docker-entrypoint.sh`](../../backend/docker-entrypoint.sh)
+- [`backend/alembic/versions/`](../../backend/alembic/versions/)
+
+## What was not reviewed
+
+- Live execution of rollback on Contabo or production host
+- Rehearsed `alembic downgrade` on real data
+- Automated rollback script implementation (suggested only)
+- HubSpot / legacy `n8n/docker-compose.yml` stack rollback
+
 

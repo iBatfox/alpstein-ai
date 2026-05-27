@@ -16,7 +16,22 @@
 
 # Next Steps
 
-## Recommended next task: **CIP-C** / **T14.5** (product/ops) or production cutover planning (separate from Phase B)
+## Recommended next task: **P0 git stabilization** (commit C2 scrub + C1 parity docs) then **C5 / T14.5**
+
+**RBU drill (2026-05-27):** [`disposable-rbu-drill-2026-05-27.md`](../audits/disposable-rbu-drill-2026-05-27.md) — **CONDITIONAL NO-GO** Phase D until export-scrub is in git.
+
+### Phase C — n8n runtime/export parity
+
+| Step | Status | Notes |
+|------|--------|-------|
+| **C1** | **done** | [`n8n-runtime-export-parity.md`](../ops/n8n-runtime-export-parity.md), [`T-c1-n8n-runtime-export-parity.md`](../../tasks/done/T-c1-n8n-runtime-export-parity.md) |
+| C2 / T14.6 | **done** | [`export-scrub.sh`](../../scripts/n8n/export-scrub.sh) — [`T14.6-n8n-export-scrub-parity-gate.md`](../../tasks/done/T14.6-n8n-export-scrub-parity-gate.md) |
+| **C3** | planned | Runtime vs export diff |
+| **C4** | planned | Pre-deploy parity checklist script |
+| **C5 / T14.5** | planned | Telegram regression on canonical export |
+| **C6** | planned | Clean-clone G5 webhook import path |
+
+Also: **CIP-C** (Langfuse intent metadata).
 
 ### Deployment portability (B2)
 
@@ -46,7 +61,7 @@ Compose: [`postgres-compose.md`](../deployment/postgres-compose.md), [`n8n-compo
 | ID | Task | Notes |
 |----|------|-------|
 | **T14.5** | Owner-notify + duplicate regression (Telegram path) | Unblocked after Alpstein AI greeting switch |
-| **T14.6** | Scrubbed n8n export + repo as source of truth | Formal export hygiene gate |
+| **T14.6** | **done** | G-EXP-2 gate — run `scripts/n8n/export-scrub.sh` before workflow commits |
 
 Plan reference: [`tasks/todo/t14-telegram-customer-ingress.md`](../../tasks/todo/t14-telegram-customer-ingress.md) (T14.1–T14.4 and T14-OC **done**).
 

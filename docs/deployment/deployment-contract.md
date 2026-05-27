@@ -602,6 +602,9 @@ Evidence: committed gate transcript in `docs/audits/`.
 | DB recovery | `docs/ops/database-recovery.md` |
 | n8n env checklist | `docs/ops/n8n-env-credential-checklist.md` |
 | n8n runtime (legacy host) | `docs/ops/n8n-runtime-start.md` |
+| n8n export parity (Phase C) | `docs/ops/n8n-runtime-export-parity.md` |
+| n8n export gate G-EXP-2 (C2) | `scripts/n8n/export-scrub.sh` |
+| Workflow registry | `n8n/workflows/runtime-registry.md` |
 | Webhook API | `specs/api/webhooks.md` |
 | Product deployment vision | `specs/architecture/deployment.md` |
 | Backend settings source | `backend/app/core/config.py` |

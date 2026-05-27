@@ -7,7 +7,8 @@
 **Workflow file:** [`n8n/workflows/t14_workflow_telegram_customer_ingress_skeleton.json`](../../n8n/workflows/t14_workflow_telegram_customer_ingress_skeleton.json)  
 **Workflow name:** `alpstein-incoming-message-telegram`  
 **Mapping:** [`telegram-customer-ingress.md`](telegram-customer-ingress.md)  
-**Credentials:** [`telegram-channel-credentials.md`](../architecture/telegram-channel-credentials.md)
+**Credentials:** [`telegram-channel-credentials.md`](../architecture/telegram-channel-credentials.md)  
+**Export parity:** [`n8n-runtime-export-parity.md`](n8n-runtime-export-parity.md) · Registry: [`n8n/workflows/runtime-registry.md`](../../n8n/workflows/runtime-registry.md)
 
 **Status:** T14.3 + **T14-OC-3** + **Alpstein AI greeting switch** in repo export — **repo `active: false`**. Runtime id after latest import: `2lMuaSWD1XFOXLEK` (deactivated post-test).
 

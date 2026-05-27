@@ -7,7 +7,8 @@
 **Workflow file:** [`n8n/workflows/t13_workflow1_test_webhook_skeleton.json`](../../n8n/workflows/t13_workflow1_test_webhook_skeleton.json)  
 **Workflow name:** `alpstein-incoming-message-test`  
 **Design:** [`docs/project-status/t13-n8n-workflow-plan.md`](../project-status/t13-n8n-workflow-plan.md) §3  
-**Env checklist:** [`n8n-env-credential-checklist.md`](n8n-env-credential-checklist.md)
+**Env checklist:** [`n8n-env-credential-checklist.md`](n8n-env-credential-checklist.md)  
+**Export parity:** [`n8n-runtime-export-parity.md`](n8n-runtime-export-parity.md)
 
 **T13.2:** webhook → normalize.  
 **T13.3:** POST backend with auth.  

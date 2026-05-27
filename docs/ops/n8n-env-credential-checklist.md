@@ -6,7 +6,8 @@
 **Purpose:** Pre-flight checklist before building n8n Workflow 1 (test webhook path).  
 **Scope:** Names and placement only — **no secret values in this repo.**  
 **Design reference:** [`docs/project-status/t13-n8n-workflow-plan.md`](../project-status/t13-n8n-workflow-plan.md)  
-**Contracts:** [`specs/api/webhooks.md`](../../specs/api/webhooks.md), [`specs/api/api-endpoints.md`](../../specs/api/api-endpoints.md)
+**Contracts:** [`specs/api/webhooks.md`](../../specs/api/webhooks.md), [`specs/api/api-endpoints.md`](../../specs/api/api-endpoints.md)  
+**Export parity (Phase C1):** [`n8n-runtime-export-parity.md`](n8n-runtime-export-parity.md), [`n8n/workflows/README.md`](../../n8n/workflows/README.md)
 
 Use this checklist for local/dev and production n8n setup. Workflow JSON implementation starts at **T13.2**.
 

@@ -4,6 +4,8 @@
 |----------|---------|
 | [`deployment-contract.md`](deployment-contract.md) | **Canonical** env names, startup order, network, RBUs (B2.0+) |
 | [`../audits/clean-clone-gate-2026-05-27.md`](../audits/clean-clone-gate-2026-05-27.md) | B2.9 clean-clone verification evidence |
+| [`../audits/disposable-rbu-drill-2026-05-27.md`](../audits/disposable-rbu-drill-2026-05-27.md) | Disposable RBU rollback rehearsal |
+| [`../ops/n8n-runtime-export-parity.md`](../ops/n8n-runtime-export-parity.md) | n8n export governance + G-EXP-2 |
 | [`../ops/database-recovery.md`](../ops/database-recovery.md) | Alembic replay after DB loss |
 | [`../ops/n8n-env-credential-checklist.md`](../ops/n8n-env-credential-checklist.md) | n8n ↔ backend token alignment |
 | [`../ops/n8n-runtime-start.md`](../ops/n8n-runtime-start.md) | Legacy host n8n start (Contabo) |
@@ -31,6 +33,7 @@
 | [`backend/Dockerfile`](../../backend/Dockerfile) | Backend image build context |
 
 | [`n8n-compose.md`](n8n-compose.md) | B2.7 n8n on `alpstein_internal` → `http://backend:8000` |
+| [`n8n-runtime-export-parity.md`](../ops/n8n-runtime-export-parity.md) | Phase C1 — workflow export governance |
 
 Legacy host n8n: [`n8n/docker-compose.yml`](../../n8n/docker-compose.yml) + [`n8n-runtime-start.md`](../ops/n8n-runtime-start.md).
 
