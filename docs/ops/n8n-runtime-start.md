@@ -1,6 +1,8 @@
 **Doc status:** runtime-derived  
 **Tier:** ops/production (pending move)
 
+> **Legacy host runbook (Contabo):** Uses `BACKEND_BASE_URL=http://172.20.0.1:8010` and host uvicorn on port **8010**. Portable target: [`deployment-contract.md`](../deployment/deployment-contract.md) — `http://backend:8000` on compose network (B2.7+). Env templates: `n8n/.env.example`, `backend/.env.example`.
+
 # Alpstein n8n — Runtime Start (T13.0-impl)
 
 **Compose:** [`n8n/docker-compose.yml`](../../n8n/docker-compose.yml)  

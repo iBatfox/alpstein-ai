@@ -125,6 +125,20 @@ Specification-driven MVP with **backend AI orchestration complete**, **n8n test 
 - Domain: https://alpstein-ai.ch
 - n8n admin: https://n8n.alpstein-ai.ch
 
+### Deployment portability (B2)
+
+| Phase | Status |
+|-------|--------|
+| B2.0 deployment contract | **done** — [`docs/deployment/deployment-contract.md`](../deployment/deployment-contract.md) |
+| B2.1 env governance artifacts | **done** — `backend/.env.example`, `n8n/.env.example`, root `.env.example` index |
+| B2.2 Postgres compose | **done** — root `docker-compose.yml` (postgres only); [`postgres-compose.md`](../deployment/postgres-compose.md) |
+| B2.3 Backend Dockerfile | **done** — `backend/Dockerfile`, `requirements-prod.txt`; [`backend-image.md`](../deployment/backend-image.md) |
+| B2.4+ Readiness / compose backend | **partially implemented** |
+
+**Portable Postgres:** service `postgres`, DB `alpstein_ai`, volume `alpstein_postgres_data` — separate from legacy `backend_postgres` / `bitrix_app`.
+
+**Legacy production:** host uvicorn `:8010`, n8n `BACKEND_BASE_URL=http://172.20.0.1:8010`, shared `backend_postgres` container — unchanged; not wired to B2.2 compose.
+
 ---
 
 ## Current MVP Goal

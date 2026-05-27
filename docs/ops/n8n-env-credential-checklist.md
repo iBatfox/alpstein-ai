@@ -34,11 +34,14 @@ Use this checklist for local/dev and production n8n setup. Workflow JSON impleme
 ### Example URLs (placeholders)
 
 ```text
-BACKEND_BASE_URL=https://alpstein-ai.ch          # production via nginx
-BACKEND_BASE_URL=http://backend:8000             # Docker internal (n8n → backend on compose network)
+BACKEND_BASE_URL=http://backend:8000             # portable target (compose internal)
+BACKEND_BASE_URL=https://alpstein-ai.ch          # future production via nginx → api
+BACKEND_BASE_URL=http://172.20.0.1:8010          # LEGACY Contabo host only (see n8n-runtime-start.md)
 GET  {BACKEND_BASE_URL}/api/v1/health
 POST {BACKEND_BASE_URL}/api/v1/webhook/message
 ```
+
+Canonical env templates: [`backend/.env.example`](../../backend/.env.example), [`n8n/.env.example`](../../n8n/.env.example) — [`deployment-contract.md`](../deployment/deployment-contract.md).
 
 ---
 
@@ -66,9 +69,11 @@ POST {BACKEND_BASE_URL}/api/v1/webhook/message
 
 | Name | Owner |
 |------|--------|
-| `ALPSTEIN_AI_DATABASE_URL` / `DATABASE_URL` | Backend only |
-| `OPENAI_API_KEY` | Backend only |
-| `SECRET_KEY` | Backend only |
+| `ALPSTEIN_AI_DATABASE_URL` | Backend only (`DATABASE_URL` deprecated) |
+| `ALPSTEIN_AI_ENVIRONMENT` | Backend only (`ENVIRONMENT` deprecated) |
+| `OPENAI_API_KEY`, `OPENAI_MODEL`, `AI_REQUEST_TIMEOUT` | Backend only |
+| `LANGFUSE_*` | Backend only |
+| `SECRET_KEY` | Deprecated — not in `Settings`; do not configure |
 
 ---
 
