@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import re
 import uuid
+from datetime import date, datetime
+from enum import Enum
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -57,7 +59,11 @@ class PromptRunService:
         stored_final_prompt = _prepare_final_prompt(final_prompt)
         stored_result = _redact_secrets(result) if result is not None else None
         stored_error = _redact_secrets(error) if error is not None else None
-        stored_metadata = _redact_metadata(metadata) if metadata is not None else None
+        stored_metadata = (
+            _redact_metadata(json_safe_metadata(metadata))
+            if metadata is not None
+            else None
+        )
 
         prompt_run = PromptRun(
             tenant_id=tenant_id,
@@ -132,6 +138,29 @@ def _truncate_with_marker(text: str, max_chars: int) -> tuple[str, bool]:
     return text[: max_chars - len(TRUNCATED_MARKER)] + TRUNCATED_MARKER, True
 
 
+def json_safe_metadata(value: Any) -> Any:
+    """Convert metadata values to JSON-serializable forms (UUID → str, etc.)."""
+    if value is None:
+        return None
+    if isinstance(value, uuid.UUID):
+        return str(value)
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, Enum):
+        return json_safe_metadata(value.value)
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float, str)):
+        return value
+    if isinstance(value, dict):
+        return {str(key): json_safe_metadata(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [json_safe_metadata(item) for item in value]
+    return str(value)
+
+
 def _redact_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
     redacted: dict[str, Any] = {}
     for key, value in metadata.items():
@@ -139,6 +168,11 @@ def _redact_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
             redacted[key] = _redact_secrets(value)
         elif isinstance(value, dict):
             redacted[key] = _redact_metadata(value)
+        elif isinstance(value, list):
+            redacted[key] = [
+                _redact_secrets(item) if isinstance(item, str) else item
+                for item in value
+            ]
         else:
             redacted[key] = value
     return redacted

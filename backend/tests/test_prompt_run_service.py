@@ -1,4 +1,6 @@
+import json
 import uuid
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -9,6 +11,7 @@ from app.services.prompt_run_service import (
     FINAL_PROMPT_MAX_CHARS,
     TRUNCATED_MARKER,
     PromptRunService,
+    json_safe_metadata,
 )
 
 
@@ -38,6 +41,71 @@ def _scope_entities():
         conversation_id=conversation_id,
     )
     return tenant_id, business, conversation, message, template_id
+
+
+def test_json_safe_metadata_serializes_uuid_datetime_and_nested_values():
+    correlation_id = uuid.uuid4()
+    tenant_id = uuid.uuid4()
+    business_id = uuid.uuid4()
+    observed_at = datetime(2026, 5, 28, 12, 0, tzinfo=timezone.utc)
+
+    payload = json_safe_metadata(
+        {
+            "correlation_id": correlation_id,
+            "tenant_id": tenant_id,
+            "assembled_section_ids": ["platform_system", tenant_id],
+            "nested": {"business_id": business_id},
+            "observed_at": observed_at,
+        }
+    )
+
+    json.dumps(payload)
+    assert payload["correlation_id"] == str(correlation_id)
+    assert payload["tenant_id"] == str(tenant_id)
+    assert payload["assembled_section_ids"] == ["platform_system", str(tenant_id)]
+    assert payload["nested"]["business_id"] == str(business_id)
+    assert payload["observed_at"] == observed_at.isoformat()
+
+
+@pytest.mark.anyio
+async def test_create_prompt_run_stores_json_safe_observability_metadata(
+    prompt_run_service: PromptRunService,
+):
+    tenant_id, business, conversation, message, template_id = _scope_entities()
+    correlation_id = uuid.uuid4()
+    session = MagicMock()
+    session.flush = AsyncMock()
+
+    await prompt_run_service.create_prompt_run(
+        session,
+        tenant_id=tenant_id,
+        business=business,
+        conversation=conversation,
+        message=message,
+        prompt_template_id=template_id,
+        prompt_version="1",
+        model="gpt-4o-mini",
+        provider="openai",
+        input_tokens=1,
+        output_tokens=1,
+        latency_ms=1,
+        result="ok",
+        error=None,
+        metadata={
+            "correlation_id": correlation_id,
+            "tenant_id": tenant_id,
+            "business_id": business.id,
+            "conversation_id": conversation.id,
+            "assembled_section_ids": ["platform_system"],
+        },
+    )
+
+    stored = session.add.call_args.args[0]
+    assert stored.metadata_ is not None
+    json.dumps(stored.metadata_)
+    assert stored.metadata_["correlation_id"] == str(correlation_id)
+    assert stored.metadata_["tenant_id"] == str(tenant_id)
+    assert isinstance(stored.metadata_["business_id"], str)
 
 
 @pytest.mark.anyio

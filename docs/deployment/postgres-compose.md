@@ -116,6 +116,21 @@ Migrations run automatically on backend start (`docker-entrypoint.sh` → `alemb
 
 **Dev seed (optional):** not part of normal `up`. See [`bootstrap-profile.md`](bootstrap-profile.md).
 
+---
+
+## Troubleshooting (D4.2)
+
+| Symptom | Likely cause | Action |
+|---------|----------------|--------|
+| `Set POSTGRES_PASSWORD in .env` on `config` / `up` | Root `.env` missing `POSTGRES_*` (only backend keys present) | Copy **repo root** `.env.example`; set `POSTGRES_PASSWORD` |
+| `InvalidPasswordError` / backend waits forever for postgres | Password in `.env` ≠ password used when volume was first created | Restore password or `docker volume rm alpstein_postgres_data` (data loss) then `up` again |
+| `address already in use` on `127.0.0.1:8000` | Host uvicorn or another process on 8000 | Omit dev overlay and use `docker exec alpstein_backend` for curls, or stop host backend / change `BACKEND_HOST_PORT` |
+| Backend `unhealthy`, logs show postgres wait exhausted | Postgres container exited or renamed (`*_alpstein_postgres`) | `docker-compose -p alpstein-ai rm -sf postgres backend && docker-compose -p alpstein-ai up -d postgres backend` |
+| Webhook `404 BUSINESS_NOT_FOUND` on fresh DB | No bootstrap businesses | `docker-compose -p alpstein-ai --profile bootstrap run --rm backend-bootstrap` |
+| `KeyError: 'ContainerConfig'` on recreate | docker-compose 1.29 + Docker 29 | `docker-compose rm -sf <service>` then `up` |
+
+Audit: [`d4-2-compose-e2e-hardening-2026-05-28.md`](../audits/d4-2-compose-e2e-hardening-2026-05-28.md).
+
 ```bash
 docker-compose -p alpstein-ai --profile bootstrap run --rm backend-bootstrap
 ```
