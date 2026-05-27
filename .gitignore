@@ -1,0 +1,32 @@
+# Secrets and local env (templates stay tracked)
+.env
+.env.*
+!.env.example
+n8n/.env
+n8n/.env.*
+!n8n/.env.example
+!n8n/.env.telegram.customer.example
+
+# Python cache and virtualenvs
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# Local agent/tooling state
+.codex/
+.claude/
+.cursor/*
+!.cursor/skills/
+!.cursor/skills/**
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+
+# Runtime garbage / ad-hoc exports
+tmp/
+n8n/workflows/My_workflow.json
