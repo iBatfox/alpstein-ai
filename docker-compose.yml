@@ -1,9 +1,12 @@
-# Alpstein AI — portable stack (B2.2+: postgres first; backend/n8n added in later phases)
+# Alpstein AI — portable stack (B2.2+ postgres; B2.6+ backend)
 # Contract: docs/deployment/deployment-contract.md
 # CLI: docker-compose v1.29 — use `docker-compose` (hyphen), project `-p alpstein-ai`
 #
-# Postgres only in B2.2 — no backend service, no n8n service in this file.
+#   docker-compose -p alpstein-ai up -d postgres backend
+#   docker-compose -p alpstein-ai -f docker-compose.yml -f docker-compose.dev.yml up -d
+#
 # Does NOT use legacy host container backend_postgres / bitrix_app.
+# n8n service added in B2.7 (n8n/docker-compose.yml until then).
 
 version: "3.8"
 
@@ -27,7 +30,42 @@ services:
       retries: 5
       start_period: 10s
     # No host ports — internal network only (production target).
-    # Dev-only host bind: docker-compose.dev.yml + profile or -f overlay.
+    # Dev-only host bind: docker-compose.dev.yml overlay.
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: alpstein-ai-backend:local
+    container_name: alpstein_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      WAIT_FOR_POSTGRES: "true"
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER:-alpstein}
+      ALPSTEIN_AI_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-alpstein}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-alpstein_ai}
+      ALPSTEIN_AI_ENVIRONMENT: ${ALPSTEIN_AI_ENVIRONMENT:-development}
+      N8N_BACKEND_API_TOKEN: ${N8N_BACKEND_API_TOKEN:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    networks:
+      - alpstein_internal
+    expose:
+      - "8000"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import httpx; r=httpx.get('http://127.0.0.1:8000/api/v1/health/ready', timeout=5.0); r.raise_for_status()\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
+    # No host ports in default file — dev overlay maps 127.0.0.1:8000 only.
 
 networks:
   alpstein_internal:

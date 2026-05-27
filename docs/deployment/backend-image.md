@@ -1,11 +1,12 @@
-# Backend container image (B2.3–B2.5)
+# Backend container image (B2.3–B2.6)
 
 **Contract:** [`deployment-contract.md`](deployment-contract.md)  
 **Dockerfile:** [`backend/Dockerfile`](../../backend/Dockerfile)  
 **Entrypoint:** [`backend/docker-entrypoint.sh`](../../backend/docker-entrypoint.sh)  
+**Compose:** [`docker-compose.yml`](../../docker-compose.yml) service `backend`  
 **Production deps:** [`backend/requirements-prod.txt`](../../backend/requirements-prod.txt)
 
-Reproducible backend image with **migrate-then-serve** at container start. Root `docker-compose.yml` adds the `backend` service in **B2.6** only.
+Reproducible backend image with **migrate-then-serve** at container start, orchestrated by root compose **B2.6+**.
 
 ---
 
@@ -17,7 +18,8 @@ Reproducible backend image with **migrate-then-serve** at container start. Root 
 | Optional TCP wait | `docker-entrypoint.sh` (`pg_isready`) | Container start |
 | `alembic upgrade head` | **Backend container entrypoint** | Every backend container start |
 | `uvicorn` | **Backend container entrypoint** (`exec`) | After successful migration |
-| Readiness probe | `GET /api/v1/health/ready` (B2.4) | Orchestrator / operator |
+| Readiness probe | `GET /api/v1/health/ready` (B2.4) | Compose healthcheck + operator |
+| Compose start order | `depends_on: postgres` (healthy) | B2.6 |
 
 **Not in scope:** separate migration-only container, init containers, Kubernetes.
 
@@ -108,23 +110,28 @@ docker run --rm \
 # Expect: alembic error, exit code != 0, no "starting uvicorn"
 ```
 
-### Full manual smoke (operator — B2.6 prep)
+### Compose stack (B2.6)
+
+From repo root (`.env` with `POSTGRES_PASSWORD` set):
 
 ```bash
-# Terminal 1 — postgres (see postgres-compose.md)
-docker-compose -p alpstein-ai -f docker-compose.yml -f docker-compose.dev.yml up -d postgres
+docker-compose -p alpstein-ai config
+docker-compose -p alpstein-ai up -d postgres backend
 
-# Terminal 2 — backend container (not in compose yet)
-docker run --rm -p 8000:8000 \
-  --network alpstein_internal \
-  -e WAIT_FOR_POSTGRES=true \
-  -e POSTGRES_HOST=postgres \
-  -e ALPSTEIN_AI_DATABASE_URL=postgresql+asyncpg://alpstein:YOUR_PASSWORD@postgres:5432/alpstein_ai \
-  -e ALPSTEIN_AI_ENVIRONMENT=development \
-  -e N8N_BACKEND_API_TOKEN=dev-token \
-  alpstein-ai-backend:local
+# Dev overlay — localhost curl
+docker-compose -p alpstein-ai -f docker-compose.yml -f docker-compose.dev.yml up -d postgres backend
 
+curl -sS http://127.0.0.1:8000/api/v1/health
 curl -sS http://127.0.0.1:8000/api/v1/health/ready
+
+docker inspect --format='{{.State.Health.Status}}' alpstein_backend
+docker-compose -p alpstein-ai logs backend
+```
+
+Compose healthcheck (inside container, no curl/wget — uses **httpx** already in image):
+
+```text
+python -c "import httpx; r=httpx.get('http://127.0.0.1:8000/api/v1/health/ready', timeout=5.0); r.raise_for_status()"
 ```
 
 ---
@@ -147,9 +154,24 @@ RBU: image digest + entrypoint script revision.
 
 ---
 
+## Compose service summary (B2.6)
+
+| Attribute | Value |
+|-----------|--------|
+| Service name | `backend` |
+| Container name | `alpstein_backend` |
+| Image | `alpstein-ai-backend:local` (build) |
+| Depends on | `postgres` (`service_healthy`) |
+| Database URL host | `postgres` (not host gateway) |
+| Internal port | `8000` |
+| Host port (default) | **none** |
+| Host port (dev overlay) | `127.0.0.1:8000` |
+
+Environment interpolated from repo root `.env` (see `.env.example`): `ALPSTEIN_AI_DATABASE_URL`, `ALPSTEIN_AI_ENVIRONMENT`, `N8N_BACKEND_API_TOKEN`, `OPENAI_API_KEY`.
+
 ## Out of scope
 
-- `backend` in root `docker-compose.yml` (**B2.6**)
+- n8n service in root compose (**B2.7**)
 - Live Contabo host uvicorn replacement
 - n8n workflow changes
 

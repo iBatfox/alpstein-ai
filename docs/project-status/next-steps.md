@@ -16,7 +16,7 @@
 
 # Next Steps
 
-## Recommended next task: **B2.6** (compose backend) or **CIP-C** / **T14.5**
+## Recommended next task: **B2.7** (n8n compose) or **CIP-C** / **T14.5**
 
 ### Deployment portability (B2)
 
@@ -28,7 +28,8 @@
 | B2.3 | **done** | [`backend/Dockerfile`](../../backend/Dockerfile) — [`T-b2.3-backend-dockerfile-image-build.md`](../../tasks/done/T-b2.3-backend-dockerfile-image-build.md) |
 | B2.4 | **done** | Readiness endpoint |
 | B2.5 | **done** | [`docker-entrypoint.sh`](../../backend/docker-entrypoint.sh) — [`T-b2.5-backend-entrypoint-contract.md`](../../tasks/done/T-b2.5-backend-entrypoint-contract.md) |
-| **B2.6** | **next** | `backend` service in root `docker-compose.yml` |
+| B2.6 | **done** | Root compose `backend` — [`T-b2.6-backend-compose-service.md`](../../tasks/done/T-b2.6-backend-compose-service.md) |
+| **B2.7** | **next** | n8n → `http://backend:8000` on compose network |
 
 Compose: [`postgres-compose.md`](../deployment/postgres-compose.md). Image + entrypoint: [`backend-image.md`](../deployment/backend-image.md).
 

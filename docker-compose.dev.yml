@@ -1,10 +1,11 @@
-# Dev overlay — optional host access to Postgres for local Alembic/psql debugging.
+# Dev overlay — optional localhost access for Postgres and backend debugging.
 # NOT the production target. Do not expose 0.0.0.0.
 #
 # Usage (from repo root, with .env containing POSTGRES_PASSWORD):
-#   docker-compose -p alpstein-ai -f docker-compose.yml -f docker-compose.dev.yml up -d postgres
+#   docker-compose -p alpstein-ai -f docker-compose.yml -f docker-compose.dev.yml up -d
 #
-# Default host port 15433 avoids collision with legacy backend_postgres on 15432.
+# Postgres host port 15433 avoids collision with legacy backend_postgres on 15432.
+# Backend host port 8000 is loopback-only for curl/browser from the host.
 
 version: "3.8"
 
@@ -12,3 +13,7 @@ services:
   postgres:
     ports:
       - "127.0.0.1:${POSTGRES_HOST_PORT:-15433}:5432"
+
+  backend:
+    ports:
+      - "127.0.0.1:${BACKEND_HOST_PORT:-8000}:8000"

@@ -5,7 +5,7 @@
 #   docker build -f Dockerfile -t alpstein-ai-backend:local .
 #
 # Migrations run at container start via docker-entrypoint.sh (B2.5), not at image build.
-# Not wired into root docker-compose.yml until B2.6.
+# Wired in root docker-compose.yml as service `backend` (B2.6).
 
 FROM python:3.12-slim-bookworm
 

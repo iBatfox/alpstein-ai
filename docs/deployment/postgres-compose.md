@@ -1,13 +1,15 @@
-# Postgres compose service (B2.2)
+# Postgres + backend compose (B2.2 / B2.6)
 
 **Contract:** [`deployment-contract.md`](deployment-contract.md) §7  
-**Compose:** [`docker-compose.yml`](../../docker-compose.yml) (postgres only)
+**Compose:** [`docker-compose.yml`](../../docker-compose.yml) (`postgres` + `backend`)
 
 Dedicated Alpstein PostgreSQL — **not** the legacy `backend_postgres` / `bitrix_app` instance.
 
 ---
 
 ## Service summary
+
+### Postgres
 
 | Attribute | Value |
 |-----------|--------|
@@ -22,6 +24,17 @@ Dedicated Alpstein PostgreSQL — **not** the legacy `backend_postgres` / `bitri
 | Host port (default) | **none** |
 | Host port (dev overlay) | `127.0.0.1:15433` → `5432` |
 
+### Backend (B2.6)
+
+| Attribute | Value |
+|-----------|--------|
+| Compose service name | `backend` |
+| Container name | `alpstein_backend` |
+| Build | `backend/Dockerfile` |
+| Depends on | `postgres` healthy |
+| Internal port | `8000` |
+| Host port (dev overlay) | `127.0.0.1:8000` → `8000` |
+
 ---
 
 ## Environment variables
@@ -33,33 +46,41 @@ Set in repo root `.env` (copy from `.env.example`). **Never commit `.env`.**
 | `POSTGRES_DB` | No | `alpstein_ai` | Database name |
 | `POSTGRES_USER` | No | `alpstein` | Superuser for init |
 | `POSTGRES_PASSWORD` | **Yes** | — | Postgres password |
-| `POSTGRES_HOST_PORT` | No | `15433` | Dev overlay only |
+| `POSTGRES_HOST_PORT` | No | `15433` | Dev overlay postgres only |
+| `BACKEND_HOST_PORT` | No | `8000` | Dev overlay backend only |
+| `ALPSTEIN_AI_ENVIRONMENT` | No | `development` | Backend Settings |
+| `N8N_BACKEND_API_TOKEN` | For webhooks | — | Shared with n8n (when wired) |
+| `OPENAI_API_KEY` | For live AI | — | Backend only |
 
-Backend URL (when running Alembic from host against dev overlay):
+`ALPSTEIN_AI_DATABASE_URL` is **constructed in compose** (not copied manually):
+
+```text
+postgresql+asyncpg://alpstein:<POSTGRES_PASSWORD>@postgres:5432/alpstein_ai
+```
+
+Host Alembic against dev postgres port (without backend container):
 
 ```text
 ALPSTEIN_AI_DATABASE_URL=postgresql+asyncpg://alpstein:<POSTGRES_PASSWORD>@127.0.0.1:15433/alpstein_ai
 ```
 
-Backend URL (future backend container on same compose network):
-
-```text
-ALPSTEIN_AI_DATABASE_URL=postgresql+asyncpg://alpstein:<POSTGRES_PASSWORD>@postgres:5432/alpstein_ai
-```
-
-`POSTGRES_PASSWORD` must match the password segment in `ALPSTEIN_AI_DATABASE_URL`.
-
 ---
 
-## Healthcheck
+## Healthchecks
+
+**Postgres:**
 
 ```text
 pg_isready -U alpstein -d alpstein_ai
 ```
 
-Compose marks the service healthy when PostgreSQL accepts connections. Interval 5s, 5 retries, 10s start period.
+**Backend** (inside container; DB `SELECT 1` only — no webhook/OpenAI):
 
-If you change `POSTGRES_USER` or `POSTGRES_DB` from defaults, update the healthcheck in `docker-compose.yml` to match.
+```text
+GET http://127.0.0.1:8000/api/v1/health/ready
+```
+
+Implemented via `httpx` in compose healthcheck `CMD-SHELL`. `start_period: 90s` allows first-run migrations.
 
 ---
 
@@ -69,51 +90,47 @@ From repo root:
 
 ```bash
 cp .env.example .env
-# Edit .env — set POSTGRES_PASSWORD (and optional POSTGRES_HOST_PORT)
+# Edit .env — set POSTGRES_PASSWORD; optional N8N_BACKEND_API_TOKEN, OPENAI_API_KEY
 
-# Production-style (no host port)
+# Internal network only (no host ports)
 docker-compose -p alpstein-ai config
-docker-compose -p alpstein-ai up -d postgres
+docker-compose -p alpstein-ai up -d postgres backend
 docker-compose -p alpstein-ai ps
-docker-compose -p alpstein-ai exec postgres pg_isready -U alpstein -d alpstein_ai
 
-# Dev overlay (localhost psql / host Alembic)
-docker-compose -p alpstein-ai -f docker-compose.yml -f docker-compose.dev.yml up -d postgres
+# Dev overlay (localhost curl + psql)
+docker-compose -p alpstein-ai -f docker-compose.yml -f docker-compose.dev.yml up -d postgres backend
+
+curl -sS http://127.0.0.1:8000/api/v1/health
+curl -sS http://127.0.0.1:8000/api/v1/health/ready
 ```
 
 Verify health:
 
 ```bash
 docker inspect --format='{{.State.Health.Status}}' alpstein_postgres
+docker inspect --format='{{.State.Health.Status}}' alpstein_backend
 ```
 
-Schema is **empty** after first start — run migrations from `backend/` (B2.5+ entrypoint; manual until then):
-
-```bash
-cd backend
-export ALPSTEIN_AI_DATABASE_URL=postgresql+asyncpg://alpstein:YOUR_PASSWORD@127.0.0.1:15433/alpstein_ai
-alembic upgrade head
-```
+Migrations run automatically on backend start (`docker-entrypoint.sh` → `alembic upgrade head`).
 
 ---
 
 ## Rollback
 
-**Scope:** B2.2 postgres stack only — does not affect legacy `backend_postgres` or live production.
+**Scope:** portable compose stack — does not affect legacy `backend_postgres` or live production.
 
 1. Stop stack: `docker-compose -p alpstein-ai down`
-2. **Data loss warning:** remove volume only after backup decision:  
+2. **Data loss warning:** remove volume only after backup:  
    `docker volume rm alpstein_postgres_data`
-3. Revert git commit containing `docker-compose.yml` if removing the slice entirely
+3. Revert to tag `baseline-b2.5-entrypoint` to remove backend service from compose
 
-RBU for postgres-only: compose file revision + volume snapshot ID (if data must be preserved).
+RBU: compose file revision + volume snapshot ID.
 
 ---
 
-## Out of scope (B2.2)
+## Out of scope
 
-- Backend container / Dockerfile
-- n8n service in root compose (stays in `n8n/docker-compose.yml` until B2.7)
+- n8n service in root compose (**B2.7**)
 - Migrating data from `bitrix_app`
 - Changing Contabo live services
 
@@ -121,5 +138,6 @@ RBU for postgres-only: compose file revision + volume snapshot ID (if data must 
 
 ## Related
 
-- [`database-recovery.md`](../ops/database-recovery.md) — Alembic chain after empty DB
+- [`backend-image.md`](backend-image.md) — entrypoint, image build
+- [`database-recovery.md`](../ops/database-recovery.md) — Alembic chain
 - [`README.md`](README.md) — deployment doc index
