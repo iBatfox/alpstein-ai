@@ -16,7 +16,7 @@
 
 # Next Steps
 
-## Recommended next task: **B2.2** (deployment) or **CIP-C** / **T14.5**
+## Recommended next task: **B2.6** (compose backend) or **CIP-C** / **T14.5**
 
 ### Deployment portability (B2)
 
@@ -26,9 +26,11 @@
 | B2.1 | **done** | Env templates tracked; spec/ops drift marked — [`T-b2.1-deployment-governance-artifacts.md`](../../tasks/done/T-b2.1-deployment-governance-artifacts.md) |
 | B2.2 | **done** | [`docker-compose.yml`](../../docker-compose.yml) postgres only — [`T-b2.2-postgres-compose-service.md`](../../tasks/done/T-b2.2-postgres-compose-service.md) |
 | B2.3 | **done** | [`backend/Dockerfile`](../../backend/Dockerfile) — [`T-b2.3-backend-dockerfile-image-build.md`](../../tasks/done/T-b2.3-backend-dockerfile-image-build.md) |
-| **B2.4** | **done** | Readiness endpoint implemented; compose backend wiring still deferred |
+| B2.4 | **done** | Readiness endpoint |
+| B2.5 | **done** | [`docker-entrypoint.sh`](../../backend/docker-entrypoint.sh) — [`T-b2.5-backend-entrypoint-contract.md`](../../tasks/done/T-b2.5-backend-entrypoint-contract.md) |
+| **B2.6** | **next** | `backend` service in root `docker-compose.yml` |
 
-Compose: [`postgres-compose.md`](../deployment/postgres-compose.md). Image: [`backend-image.md`](../deployment/backend-image.md).
+Compose: [`postgres-compose.md`](../deployment/postgres-compose.md). Image + entrypoint: [`backend-image.md`](../deployment/backend-image.md).
 
 **HF-1 (done):** History safety preamble in §7 — [`HF-1-history-safety-promptbuilder.md`](../../tasks/done/HF-1-history-safety-promptbuilder.md). Plan: [`Plan Context Freshness History Safety Policy.md`](../../tasks/done/Plan%20Context%20Freshness%20History%20Safety%20Policy.md).
 

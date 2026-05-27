@@ -416,9 +416,9 @@ Portable startup order — **mandatory** for clean-clone and future compose:
 ```text
 1. postgres start
 2. postgres health: pg_isready (or equivalent)
-3. alembic upgrade head          [one-shot init OR entrypoint pre-uvicorn]
+3. alembic upgrade head          [backend container entrypoint — B2.5]
 4. (optional) bootstrap profile  [dev only: seed + documented SQL]
-5. backend start (uvicorn)
+5. backend start (uvicorn via entrypoint exec)
 6. liveness: GET /api/v1/health
 7. readiness: GET /api/v1/health/ready   [B2.4+]
 8. n8n start (depends on backend readiness or liveness per phase)
@@ -504,7 +504,7 @@ Implementation order — **do not skip**. No Docker implementation before B2.0 i
 | **B2.2** | Postgres compose service | **done** — `docker-compose.yml` + `docker-compose.dev.yml`; see [`postgres-compose.md`](postgres-compose.md) | `docker-compose -p alpstein-ai down`; volume rm after backup |
 | **B2.3** | Backend Dockerfile | **done** — `backend/Dockerfile`, `requirements-prod.txt`; see [`backend-image.md`](backend-image.md) | `docker rmi` previous tag |
 | **B2.4** | Readiness health | `GET /api/v1/health/ready` + tests | Revert backend commit |
-| **B2.5** | Backend entrypoint contract | `alembic upgrade head && uvicorn ...` script documented + in image | Revert image |
+| **B2.5** | Backend entrypoint contract | **done** — `docker-entrypoint.sh`; see [`backend-image.md`](backend-image.md) | Revert entrypoint + image tag |
 | **B2.6** | Minimal compose | `postgres` + `backend`; internal network; health gates | `docker compose down`; volume snapshot |
 | **B2.7** | n8n network integration | n8n uses `http://backend:8000`; drop host-gateway path | Prior n8n compose + export |
 | **B2.8** | Bootstrap profile | Documented seed/SQL order; compose profile | DB volume restore |
@@ -543,6 +543,15 @@ Implementation order — **do not skip**. No Docker implementation before B2.0 i
 - [x] `docker build` succeeds; `import app.main` passes without DB
 - [x] Root `docker-compose.yml` unchanged (postgres only)
 - [ ] Operator rebuild on clean clone for RBU tag
+
+### B2.5 exit criteria
+
+- [x] `backend/docker-entrypoint.sh` — `set -eu`, bounded `pg_isready` wait, `alembic upgrade head`, `exec uvicorn`
+- [x] Migration failure prevents uvicorn start (non-zero exit)
+- [x] No secrets logged from entrypoint
+- [x] Dockerfile ENTRYPOINT; no migrations at image build
+- [x] Root `docker-compose.yml` still postgres-only
+- [ ] Operator full smoke: postgres + `docker run` backend on `alpstein_internal` (optional before B2.6)
 
 ---
 
@@ -588,7 +597,8 @@ Evidence: committed gate transcript in `docs/audits/`.
 | 2026-05-27 | B2.1 — `backend/.env.example`, `n8n/.env.example`, root index; spec/ops drift markers |
 | 2026-05-27 | B2.2 — `docker-compose.yml` postgres-only; [`postgres-compose.md`](postgres-compose.md) |
 | 2026-05-27 | B2.3 — `backend/Dockerfile`, `requirements-prod.txt`; [`backend-image.md`](backend-image.md) |
+| 2026-05-27 | B2.5 — `docker-entrypoint.sh` migrate-then-serve lifecycle |
 
 ---
 
-*End of deployment contract. Next phase: B2.4 — Readiness health endpoint.*
+*End of deployment contract. Next phase: B2.6 — backend service in root compose.*

@@ -10,7 +10,7 @@
 
 Specification-driven MVP with **backend AI orchestration complete**, **n8n test + Telegram ingress workflows implemented** (ops maturity partial), and **conversational behavior extensions** (greeting, intent for one demo business, operator context) shipped in backend.
 
-**Primary open engineering:** CIP-C Langfuse intent metadata, T14.5–T14.6 Telegram regression/export gate, ATTR-3 attribution persistence.
+**Primary open engineering:** CIP-C Langfuse intent metadata, T14.5–T14.6 Telegram regression/export gate, ATTR-3 attribution persistence, **B2.6** compose backend service.
 
 ---
 
@@ -132,8 +132,10 @@ Specification-driven MVP with **backend AI orchestration complete**, **n8n test 
 | B2.0 deployment contract | **done** — [`docs/deployment/deployment-contract.md`](../deployment/deployment-contract.md) |
 | B2.1 env governance artifacts | **done** — `backend/.env.example`, `n8n/.env.example`, root `.env.example` index |
 | B2.2 Postgres compose | **done** — root `docker-compose.yml` (postgres only); [`postgres-compose.md`](../deployment/postgres-compose.md) |
-| B2.3 Backend Dockerfile | **done** — `backend/Dockerfile`, `requirements-prod.txt`; [`backend-image.md`](../deployment/backend-image.md) |
-| B2.4+ Readiness / compose backend | **partially implemented** |
+| B2.3 Backend Dockerfile | **done** — [`backend-image.md`](../deployment/backend-image.md) |
+| B2.4 Readiness health | **done** — `GET /api/v1/health/ready` |
+| B2.5 Entrypoint migrate-then-serve | **done** — `backend/docker-entrypoint.sh` |
+| B2.6+ Compose backend service | **not started** |
 
 **Portable Postgres:** service `postgres`, DB `alpstein_ai`, volume `alpstein_postgres_data` — separate from legacy `backend_postgres` / `bitrix_app`.
 
