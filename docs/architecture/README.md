@@ -39,7 +39,8 @@ All other architecture docs in this folder are **supporting** — verify against
 | [`conversation-intent-policy-mvp.md`](conversation-intent-policy-mvp.md) | runtime-derived | §6 intent — **partial** (one business) |
 | [`operator-business-context-n8n.md`](operator-business-context-n8n.md) | runtime-derived | §4 operator context — **implemented** |
 | [`pre-sales-contact-ownership.md`](pre-sales-contact-ownership.md) | runtime-derived | Contact rules — backend **done**, n8n ops **partial** |
-| [`langfuse-tracing.md`](langfuse-tracing.md) | runtime-derived | §11 observability — **partial** (CIP-C gap) |
+| [`langfuse-tracing.md`](langfuse-tracing.md) | runtime-derived | §11 observability — **partial** (CIP-C D2) |
+| [`../../specs/architecture/observability-metadata.md`](../../specs/architecture/observability-metadata.md) | **canonical (D1)** | Correlation, lineage, Langfuse mapping — **spec only** |
 | [`telegram-channel-credentials.md`](telegram-channel-credentials.md) | runtime-derived | §8 Telegram — dual-bot model |
 | [`technical-pre-sales-behavior-mvp.md`](technical-pre-sales-behavior-mvp.md) | **deprecated** | Legacy appendix era; see CIP + canonical §5 |
 
