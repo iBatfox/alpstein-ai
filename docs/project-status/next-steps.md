@@ -31,7 +31,7 @@
 | **C5 / T14.5** | planned | Telegram regression on canonical export |
 | **C6** | planned | Clean-clone G5 webhook import path |
 
-Also: **CIP-C** (Langfuse intent metadata).
+**CIP-C Phase D:** D1 observability metadata **approved** (§16 defaults locked) — [`cip-c-d1-observability-metadata.md`](cip-c-d1-observability-metadata.md), [`observability-metadata.md`](../../specs/architecture/observability-metadata.md). **Next: D2** backend propagation + Langfuse wiring (do not start until explicitly tasked).
 
 ### Deployment portability (B2)
 
@@ -51,8 +51,6 @@ Also: **CIP-C** (Langfuse intent metadata).
 Compose: [`postgres-compose.md`](../deployment/postgres-compose.md), [`n8n-compose.md`](../deployment/n8n-compose.md). Image + entrypoint: [`backend-image.md`](../deployment/backend-image.md).
 
 **HF-1 (done):** History safety preamble in §7 — [`HF-1-history-safety-promptbuilder.md`](../../tasks/done/HF-1-history-safety-promptbuilder.md). Plan: [`Plan Context Freshness History Safety Policy.md`](../../tasks/done/Plan%20Context%20Freshness%20History%20Safety%20Policy.md).
-
-**CIP-C:** Wire Langfuse metadata `conversation_intent`, `intent_matched_rule`, `intent_used_previous_message` at runtime (`langfuse_intent_trace.py` constants exist).
 
 ---
 
@@ -76,8 +74,9 @@ Plan reference: [`tasks/todo/t14-telegram-customer-ingress.md`](../../tasks/todo
 | Spec | [`conversation-intent-policy-mvp.md`](../architecture/conversation-intent-policy-mvp.md) |
 | CIP-A routing foundation | **implemented** (absorbed into CIP-B; `ConversationIntentService`) |
 | CIP-B PromptBuilder wire | **done** — [`CIP-B-conversation-intent-promptbuilder.md`](../../tasks/done/CIP-B-conversation-intent-promptbuilder.md) |
-| CIP-C Langfuse metadata | **open** |
-| CIP-D Telegram live smoke | **open** (after CIP-C) |
+| CIP-C D1 observability contract | **approved** (defaults §16) |
+| CIP-C D2 Langfuse + context propagation | **ready** (not started) |
+| CIP-D Telegram live smoke | **open** (after CIP-C D2) |
 
 Contact ownership backend cleanup **done** — [`CIP-contact-ownership-backend-cleanup.md`](../../tasks/done/CIP-contact-ownership-backend-cleanup.md). **Ops:** add contact block to n8n `operator_business_context` ([`pre-sales-contact-ownership.md`](../architecture/pre-sales-contact-ownership.md)).
 
