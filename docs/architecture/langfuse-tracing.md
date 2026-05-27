@@ -6,7 +6,7 @@
 
 # Langfuse tracing (backend MVP)
 
-**Status:** Implemented — dev/internal only (production policy unchanged per spec §16.6).
+**Status:** Implemented — dev/internal only (production policy unchanged per spec §16.6). **D4.4:** flat metadata production-safe; generation I/O exposure remains if tracing enabled in production — see [`d4-operational-wrap-up-2026-05-27.md`](../audits/d4-operational-wrap-up-2026-05-27.md).
 
 ## Enable
 

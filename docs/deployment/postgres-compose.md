@@ -129,7 +129,7 @@ Migrations run automatically on backend start (`docker-entrypoint.sh` → `alemb
 | Webhook `404 BUSINESS_NOT_FOUND` on fresh DB | No bootstrap businesses | `docker-compose -p alpstein-ai --profile bootstrap run --rm backend-bootstrap` |
 | `KeyError: 'ContainerConfig'` on recreate | docker-compose 1.29 + Docker 29 | `docker-compose rm -sf <service>` then `up` |
 
-Audit: [`d4-2-compose-e2e-hardening-2026-05-28.md`](../audits/d4-2-compose-e2e-hardening-2026-05-28.md).
+Audits: [`d4-2-compose-e2e-hardening-2026-05-28.md`](../audits/d4-2-compose-e2e-hardening-2026-05-28.md), [`d4-operational-wrap-up-2026-05-27.md`](../audits/d4-operational-wrap-up-2026-05-27.md) (D4 close).
 
 ```bash
 docker-compose -p alpstein-ai --profile bootstrap run --rm backend-bootstrap

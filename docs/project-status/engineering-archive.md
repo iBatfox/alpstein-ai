@@ -26,7 +26,8 @@
 | 2026-05-25 | T14-OC | `operator_business_context` spec + backend + n8n Set node |
 | 2026-05-25 | Greeting, Langfuse, ATTR-2, demo separation | Backend greeting policy; dev tracing; attribution schema; Alpstein vs barbershop demo split |
 | 2026-05-25–27 | CIP-B intent + contact ownership | Intent slices in §2 for `alpstein_ai_demo_001`; hardcoded contacts removed from backend prompts |
-| Ongoing | Hardening + ATTR persistence | HF-1 history safety, CIP-C/D, T14.5–T14.6, ATTR-3+, T13.6 retries, WhatsApp |
+| 2026-05-27 | B2 deployment portability + D4 ops verification | Compose SoT, migrate-then-serve, readiness, JSON-safe metadata, replay lineage, ingress policy — **not** K8s/scale proof |
+| Ongoing | Phase E controlled expansion | T14.5/C5, CIP-D, ATTR-3+, C3/C4 parity, T13.6 retries; WhatsApp **deferred** |
 
 ---
 

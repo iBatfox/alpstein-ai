@@ -4,13 +4,15 @@
 
 # Alpstein AI — Current State
 
-**As-of:** 2026-05-27
+**As-of:** 2026-05-27 (D4.5 operational wrap-up)
 
 ## Project Phase
 
 Specification-driven MVP with **backend AI orchestration complete**, **n8n test + Telegram ingress workflows implemented** (ops maturity partial), and **conversational behavior extensions** (greeting, intent for one demo business, operator context) shipped in backend.
 
-**Primary open engineering:** CIP-C Langfuse intent metadata, **C5/T14.5** Telegram regression, ATTR-3 attribution persistence. **Phase B portable compose:** complete (B2.9). **Phase C1** parity policy + **C2/T14.6** export scrub gate — done.
+**Phase D4 operational verification:** **complete** (D4.1–D4.4, U1, OPS-C1). Portable **Docker Compose** is the **operational source of truth** for backend verification; see [`d4-operational-wrap-up-2026-05-27.md`](../audits/d4-operational-wrap-up-2026-05-27.md). Verdict: **stable with known operational limits** — not enterprise maturity.
+
+**Primary open engineering (Phase E prep):** **T14.5 / C5** Telegram regression on portable path, **CIP-D** live smoke, ATTR-3 attribution persistence. **Phase B portable compose:** complete (B2.9). **Phase C1/C2** export governance — done; C3–C5 partial/planned.
 
 ---
 
@@ -58,7 +60,8 @@ Specification-driven MVP with **backend AI orchestration complete**, **n8n test 
 - **Greeting:** `GreetingPolicyService` + greeting blocks in §2 task_instructions
 - **Intent (partial):** `ConversationIntentService` + intent slices for `alpstein_ai_demo_001` only; non-Alpstein tenants use core task + generic greeting only (P0 + P1; no legacy appendix)
 - **History Safety (HF-1):** §7 preamble + non-authoritative `ai` labels in `PromptBuilderService` — **implemented**
-- **Langfuse (dev):** `LangfuseTracingService` on orchestration; greeting tags; intent metadata constants exist but **runtime export not wired (CIP-C)**
+- **Langfuse (dev):** `LangfuseTracingService` + `ObservabilityContext` (D2); flat metadata §16.2; intent keys wired in orchestration path — **implemented**; production off by default
+- **Observability metadata (D4):** `prompt_runs.metadata` JSON-safe (`json_safe_metadata`); scalar lineage; production-safe envelope per D4.4
 - pytest: **308** test functions in `backend/tests/` (as-of 2026-05-27; run `pytest` in venv to verify green)
 
 ### Missing / deferred
@@ -115,8 +118,25 @@ Specification-driven MVP with **backend AI orchestration complete**, **n8n test 
 | Legacy pre-sales appendix | **removed** (P1); non-Alpstein uses core task + generic greeting only |
 | Operator context overlay | **implemented** |
 | History Safety (HF-1) | **implemented** |
-| Langfuse intent metadata at runtime | **planned** (CIP-C) |
+| Langfuse intent metadata at runtime | **implemented** (D2); live Alpstein demo smoke **open** (CIP-D) |
 | AI Gateway (sole OpenAI HTTP) | **implemented** |
+
+---
+
+## Operational baseline (Phase D4)
+
+| Item | Status |
+|------|--------|
+| Compose runtime SoT | **verified** (D4.2, D4.3) — `docker-compose -p alpstein-ai` |
+| Migrate-before-serve | **verified** — `backend/docker-entrypoint.sh` |
+| Correlation / replay lineage | **verified** on compose (D4.3) |
+| Metadata JSON-safe persistence | **verified** (U1 + D4.3) |
+| Production-safe metadata envelope | **verified** by code + sample (D4.4) |
+| Single ingress policy | **implemented** (OPS-C1) — [`operational-ingress-policy.md`](../ops/operational-ingress-policy.md) |
+| Failure-path live drill | **deferred** |
+| Legacy host `:8010` | **compatibility only** — stale-process hazard if not stopped |
+
+Wrap-up: [`d4-operational-wrap-up-2026-05-27.md`](../audits/d4-operational-wrap-up-2026-05-27.md).
 
 ---
 
@@ -143,7 +163,7 @@ Specification-driven MVP with **backend AI orchestration complete**, **n8n test 
 
 **Portable Postgres:** service `postgres`, DB `alpstein_ai`, volume `alpstein_postgres_data` — separate from legacy `backend_postgres` / `bitrix_app`.
 
-**Legacy production:** host uvicorn `:8010`, n8n `BACKEND_BASE_URL=http://172.20.0.1:8010`, shared `backend_postgres` container — unchanged; not wired to B2.2 compose.
+**Legacy production:** host uvicorn `:8010`, n8n `BACKEND_BASE_URL=http://172.20.0.1:8010`, shared `backend_postgres` container — **documented compatibility**; not portable SoT. Do not use for D4/CIP validation without confirmed process revision.
 
 ---
 

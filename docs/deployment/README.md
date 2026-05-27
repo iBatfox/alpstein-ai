@@ -6,6 +6,8 @@
 | [`../audits/clean-clone-gate-2026-05-27.md`](../audits/clean-clone-gate-2026-05-27.md) | B2.9 clean-clone verification evidence |
 | [`../audits/disposable-rbu-drill-2026-05-27.md`](../audits/disposable-rbu-drill-2026-05-27.md) | Disposable RBU rollback rehearsal |
 | [`../audits/d4-2-compose-e2e-hardening-2026-05-28.md`](../audits/d4-2-compose-e2e-hardening-2026-05-28.md) | D4.2 compose E2E / portability drill |
+| [`../audits/d4-operational-wrap-up-2026-05-27.md`](../audits/d4-operational-wrap-up-2026-05-27.md) | **D4.5** operational wrap-up — SoT, risks, Phase E readiness |
+| [`../ops/operational-ingress-policy.md`](../ops/operational-ingress-policy.md) | Single ingress policy (OPS-C1) |
 | [`../ops/n8n-runtime-export-parity.md`](../ops/n8n-runtime-export-parity.md) | n8n export governance + G-EXP-2 |
 | [`../ops/database-recovery.md`](../ops/database-recovery.md) | Alembic replay after DB loss |
 | [`../ops/n8n-env-credential-checklist.md`](../ops/n8n-env-credential-checklist.md) | n8n ↔ backend token alignment |

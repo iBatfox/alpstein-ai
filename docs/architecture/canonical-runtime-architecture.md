@@ -9,7 +9,7 @@
 | Field | Value |
 |-------|--------|
 | **Document status** | Canonical runtime map (Phase 1 — canonicalization) |
-| **As-of date** | 2026-05-27 (HF-1 patch) |
+| **As-of date** | 2026-05-27 (D4.5 operational baseline) |
 | **Scope** | Runtime truth only — not future architecture, not marketing |
 
 **Evidence sources used (priority order applied):**
@@ -360,13 +360,15 @@ Ideal behaviors described only in `docs/architecture/conversation-intent-policy-
 
 | Mechanism | State | Limitations |
 |-----------|-------|-------------|
-| **PromptRun** (`prompt_runs` table) | **implemented** | `final_prompt` stored redacted; not exposed in webhook API |
-| **Langfuse** | **partial** — active when keys set and (`LANGFUSE_TRACING_ENABLED` or env in `development/dev/local/test`) | Not production observability by default; failures swallowed |
-| **Langfuse span metadata** | business_id, conversation_id, channel, greeting_mode, customer_language, operator_context preview, assembled_prompt dump | **implemented** |
-| **Langfuse greeting tag** | `greeting_orchestration` | **implemented** |
-| **Langfuse intent metadata** | Keys defined in [`langfuse_intent_trace.py`](../../backend/app/schemas/langfuse_intent_trace.py) | **not wired** to `_build_metadata` (CIP-C) |
-| **n8n execution IDs** | Documented in ops/task files (e.g. exec 89–91) | Manual ops debugger; no automated link to PromptRun |
+| **PromptRun** (`prompt_runs` table) | **implemented** | `metadata` JSON-safe scalar lineage (D4/U1); `final_prompt` stored redacted; not in webhook API |
+| **Langfuse** | **partial** — active when keys set and (`LANGFUSE_TRACING_ENABLED` or env in `development/dev/local/test`) | Not production observability by default; generation I/O may hold full messages when tracing on (D4.4) |
+| **Langfuse flat metadata** | `ObservabilityContext.to_langfuse_metadata()` per §16.2 | Sensitive text previews **omitted** in production/staging |
+| **Langfuse intent metadata** | Wired in orchestration path (D2) | Live Alpstein demo smoke **open** (CIP-D) |
+| **Correlation / replay** | `correlation_id` in metadata + DB joins | **verified** on compose (D4.3); metadata-first replay |
+| **n8n execution IDs** | Header `X-N8n-Execution-Id` in D2 contract | Propagation **deferred** if headers not set by n8n |
 | **Webhook response** | No `final_prompt`, no operator context, no internal AI errors beyond fallback flag semantics | By design |
+
+**Operational SoT:** Portable compose backend — [`operational-ingress-policy.md`](../ops/operational-ingress-policy.md). Evidence: [`d4-operational-wrap-up-2026-05-27.md`](../audits/d4-operational-wrap-up-2026-05-27.md).
 
 ---
 
@@ -374,7 +376,7 @@ Ideal behaviors described only in `docs/architecture/conversation-intent-policy-
 
 | Area | Runtime truth | Docs/spec claim | Severity | Recommended owner |
 |------|---------------|-----------------|----------|-------------------|
-| **CIP-C Langfuse intent metadata** | Constants only; not in Langfuse metadata | `conversation-intent-policy-mvp.md` § CIP-C | **Important** | `alpstein-backend-engineer` |
+| **CIP-D live intent smoke** | D2 wired; D4.3 used barbershop demo | Intent keys on `alpstein_ai_demo_001` | **Minor** | Ops + backend |
 | **ATTR persistence** | Schema validates; no DB write | Attribution design docs | **Important** | `alpstein-backend-engineer` + `alpstein-database-architect` |
 | **Legacy appendix path** | Removed from codebase (P1); non-Alpstein uses minimal §2; Alpstein uses CIP charter + intent | Intent policy doc | **Resolved** (P0 + P1) | — |
 | **Langfuse demo tag** | Tags `alpstein_ai_demo_001` when business is `demo_barbershop_001` | `langfuse-tracing.md` may imply Alpstein demo tag matches business | **Important** | `alpstein-backend-engineer` (CIP-C) |
