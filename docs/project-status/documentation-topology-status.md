@@ -54,6 +54,19 @@ Navigation: [`../README.md`](../README.md) · Migration plan: [`../MIGRATION-PLA
 
 Verified against code; must stay aligned with canonical map.
 
+### Canonical source consolidation (Phase 1.3C)
+
+For each topic, prefer the **canonical source** below and treat other docs as supplements, historical reference, or deprecated duplicates.
+
+| Topic | Canonical source | Other docs (status) |
+|------|------------------|---------------------|
+| Project status | `project-status/{current-state,next-steps,completed,decisions}.md` | `engineering-archive.md` (historical chronology), `historical/engineering-audit-report.md` (historical audit) |
+| Runtime architecture | `architecture/canonical-runtime-architecture.md` | runtime-derived supplements in `architecture/` (must align) |
+| PromptBuilder rules | `specs/architecture/prompt-builder-rules.md` (contract) + canonical map §5 | `architecture/deprecated/t11-prompt-builder-design.md` (historical) |
+| Conversational behavior | canonical map §6 + `architecture/conversation-intent-policy-mvp.md` | `architecture/technical-pre-sales-behavior-mvp.md` (deprecated duplicate) |
+| Telegram ingress ops | `ops/n8n-workflow-telegram-customer-ingress.md` (runbook) | `ops/telegram-customer-ingress.md` (deprecated duplicate mapping appendix) |
+| Observability / Langfuse | canonical map §11 | `architecture/langfuse-tracing.md` (runtime-derived supplement) |
+
 ### Architecture
 
 | Document | Implementation alignment | Risk if stale |

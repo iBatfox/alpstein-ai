@@ -1,6 +1,7 @@
-**Doc status:** deprecated  
+**Doc status:** historical reference only (deprecated duplicate)  
 **Tier:** architecture/deprecated (pending move)  
-**Canonical anchor:** [`canonical-runtime-architecture.md`](canonical-runtime-architecture.md) §5 — legacy appendix path for non-`alpstein_ai_demo_001` businesses
+**Canonical source:** `docs/architecture/canonical-runtime-architecture.md` (§2/§6) + `docs/architecture/conversation-intent-policy-mvp.md` (behavior spec)  
+**Note:** This doc describes the pre-CIP monolithic approach and must not be used as a current runtime description.
 
 # Technical Pre-Sales Behavior MVP
 

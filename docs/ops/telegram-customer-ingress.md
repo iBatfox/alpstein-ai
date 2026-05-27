@@ -1,8 +1,7 @@
-**Doc status:** runtime-derived  
-**Tier:** ops/production (pending move) — **duplicate cluster** with `n8n-workflow-telegram-customer-ingress.md`
-
-**Doc status:** runtime-derived  
-**Tier:** ops/production (pending move) — **duplicate cluster** with `n8n-workflow-telegram-customer-ingress.md`
+**Doc status:** deprecated duplicate (mapping appendix)  
+**Tier:** ops/production (pending move)  
+**Canonical source:** `docs/ops/n8n-workflow-telegram-customer-ingress.md` (workflow/runbook)  
+**Keep as:** mapping appendix / historical reference for normalize-table detail (do not treat as runbook)
 
 # Telegram customer ingress — normalize mapping (T14.1)
 

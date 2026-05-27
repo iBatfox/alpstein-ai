@@ -1,6 +1,7 @@
-**Doc status:** runtime-derived  
+**Doc status:** runtime-derived (supplement)  
 **Tier:** architecture/runtime (pending move)  
-**Canonical anchor:** [`canonical-runtime-architecture.md`](canonical-runtime-architecture.md) §11 — **partial** (CIP-C intent metadata not wired)
+**Canonical source:** `docs/architecture/canonical-runtime-architecture.md` §11 (observability runtime truth)  
+**Keep as:** implementation detail / enablement notes; may lag behind canonical map until CIP-C closes
 
 # Langfuse tracing (backend MVP)
 
