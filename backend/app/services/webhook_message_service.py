@@ -11,6 +11,7 @@ from app.models.message import Message
 from app.schemas.ai_reply import AiReplyResult
 from app.schemas.lead_signal import LeadSignalDetectionResult
 from app.schemas.notification import NotificationDecision
+from app.schemas.observability import ObservabilityContext
 from app.schemas.webhook import NormalizedWebhookMessageRequest, WebhookMessage
 from app.schemas.webhook_response import (
     WebhookLeadSummary,
@@ -102,13 +103,27 @@ class WebhookMessageService:
         self,
         session: AsyncSession,
         request: NormalizedWebhookMessageRequest,
+        *,
+        observability: ObservabilityContext | None = None,
     ) -> WebhookMessageProcessResult:
+        if observability is None:
+            observability = ObservabilityContext(
+                correlation_id=uuid.uuid4(),
+                channel=request.channel.value,
+                external_message_id=request.message.external_message_id,
+                external_conversation_id=request.message.external_conversation_id,
+            )
         business = await self.business_service.get_by_external_id(
             session,
             request.business_id,
         )
         tenant_id = business.tenant_id
         channel = request.channel.value
+        observability = observability.with_business(
+            tenant_id=tenant_id,
+            business_id=business.id,
+            business_external_id=business.external_id,
+        )
 
         customer = await self.customer_service.get_or_create_customer(
             session,
@@ -140,6 +155,11 @@ class WebhookMessageService:
             external_message_id=request.message.external_message_id,
             raw_payload=request.message.raw_payload,
         )
+        observability = observability.with_session(
+            conversation_id=conversation.id,
+            inbound_message_id=save_result.message.id,
+            is_duplicate=save_result.is_duplicate,
+        )
 
         conversation.last_message_at = _message_timestamp(request.message)
         await session.flush()
@@ -162,6 +182,7 @@ class WebhookMessageService:
                 operator_business_context=request.operator_business_context,
                 message_timestamp=request.message.timestamp,
                 raw_payload=request.message.raw_payload,
+                observability=observability,
             )
             return WebhookMessageProcessResult(
                 conversation=conversation,
@@ -199,6 +220,7 @@ class WebhookMessageService:
             operator_business_context=request.operator_business_context,
             message_timestamp=request.message.timestamp,
             raw_payload=request.message.raw_payload,
+            observability=observability,
         )
 
         notification_decision = self.notification_policy_service.decide(
@@ -314,6 +336,7 @@ class WebhookMessageService:
         operator_business_context: str | None = None,
         message_timestamp: datetime | None = None,
         raw_payload: dict[str, Any] | None = None,
+        observability: ObservabilityContext | None = None,
     ) -> _ReplyResolution:
         orchestration_outcome = await self.ai_reply_coordinator.execute_for_incoming_message(
             session,
@@ -328,6 +351,7 @@ class WebhookMessageService:
             operator_business_context=operator_business_context,
             message_timestamp=message_timestamp,
             raw_payload=raw_payload,
+            observability=observability,
         )
 
         if orchestration_outcome.is_duplicate:

@@ -1,6 +1,6 @@
 # CIP-C Phase D — D1 Observability metadata (complete)
 
-**Status:** **approved** — §16 defaults locked; D2 not started  
+**Status:** **approved** — §16 defaults locked; **D2 implemented** (pending review)  
 **Date:** 2026-05-25 · defaults finalized 2026-05-27  
 **Branch:** `stabilization/runtime-baseline`
 
@@ -23,8 +23,8 @@
 |-----------|--------|
 | `prompt_runs` | Persists execution; `final_prompt` redacted; **`metadata` JSONB underused** |
 | `messages.ai_metadata` | `prompt_run_id`, `model`, `provider`, `used_fallback` |
-| Langfuse | Partial — `session_id=conversation_id`; greeting tags; **no `correlation_id`**; **CIP intent keys not wired** |
-| Webhook | No request correlation id |
+| Langfuse | D2 — flat envelope metadata; `session_id=conversation_id`; `correlation_id` + CIP intent keys wired |
+| Webhook | D2 — `X-Correlation-Id` / body / server UUID; `X-N8n-Execution-Id` at ingress |
 | Channel attribution | Spec only (ATTR); not in traces yet |
 
 ## Approved defaults (§16 summary)
@@ -40,7 +40,7 @@
 
 ## Next step
 
-**D2** — `ObservabilityContext` + propagation + Langfuse `_build_metadata` + `prompt_runs.metadata` (backend-engineer). **Not started.**
+**D2** — `ObservabilityContext` + propagation + Langfuse metadata + `prompt_runs.metadata`. **Implemented** (see `tasks/done/T-d2-langfuse-runtime-metadata-wiring.md`).
 
 ## Suggested commit
 

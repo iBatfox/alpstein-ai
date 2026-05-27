@@ -31,7 +31,7 @@
 | **C5 / T14.5** | planned | Telegram regression on canonical export |
 | **C6** | planned | Clean-clone G5 webhook import path |
 
-**CIP-C Phase D:** D1 observability metadata **approved** (§16 defaults locked) — [`cip-c-d1-observability-metadata.md`](cip-c-d1-observability-metadata.md), [`observability-metadata.md`](../../specs/architecture/observability-metadata.md). **Next: D2** backend propagation + Langfuse wiring (do not start until explicitly tasked).
+**CIP-C Phase D:** D1 observability metadata **approved** (§16 defaults locked). **D2** Langfuse runtime metadata wiring **implemented** (pending review) — [`T-d2-langfuse-runtime-metadata-wiring.md`](../../tasks/done/T-d2-langfuse-runtime-metadata-wiring.md). **Next: D3** n8n correlation headers (when tasked).
 
 ### Deployment portability (B2)
 
@@ -75,7 +75,7 @@ Plan reference: [`tasks/todo/t14-telegram-customer-ingress.md`](../../tasks/todo
 | CIP-A routing foundation | **implemented** (absorbed into CIP-B; `ConversationIntentService`) |
 | CIP-B PromptBuilder wire | **done** — [`CIP-B-conversation-intent-promptbuilder.md`](../../tasks/done/CIP-B-conversation-intent-promptbuilder.md) |
 | CIP-C D1 observability contract | **approved** (defaults §16) |
-| CIP-C D2 Langfuse + context propagation | **ready** (not started) |
+| CIP-C D2 Langfuse + context propagation | **implemented** (pending review) |
 | CIP-D Telegram live smoke | **open** (after CIP-C D2) |
 
 Contact ownership backend cleanup **done** — [`CIP-contact-ownership-backend-cleanup.md`](../../tasks/done/CIP-contact-ownership-backend-cleanup.md). **Ops:** add contact block to n8n `operator_business_context` ([`pre-sales-contact-ownership.md`](../architecture/pre-sales-contact-ownership.md)).

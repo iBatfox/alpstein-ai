@@ -9,6 +9,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.schemas.ai_reply_orchestration import AiReplyOrchestrationOutcome
+from app.schemas.observability import ObservabilityContext
 from app.services.ai_reply_orchestration_service import AiReplyOrchestrationService
 
 REASON_DUPLICATE_INCOMING_MESSAGE = "duplicate_incoming_message"
@@ -39,6 +40,7 @@ class AiReplyOrchestrationCoordinator:
         operator_business_context: str | None = None,
         message_timestamp: datetime | None = None,
         raw_payload: dict[str, Any] | None = None,
+        observability: ObservabilityContext | None = None,
     ) -> AiReplyOrchestrationOutcome:
         if is_duplicate:
             return AiReplyOrchestrationOutcome(
@@ -60,6 +62,7 @@ class AiReplyOrchestrationCoordinator:
             operator_business_context=operator_business_context,
             message_timestamp=message_timestamp,
             raw_payload=raw_payload,
+            observability=observability,
         )
         return AiReplyOrchestrationOutcome(
             is_duplicate=False,

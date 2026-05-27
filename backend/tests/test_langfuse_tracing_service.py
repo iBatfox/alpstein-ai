@@ -10,11 +10,12 @@ import pytest
 from app.core.config import Settings
 from app.schemas.ai_gateway import AiGatewayResult
 from app.schemas.assembled_prompt import AssembledPrompt, AssembledPromptSection
-from app.schemas.greeting import GreetingMode, GreetingPolicy
+from app.schemas.observability import (
+    ALPSTEIN_DEMO_BUSINESS_EXTERNAL_ID,
+    ObservabilityContext,
+)
 from app.services.langfuse_tracing_service import (
-    DEMO_BUSINESS_EXTERNAL_ID,
     LangfuseTracingService,
-    TRACE_TAG_DEMO_BUSINESS,
     TRACE_TAG_GREETING,
 )
 
@@ -48,11 +49,33 @@ def _assembled_prompt() -> AssembledPrompt:
     )
 
 
-def _greeting_policy() -> GreetingPolicy:
-    return GreetingPolicy(
-        mode=GreetingMode.FIRST_CONTACT,
-        reply_language_code="ru",
-        reply_language_name="Russian",
+def _observability(**overrides) -> ObservabilityContext:
+    correlation_id = overrides.pop("correlation_id", uuid.uuid4())
+    conversation_id = overrides.pop("conversation_id", uuid.uuid4())
+    business_external_id = overrides.pop(
+        "business_external_id",
+        ALPSTEIN_DEMO_BUSINESS_EXTERNAL_ID,
+    )
+    return ObservabilityContext(
+        correlation_id=correlation_id,
+        business_external_id=business_external_id,
+        business_id=overrides.pop("business_id", uuid.uuid4()),
+        tenant_id=overrides.pop("tenant_id", uuid.uuid4()),
+        channel=overrides.pop("channel", "telegram"),
+        conversation_id=conversation_id,
+        inbound_message_id=overrides.pop("inbound_message_id", uuid.uuid4()),
+        is_duplicate=overrides.pop("is_duplicate", False),
+        greeting_mode=overrides.pop("greeting_mode", "first_contact"),
+        customer_language_code=overrides.pop("customer_language_code", "ru"),
+        operator_business_context_present=overrides.pop(
+            "operator_business_context_present",
+            True,
+        ),
+        operator_business_context_preview=overrides.pop(
+            "operator_business_context_preview",
+            "Russian supported",
+        ),
+        **overrides,
     )
 
 
@@ -89,23 +112,14 @@ def test_tracing_enabled_in_production_when_explicit():
 
 
 def test_build_tags_for_telegram_demo():
-    from app.services import langfuse_tracing_service as module
+    from app.services.langfuse_tracing_service import _build_tags
 
-    context = module._AiReplyTraceContext(
-        business_external_id=DEMO_BUSINESS_EXTERNAL_ID,
-        business_id=str(uuid.uuid4()),
-        conversation_id=str(uuid.uuid4()),
-        channel="telegram",
-        customer_language_code="ru",
-        greeting_mode="first_contact",
-        operator_business_context="Russian supported",
-        customer_message_preview="Привет",
-    )
-    tags = module._build_tags(context)
+    context = _observability()
+    tags = _build_tags(context)
 
     assert TRACE_TAG_GREETING in tags
     assert "telegram" in tags
-    assert TRACE_TAG_DEMO_BUSINESS in tags
+    assert ALPSTEIN_DEMO_BUSINESS_EXTERNAL_ID in tags
 
 
 @pytest.mark.anyio
@@ -116,13 +130,8 @@ async def test_trace_ai_reply_noop_when_disabled():
     recorded = False
 
     async with service.trace_ai_reply(
-        business_external_id=DEMO_BUSINESS_EXTERNAL_ID,
-        business_id=str(uuid.uuid4()),
-        conversation_id=str(uuid.uuid4()),
-        channel="telegram",
-        greeting_policy=_greeting_policy(),
-        operator_business_context="notes",
-        customer_message_text="Hi",
+        observability=_observability(),
+        customer_message_preview="Hi",
         assembled_prompt=_assembled_prompt(),
     ) as recorder:
         recorder.record_gateway_result(
@@ -158,6 +167,7 @@ async def test_trace_ai_reply_records_openai_generation_when_enabled():
         app_settings=_settings(),
         client=mock_client,
     )
+    observability = _observability()
 
     with patch(
         "app.services.langfuse_tracing_service.propagate_attributes"
@@ -166,13 +176,8 @@ async def test_trace_ai_reply_records_openai_generation_when_enabled():
         mock_propagate.return_value.__exit__ = MagicMock(return_value=False)
 
         async with service.trace_ai_reply(
-            business_external_id=DEMO_BUSINESS_EXTERNAL_ID,
-            business_id=str(uuid.uuid4()),
-            conversation_id=str(uuid.uuid4()),
-            channel="telegram",
-            greeting_policy=_greeting_policy(),
-            operator_business_context="If Russian, reply in Russian",
-            customer_message_text="Привет",
+            observability=observability,
+            customer_message_preview="Привет",
             assembled_prompt=_assembled_prompt(),
         ) as recorder:
             recorder.record_gateway_result(
@@ -188,6 +193,7 @@ async def test_trace_ai_reply_records_openai_generation_when_enabled():
                 ),
                 model="gpt-4o-mini",
             )
+            recorder.update_trace_metadata({"prompt_run_id": str(uuid.uuid4())})
 
     mock_client.flush.assert_called_once()
     generation_calls = [
@@ -208,10 +214,58 @@ async def test_trace_ai_reply_records_openai_generation_when_enabled():
             metadata = call.kwargs.get("metadata")
             break
     assert metadata is not None
-    assert metadata["business_id"] == DEMO_BUSINESS_EXTERNAL_ID
+    assert metadata["business_id"] == ALPSTEIN_DEMO_BUSINESS_EXTERNAL_ID
     assert metadata["greeting_mode"] == "first_contact"
     assert metadata["customer_language"] == "ru"
+    assert metadata["correlation_id"] == str(observability.correlation_id)
     assert "operator_business_context" in metadata
     assert "assembled_prompt" in metadata
     assert "sk-test" not in str(metadata)
     assert "pk-test" not in str(metadata)
+
+
+@pytest.mark.anyio
+async def test_trace_ai_reply_production_metadata_excludes_sensitive_text():
+    mock_client = MagicMock()
+    mock_span = MagicMock()
+    mock_client.start_as_current_observation.return_value.__enter__ = MagicMock(
+        return_value=mock_span
+    )
+    mock_client.start_as_current_observation.return_value.__exit__ = MagicMock(
+        return_value=False
+    )
+
+    service = LangfuseTracingService(
+        app_settings=_settings(
+            environment="production",
+            langfuse_tracing_enabled=True,
+        ),
+        client=mock_client,
+    )
+    observability = _observability(
+        operator_business_context_preview="Production operator notes",
+    )
+
+    with patch(
+        "app.services.langfuse_tracing_service.propagate_attributes"
+    ) as mock_propagate:
+        mock_propagate.return_value.__enter__ = MagicMock(return_value=None)
+        mock_propagate.return_value.__exit__ = MagicMock(return_value=False)
+
+        async with service.trace_ai_reply(
+            observability=observability,
+            customer_message_preview="Hello",
+            assembled_prompt=_assembled_prompt(),
+        ):
+            pass
+
+    metadata = None
+    for call in mock_client.start_as_current_observation.call_args_list:
+        if call.kwargs.get("as_type") == "span":
+            metadata = call.kwargs.get("metadata")
+            break
+
+    assert metadata is not None
+    assert metadata["operator_business_context_present"] == "true"
+    assert "operator_business_context" not in metadata
+    assert "assembled_prompt" not in metadata

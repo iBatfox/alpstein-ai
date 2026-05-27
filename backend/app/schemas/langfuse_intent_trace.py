@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-# Span / trace metadata keys — do not wire to Langfuse until CIP-C.
+# Span / trace metadata keys — wired via ObservabilityContext (D2).
 LANGFUSE_METADATA_CONVERSATION_INTENT = "conversation_intent"
 LANGFUSE_METADATA_INTENT_MATCHED_RULE = "intent_matched_rule"
 

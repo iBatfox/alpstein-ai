@@ -1,13 +1,29 @@
-from fastapi import APIRouter, Depends
+import logging
+from contextvars import Token
+
+from fastapi import APIRouter, Depends, Header, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.webhook_auth import require_webhook_token
+from app.core.observability_context import (
+    reset_observability_context,
+    set_observability_context,
+)
 from app.db.session import get_db_session
 from app.exceptions import BusinessNotFoundError, TenantContextError
+from app.schemas.observability import (
+    InvalidCorrelationIdError,
+    X_CORRELATION_ID_HEADER,
+    X_N8N_EXECUTION_ID_HEADER,
+    observability_context_from_webhook,
+    resolve_correlation_id,
+)
 from app.schemas.webhook import NormalizedWebhookMessageRequest
 from app.schemas.webhook_response import serialize_webhook_message_success
 from app.services.webhook_message_service import WebhookMessageService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 webhook_message_service = WebhookMessageService()
@@ -16,10 +32,52 @@ webhook_message_service = WebhookMessageService()
 @router.post("/webhook/message", dependencies=[Depends(require_webhook_token)])
 async def post_webhook_message(
     body: NormalizedWebhookMessageRequest,
+    request: Request,
     session: AsyncSession = Depends(get_db_session),
+    x_correlation_id: str | None = Header(default=None, alias=X_CORRELATION_ID_HEADER),
+    x_n8n_execution_id: str | None = Header(
+        default=None,
+        alias=X_N8N_EXECUTION_ID_HEADER,
+    ),
 ) -> dict:
     try:
-        result = await webhook_message_service.process_incoming_message(session, body)
+        correlation_id = resolve_correlation_id(
+            header_value=x_correlation_id,
+            body_value=body.correlation_id,
+        )
+    except InvalidCorrelationIdError as exc:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "success": False,
+                "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": str(exc),
+                },
+            },
+        )
+
+    observability = observability_context_from_webhook(
+        body,
+        correlation_id=correlation_id,
+        n8n_execution_id=x_n8n_execution_id,
+    )
+    context_token: Token | None = set_observability_context(observability)
+    logger.info(
+        "webhook message received",
+        extra={
+            "correlation_id": str(correlation_id),
+            "business_external_id": body.business_id,
+            "channel": body.channel.value,
+        },
+    )
+
+    try:
+        result = await webhook_message_service.process_incoming_message(
+            session,
+            body,
+            observability=observability,
+        )
         await session.commit()
     except BusinessNotFoundError:
         await session.rollback()
@@ -45,6 +103,9 @@ async def post_webhook_message(
                 },
             },
         )
+    finally:
+        if context_token is not None:
+            reset_observability_context(context_token)
 
     return serialize_webhook_message_success(
         reply_to_customer=result.reply_to_customer,

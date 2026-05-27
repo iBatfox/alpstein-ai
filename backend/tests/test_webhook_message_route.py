@@ -387,3 +387,74 @@ async def test_webhook_message_new_open_conversation_after_non_reusable_status(
         )
 
     assert response.json()["data"]["conversation"]["status"] == "open"
+
+
+@pytest.mark.anyio
+async def test_webhook_message_passes_correlation_id_to_service(
+    mock_webhook_message_service: MagicMock,
+    mock_db_session: MagicMock,
+):
+    correlation_id = uuid.uuid4()
+    n8n_execution_id = "n8n-exec-42"
+    mock_webhook_message_service.process_incoming_message = AsyncMock(
+        return_value=WebhookMessageProcessResult(
+            conversation=Conversation(
+                id=uuid.uuid4(),
+                tenant_id=uuid.uuid4(),
+                business_id=uuid.uuid4(),
+                customer_id=uuid.uuid4(),
+                channel="whatsapp",
+                status="open",
+            ),
+            message=Message(
+                id=uuid.uuid4(),
+                tenant_id=uuid.uuid4(),
+                business_id=uuid.uuid4(),
+                conversation_id=uuid.uuid4(),
+                sender_type="customer",
+                direction="incoming",
+                channel="whatsapp",
+                message_text="Hello",
+            ),
+            is_duplicate=False,
+            reply_to_customer="OK",
+            lead_created=False,
+            notify_owner=False,
+        )
+    )
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/webhook/message",
+            json=_valid_payload(),
+            headers={
+                **_auth_headers(),
+                "X-Correlation-Id": str(correlation_id),
+                "X-N8n-Execution-Id": n8n_execution_id,
+            },
+        )
+
+    assert response.status_code == 200
+    kwargs = mock_webhook_message_service.process_incoming_message.await_args.kwargs
+    observability = kwargs["observability"]
+    assert observability.correlation_id == correlation_id
+    assert observability.n8n_execution_id == n8n_execution_id
+
+
+@pytest.mark.anyio
+async def test_webhook_message_invalid_correlation_id_returns_validation_error(
+    mock_webhook_message_service: MagicMock,
+    mock_db_session: MagicMock,
+):
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/webhook/message",
+            json=_valid_payload(),
+            headers={**_auth_headers(), "X-Correlation-Id": "not-a-uuid"},
+        )
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+    mock_webhook_message_service.process_incoming_message.assert_not_called()

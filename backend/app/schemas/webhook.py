@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime
 from enum import StrEnum
 from typing import Any
@@ -66,6 +67,7 @@ class WebhookMessage(BaseModel):
 class NormalizedWebhookMessageRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
+    correlation_id: str | None = Field(default=None)
     business_id: str = Field(min_length=1)
     channel: WebhookChannel
     source: WebhookSource | None = None
@@ -76,6 +78,22 @@ class NormalizedWebhookMessageRequest(BaseModel):
         default=None,
         max_length=OPERATOR_BUSINESS_CONTEXT_MAX_LENGTH,
     )
+
+    @field_validator("correlation_id", mode="before")
+    @classmethod
+    def validate_correlation_id(cls, value: object) -> str | None:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            return value  # type: ignore[return-value]
+        stripped = value.strip()
+        if not stripped:
+            return None
+        try:
+            uuid.UUID(stripped)
+        except ValueError as exc:
+            raise ValueError("correlation_id must be a valid UUID") from exc
+        return stripped
 
     @field_validator("operator_business_context", mode="before")
     @classmethod

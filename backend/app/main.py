@@ -4,7 +4,9 @@ from fastapi.responses import JSONResponse
 from app.api.routes.health import router as health_router
 from app.api.routes.webhook import router as webhook_router
 from app.api.webhook_auth import WebhookAuthError
+from app.core.observability_context import configure_observability_logging
 
+configure_observability_logging()
 
 app = FastAPI(title="Alpstein AI Backend")
 

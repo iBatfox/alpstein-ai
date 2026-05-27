@@ -317,6 +317,9 @@ async def test_generate_reply_gateway_success_creates_successful_prompt_run(
     assert kwargs["prompt_version"] == "1"
     assert kwargs["final_prompt"] is not None
     assert "platform_system" in kwargs["final_prompt"]
+    assert kwargs["metadata"] is not None
+    assert kwargs["metadata"]["obs_schema_version"] == "1.0"
+    assert "correlation_id" in kwargs["metadata"]
 
 
 @pytest.mark.anyio
@@ -432,5 +435,4 @@ def _wire_success_mocks(
         )
     )
     mocks["prompt_run_service"].create_prompt_run = AsyncMock(return_value=prompt_run)
-    _mock_langfuse_trace_context(mocks)
     _mock_langfuse_trace_context(mocks)

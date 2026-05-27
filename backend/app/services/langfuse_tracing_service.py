@@ -12,16 +12,15 @@ from langfuse import Langfuse, propagate_attributes
 from app.core.config import Settings, langfuse_tracing_active, settings
 from app.schemas.ai_gateway import AiGatewayResult
 from app.schemas.assembled_prompt import AssembledPrompt
-from app.schemas.greeting import GreetingPolicy
+from app.schemas.observability import (
+    ALPSTEIN_DEMO_BUSINESS_EXTERNAL_ID,
+    ObservabilityContext,
+)
 from app.services.ai_gateway import _openai
 
 logger = logging.getLogger(__name__)
 
 TRACE_TAG_GREETING = "greeting_orchestration"
-TRACE_TAG_DEMO_BUSINESS = "alpstein_ai_demo_001"
-DEMO_BUSINESS_EXTERNAL_ID = "demo_barbershop_001"
-OPERATOR_CONTEXT_TRACE_MAX_CHARS = 4000
-ASSEMBLED_PROMPT_TRACE_MAX_CHARS = 24_000
 
 
 class AiReplyTraceRecorder(Protocol):
@@ -33,17 +32,16 @@ class AiReplyTraceRecorder(Protocol):
         model: str,
     ) -> None: ...
 
+    def update_trace_metadata(self, metadata: dict[str, str]) -> None: ...
 
-@dataclass(frozen=True)
-class _AiReplyTraceContext:
-    business_external_id: str
-    business_id: str
-    conversation_id: str
-    channel: str
-    customer_language_code: str
-    greeting_mode: str
-    operator_business_context: str | None
-    customer_message_preview: str
+
+@dataclass
+class _SpanHandle:
+    span: Any | None = None
+
+    def update_trace_metadata(self, metadata: dict[str, str]) -> None:
+        if self.span is not None:
+            self.span.update(metadata=metadata)
 
 
 class _NoOpTraceRecorder:
@@ -55,6 +53,9 @@ class _NoOpTraceRecorder:
         model: str,
     ) -> None:
         del assembled_prompt, gateway_result, model
+
+    def update_trace_metadata(self, metadata: dict[str, str]) -> None:
+        del metadata
 
 
 class _LangfuseTraceRecorder:
@@ -91,6 +92,13 @@ class _LangfuseTraceRecorder:
         else:
             output = {"error": "unknown_failure"}
 
+        generation_metadata: dict[str, str] = {"latency_ms": str(gateway_result.latency_ms)}
+        if gateway_result.model:
+            generation_metadata["gateway_model"] = gateway_result.model
+        if gateway_result.provider:
+            generation_metadata["gateway_provider"] = gateway_result.provider
+        generation_metadata["ai_success"] = "true" if gateway_result.succeeded else "false"
+
         with self._client.start_as_current_observation(
             name="openai_chat_completion",
             as_type="generation",
@@ -99,9 +107,12 @@ class _LangfuseTraceRecorder:
             output=output,
             usage_details=usage_details or None,
             level=level,
-            metadata={"latency_ms": gateway_result.latency_ms},
+            metadata=generation_metadata,
         ):
             pass
+
+    def update_trace_metadata(self, metadata: dict[str, str]) -> None:
+        del metadata
 
 
 class LangfuseTracingService:
@@ -121,46 +132,40 @@ class LangfuseTracingService:
     async def trace_ai_reply(
         self,
         *,
-        business_external_id: str,
-        business_id: str,
-        conversation_id: str,
-        channel: str,
-        greeting_policy: GreetingPolicy,
-        operator_business_context: str | None,
-        customer_message_text: str,
+        observability: ObservabilityContext,
+        customer_message_preview: str,
         assembled_prompt: AssembledPrompt,
     ) -> AsyncIterator[AiReplyTraceRecorder]:
         if not self.is_enabled():
             yield _NoOpTraceRecorder()
             return
 
-        context = _AiReplyTraceContext(
-            business_external_id=business_external_id,
-            business_id=business_id,
-            conversation_id=conversation_id,
-            channel=channel,
-            customer_language_code=greeting_policy.reply_language_code,
-            greeting_mode=greeting_policy.mode.value,
-            operator_business_context=operator_business_context,
-            customer_message_preview=_truncate(customer_message_text, 500),
-        )
+        if observability.conversation_id is None:
+            raise ValueError("observability.conversation_id is required for tracing")
 
         client = self._client or self._build_client()
-        tags = _build_tags(context)
-        metadata = _build_metadata(context, assembled_prompt)
+        tags = _build_tags(observability)
+        assembled_dump = _serialize_prompt_for_trace(assembled_prompt)
+        metadata = observability.to_langfuse_metadata(
+            settings=self._settings,
+            assembled_prompt_dump=assembled_dump,
+        )
         span_input = {
-            "business_id": context.business_external_id,
-            "conversation_id": context.conversation_id,
-            "channel": context.channel,
-            "customer_language": context.customer_language_code,
-            "greeting_mode": context.greeting_mode,
-            "customer_message": context.customer_message_preview,
+            "business_id": observability.business_external_id,
+            "conversation_id": str(observability.conversation_id),
+            "channel": observability.channel,
+            "customer_language": observability.customer_language_code,
+            "greeting_mode": observability.greeting_mode,
+            "customer_message": _truncate(customer_message_preview, 500),
+            "correlation_id": str(observability.correlation_id),
         }
+
+        span_handle = _SpanHandle()
 
         try:
             with propagate_attributes(
                 tags=tags,
-                session_id=context.conversation_id,
+                session_id=str(observability.conversation_id),
                 metadata=metadata,
             ):
                 with client.start_as_current_observation(
@@ -169,26 +174,34 @@ class LangfuseTracingService:
                     input=span_input,
                     metadata=metadata,
                 ) as span:
+                    span_handle.span = span
                     recorder = _LangfuseTraceRecorder(client)
                     try:
-                        yield recorder
+                        yield _CompositeTraceRecorder(recorder, span_handle)
                     finally:
                         span.update(
                             output={
                                 "traced": True,
-                                "greeting_mode": context.greeting_mode,
-                                "customer_language": context.customer_language_code,
+                                "greeting_mode": observability.greeting_mode,
+                                "customer_language": observability.customer_language_code,
+                                "correlation_id": str(observability.correlation_id),
                             }
                         )
         except Exception:
-            logger.exception("Langfuse trace failed; continuing without tracing")
+            logger.exception(
+                "Langfuse trace failed; continuing without tracing",
+                extra={"correlation_id": str(observability.correlation_id)},
+            )
             yield _NoOpTraceRecorder()
             return
         finally:
             try:
                 client.flush()
             except Exception:
-                logger.exception("Langfuse flush failed")
+                logger.exception(
+                    "Langfuse flush failed",
+                    extra={"correlation_id": str(observability.correlation_id)},
+                )
 
     def _build_client(self) -> Langfuse:
         host = self._settings.langfuse_host.strip()
@@ -199,37 +212,39 @@ class LangfuseTracingService:
         )
 
 
-def _build_tags(context: _AiReplyTraceContext) -> list[str]:
-    tags = [TRACE_TAG_GREETING]
-    if context.channel == "telegram":
-        tags.append("telegram")
-    if context.business_external_id == DEMO_BUSINESS_EXTERNAL_ID:
-        tags.append(TRACE_TAG_DEMO_BUSINESS)
-    return tags
+class _CompositeTraceRecorder:
+    def __init__(
+        self,
+        generation_recorder: _LangfuseTraceRecorder,
+        span_handle: _SpanHandle,
+    ) -> None:
+        self._generation_recorder = generation_recorder
+        self._span_handle = span_handle
 
-
-def _build_metadata(
-    context: _AiReplyTraceContext,
-    assembled_prompt: AssembledPrompt,
-) -> dict[str, str]:
-    metadata: dict[str, str] = {
-        "business_id": context.business_external_id,
-        "business_uuid": context.business_id,
-        "conversation_id": context.conversation_id,
-        "channel": context.channel,
-        "customer_language": context.customer_language_code,
-        "greeting_mode": context.greeting_mode,
-    }
-    if context.operator_business_context:
-        metadata["operator_business_context"] = _truncate(
-            context.operator_business_context,
-            OPERATOR_CONTEXT_TRACE_MAX_CHARS,
+    def record_gateway_result(
+        self,
+        *,
+        assembled_prompt: AssembledPrompt,
+        gateway_result: AiGatewayResult,
+        model: str,
+    ) -> None:
+        self._generation_recorder.record_gateway_result(
+            assembled_prompt=assembled_prompt,
+            gateway_result=gateway_result,
+            model=model,
         )
-    metadata["assembled_prompt"] = _truncate(
-        _serialize_prompt_for_trace(assembled_prompt),
-        ASSEMBLED_PROMPT_TRACE_MAX_CHARS,
-    )
-    return metadata
+
+    def update_trace_metadata(self, metadata: dict[str, str]) -> None:
+        self._span_handle.update_trace_metadata(metadata)
+
+
+def _build_tags(observability: ObservabilityContext) -> list[str]:
+    tags = [TRACE_TAG_GREETING]
+    if observability.channel == "telegram":
+        tags.append("telegram")
+    if observability.business_external_id == ALPSTEIN_DEMO_BUSINESS_EXTERNAL_ID:
+        tags.append(ALPSTEIN_DEMO_BUSINESS_EXTERNAL_ID)
+    return tags
 
 
 def _serialize_prompt_for_trace(prompt: AssembledPrompt) -> str:

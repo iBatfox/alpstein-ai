@@ -1,8 +1,8 @@
 **Doc status:** runtime-derived (supplement)  
 **Tier:** architecture/runtime (pending move)  
 **Canonical source:** `docs/architecture/canonical-runtime-architecture.md` §11 (observability runtime truth)  
-**Metadata semantics:** [`specs/architecture/observability-metadata.md`](../../specs/architecture/observability-metadata.md) — D1 **approved** (§16 defaults locked); runtime wiring in **D2**  
-**Keep as:** implementation detail / enablement notes; may lag canonical map until D2 lands
+**Metadata semantics:** [`specs/architecture/observability-metadata.md`](../../specs/architecture/observability-metadata.md) — D1 **approved** (§16 defaults locked); **D2 runtime wiring** in `ObservabilityContext` + `LangfuseTracingService.trace_ai_reply`  
+**Keep as:** implementation detail / enablement notes
 
 # Langfuse tracing (backend MVP)
 
@@ -37,12 +37,13 @@ Tracing auto-enables in `development` / `dev` / `local` / `test` when both keys 
 
 Session id = `conversation_id` UUID (unchanged).
 
-## D1 approved defaults (D2 targets)
+## D1 approved defaults (D2 wired)
 
 | Topic | Approved behavior |
 |-------|-------------------|
 | `correlation_id` | Header `X-Correlation-Id` preferred over body; server UUID if absent |
-| Operator context | `operator_business_context_present` always; truncated text **non-production only** |
+| Operator context | `operator_business_context_present` always; truncated text **non-production only** (§16.2) |
+| `assembled_prompt` | Truncated prompt body **non-production only** — same §16.2 guard as operator text |
 | `prompt_runs.metadata` | Scalar envelope subset, max 4096 bytes; no full prompt duplicate |
 | n8n execution | Header `X-N8n-Execution-Id` in D2 |
 | CIP intent keys | Wire `conversation_intent`, `intent_matched_rule`, `intent_used_previous_message` in D2 |
