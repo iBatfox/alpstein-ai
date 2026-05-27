@@ -9,7 +9,7 @@
 | Field | Value |
 |-------|--------|
 | **Document status** | Canonical runtime map (Phase 1 — canonicalization) |
-| **As-of date** | 2026-05-27 |
+| **As-of date** | 2026-05-27 (HF-1 patch) |
 | **Scope** | Runtime truth only — not future architecture, not marketing |
 
 **Evidence sources used (priority order applied):**
@@ -181,7 +181,9 @@ Built by `_build_task_instructions_body` ([`prompt_builder_service.py`](../../ba
 
 - Last 10–20 messages, customer/ai/owner senders, oldest→newest.
 - **Status:** **implemented**
-- **History Safety instruction:** **planned, not implemented** (HF-1) — history treated as authoritative dialogue with no freshness disclaimer.
+- **History Safety (HF-1):** When dialogue lines exist, `HISTORY_SAFETY_PREAMBLE` is prepended inside §7 ([`history_safety_prompt_instructions.py`](../../backend/app/services/history_safety_prompt_instructions.py)); prior `ai` rows use label `ai (dialogue only, not business facts)`. Preamble states current tenant profile, operator notes, knowledge, and task instructions override stale assistant content in history. Trim budget treats preamble separately from dialogue lines ([`_build_conversation_history`](../../backend/app/services/prompt_builder_service.py)). Tests: `tests/test_history_safety_prompt_builder.py`.
+- **Status (HF-1):** **implemented**
+- When history is empty, §7 is omitted or shows `(not provided)` — no preamble injected.
 
 ### §8 Current customer message
 
@@ -205,7 +207,7 @@ Built by `_build_task_instructions_body` ([`prompt_builder_service.py`](../../ba
 | **Intent types** | confused, pricing_interest, implementation_interest, technical_interest, technical_how, off_topic, social_greeting, unsupported_system, etc. | **implemented** (heuristics) |
 | **Named CRM/ERP** | Routes to `unsupported_system` before `implementation_interest` unless technical-how patterns match | **implemented** |
 | **Greeting orchestration** | Modes from history + 24h inactivity; language from message + Telegram `language_code` in raw_payload | **implemented** |
-| **History handling** | Raw recent messages in §7; no safety block; operator/tenant updates can conflict with stale AI turns in history | **implemented** with **known gap** (HF-1) |
+| **History handling** | §7 loads 10–20 recent messages; HF-1 preamble in §7 marks history as dialogue-only; `ai` sender labeled non-authoritative for business facts; current context sections override stale assistant turns | **implemented** |
 | **Lead qualification** | Every non-duplicate message creates or updates a lead; not LLM-based | **implemented** |
 | **notify_owner relation** | `NotificationPolicyService`: urgent > handoff > ai_failure > new_lead; duplicates suppress; lead_updated-only suppresses | **implemented** |
 | **Pricing behavior** | Intent slice `pricing_interest` when matched (Alpstein demo); legacy appendix pricing rules for other businesses | **partial** |
@@ -306,7 +308,6 @@ Ideal behaviors described only in `docs/architecture/conversation-intent-policy-
 | Gap | Status |
 |-----|--------|
 | ATTR-3+ attribution persistence | **planned** |
-| HF-1 history safety (prompt instruction) | **planned** |
 | T10-F3 concurrent duplicate race | **deferred** optional hardening |
 | operator_business_context DB storage | **out of MVP** (by design) |
 
@@ -343,7 +344,7 @@ Ideal behaviors described only in `docs/architecture/conversation-intent-policy-
 | Risk | Detail |
 |------|--------|
 | Legacy appendix on non-Alpstein businesses | Full `PRE_SALES_TASK_APPENDIX` still injected — larger, brochure-adjacent tone |
-| History vs operator context | Without HF-1, old AI replies in §7 can contradict updated operator notes |
+| History vs operator context | HF-1 preamble instructs model to prefer current operator/tenant context over stale `ai` lines; LLM may still err — not a versioning system |
 | Langfuse demo tag | Tag `alpstein_ai_demo_001` applied when `business_external_id == demo_barbershop_001` ([`langfuse_tracing_service.py`](../../backend/app/services/langfuse_tracing_service.py)) — misleading trace labels |
 | Single-business intent | Other tenants do not get intent slices; behavior differs by `external_id` |
 
@@ -372,7 +373,6 @@ Ideal behaviors described only in `docs/architecture/conversation-intent-policy-
 
 | Area | Runtime truth | Docs/spec claim | Severity | Recommended owner |
 |------|---------------|-----------------|----------|-------------------|
-| **HF-1 History Safety** | Preamble + non-authoritative `ai` labels in §7 | Plan task + audit P0 | **Resolved** (HF-1) | — |
 | **CIP-C Langfuse intent metadata** | Constants only; not in Langfuse metadata | `conversation-intent-policy-mvp.md` § CIP-C | **Important** | `alpstein-backend-engineer` |
 | **ATTR persistence** | Schema validates; no DB write | Attribution design docs | **Important** | `alpstein-backend-engineer` + `alpstein-database-architect` |
 | **Legacy appendix path** | Active for non-`alpstein_ai_demo_001` | Intent policy doc implies replacement | **Important** | Product + `alpstein-conversation-designer` |
@@ -381,6 +381,8 @@ Ideal behaviors described only in `docs/architecture/conversation-intent-policy-
 | **Intent in specs** | CIP behavior in `docs/architecture/` | `prompt-builder-rules.md` may not list intent §2 amendment | **Minor** | `alpstein-api-designer` / spec task |
 | **operator contact in n8n** | Backend scrubbed; n8n contact block ops follow-up | `pre-sales-contact-ownership.md` | **Minor** | Ops + `alpstein-n8n-integration-engineer` |
 | **Test count** | 308 test functions | Older docs cite 252 | **Minor** | `alpstein-project-archivist` on sweeps |
+
+**Resolved drift (no longer open):** **HF-1 History Safety** — §7 preamble + non-authoritative `ai` dialogue labels (**implemented** in `history_safety_prompt_instructions.py` / `PromptBuilderService`); prior audit and plan task treated as spec-only.
 
 ---
 
@@ -432,7 +434,6 @@ Not part of canonical runtime today:
 - Autonomous multi-agent systems (LangGraph, etc.)
 - WhatsApp / Instagram / website chat ingress (beyond schema placeholders)
 - ATTR-3+ persistence
-- HF-1 History Safety (§7 preamble + ai dialogue labels)
 - Production Langfuse as operational requirement
 - Billing, dashboard, self-service tenant onboarding UI
 - Repository layer abstraction
@@ -462,12 +463,11 @@ Unresolved — require human decision, not archivist resolution:
 
 1. **Legacy appendix retirement** — when/how to disable `PRE_SALES_TASK_APPENDIX` for remaining demo businesses.
 2. **Business-aware prompt assembly** — extend intent policy beyond `alpstein_ai_demo_001` vs keep single-business MVP.
-3. **History Safety implementation** — approve HF-1 scope (instruction-only vs context versioning).
-4. **Langfuse metadata wiring** — CIP-C priority vs HF-1.
-5. **Active workflow export freeze** — T14.6 gate: which runtime id becomes repo canonical.
-6. **Multi-tenant rollout rules** — how new businesses get intent policy, operator context, and seed data without contamination.
-7. **Langfuse tag semantics** — fix barbershop→Alpstein tag mapping or document as intentional.
-8. **Attribution persistence scope** — ATTR-3 column design and write path ownership.
+3. **Langfuse metadata wiring** — CIP-C scope and priority.
+4. **Active workflow export freeze** — T14.6 gate: which runtime id becomes repo canonical.
+5. **Multi-tenant rollout rules** — how new businesses get intent policy, operator context, and seed data without contamination.
+6. **Langfuse tag semantics** — fix barbershop→Alpstein tag mapping or document as intentional.
+7. **Attribution persistence scope** — ATTR-3 column design and write path ownership.
 
 ---
 
