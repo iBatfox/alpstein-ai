@@ -350,6 +350,7 @@ All providers must normalize into this format.
 Channel-specific tables: [channel-mapping-telegram-website.md](../../docs/architecture/channel-mapping-telegram-website.md).
 
 Identity strategy and non-merge guardrails (E1.4): [multi-channel-identity-strategy.md](../../docs/architecture/multi-channel-identity-strategy.md).
+Capability and operational risk matrix (E1.5): [channel-capability-matrix.md](../../docs/architecture/channel-capability-matrix.md).
 
 ---
 

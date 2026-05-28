@@ -19,6 +19,7 @@ This document is the **spec source of truth** for:
 - E1.0 overview: [`docs/architecture/channel-ingress-contract.md`](../../docs/architecture/channel-ingress-contract.md)
 - E1.1 Telegram + Website Chat mappings: [`docs/architecture/channel-mapping-telegram-website.md`](../../docs/architecture/channel-mapping-telegram-website.md)
 - E1.4 identity guardrails: [`docs/architecture/multi-channel-identity-strategy.md`](../../docs/architecture/multi-channel-identity-strategy.md)
+- E1.5 capability/risk matrix: [`docs/architecture/channel-capability-matrix.md`](../../docs/architecture/channel-capability-matrix.md)
 - MVP transport API: [`webhooks.md`](../api/webhooks.md) §7
 - Source attribution extension: [`channel-source-attribution.md`](channel-source-attribution.md)
 - Flow: [`incoming-message-flow.md`](../flows/incoming-message-flow.md)
