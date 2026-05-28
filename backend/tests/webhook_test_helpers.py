@@ -35,6 +35,9 @@ def delivery_visibility_service_mock(
 
 def inbound_processing_lock_service_mock() -> MagicMock:
     lock = MagicMock()
+    lock.replay_count = 0
+    lock.id = uuid.uuid4()
+    lock.idempotency_key = "ext:test"
     service = MagicMock()
     service.acquire_processing_owner = AsyncMock(
         return_value=ProcessingLockAcquireResult(
@@ -44,7 +47,7 @@ def inbound_processing_lock_service_mock() -> MagicMock:
         )
     )
     service.release = AsyncMock(return_value=lock)
-    service.record_replay_attempt = AsyncMock()
+    service.record_replay_attempt = AsyncMock(return_value=lock)
     return service
 
 

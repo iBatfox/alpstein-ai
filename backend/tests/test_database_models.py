@@ -51,6 +51,8 @@ def test_metadata_contains_persistence_slice_tables():
         "delivery_events",
         "inbound_processing_locks",
         "replay_events",
+        "retry_attempts",
+        "dead_letter_events",
     }
     assert Tenant.__tablename__ == "tenants"
     assert Business.__tablename__ == "businesses"

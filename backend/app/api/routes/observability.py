@@ -30,12 +30,26 @@ from app.schemas.replay_event import (
 from app.schemas.replay_event_mapper import replay_event_to_response
 from app.services.delivery_visibility_service import DeliveryVisibilityService
 from app.services.message_trace_service import MessageTraceService
+from app.schemas.dead_letter_event import (
+    DeadLetterEventListResponse,
+    DeadLetterEventListSuccessEnvelope,
+)
+from app.schemas.dead_letter_event_mapper import dead_letter_event_to_response
+from app.schemas.retry_attempt import (
+    RetryAttemptListResponse,
+    RetryAttemptListSuccessEnvelope,
+)
+from app.schemas.retry_attempt_mapper import retry_attempt_to_response
+from app.services.dead_letter_service import DeadLetterService
 from app.services.replay_event_service import ReplayEventService
+from app.services.retry_lifecycle_service import RetryLifecycleService
 
 router = APIRouter(prefix="/observability", tags=["observability"])
 message_trace_service = MessageTraceService()
 delivery_visibility_service = DeliveryVisibilityService()
 replay_event_service = ReplayEventService()
+retry_lifecycle_service = RetryLifecycleService()
+dead_letter_service = DeadLetterService()
 
 
 def _parse_uuid(value: str, *, field_name: str) -> uuid.UUID:
@@ -364,6 +378,123 @@ async def list_replay_events(
     return ReplayEventListSuccessEnvelope(
         data=ReplayEventListResponse(
             items=[replay_event_to_response(event) for event in events],
+            limit=limit,
+            offset=offset,
+        ),
+    ).model_dump(mode="json")
+
+
+@router.get(
+    "/retries",
+    dependencies=[Depends(require_webhook_token)],
+)
+async def list_retry_attempts(
+    tenant_id: str = Query(..., min_length=1),
+    business_id: str = Query(..., min_length=1),
+    trace_id: str | None = Query(default=None),
+    delivery_id: str | None = Query(default=None),
+    conversation_id: str | None = Query(default=None),
+    scope_type: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    try:
+        parsed_tenant_id = _parse_uuid(tenant_id, field_name="tenant_id")
+        parsed_business_id = _parse_uuid(business_id, field_name="business_id")
+        parsed_trace_id = (
+            _parse_uuid(trace_id, field_name="trace_id") if trace_id else None
+        )
+        parsed_delivery_id = (
+            _parse_uuid(delivery_id, field_name="delivery_id") if delivery_id else None
+        )
+        parsed_conversation_id = (
+            _parse_uuid(conversation_id, field_name="conversation_id")
+            if conversation_id
+            else None
+        )
+    except ValueError as exc:
+        return _validation_error(str(exc))
+
+    attempts = await retry_lifecycle_service.list_attempts(
+        session,
+        tenant_id=parsed_tenant_id,
+        business_id=parsed_business_id,
+        trace_id=parsed_trace_id,
+        delivery_id=parsed_delivery_id,
+        conversation_id=parsed_conversation_id,
+        scope_type=scope_type,
+        status=status,
+        limit=limit,
+        offset=offset,
+    )
+
+    return RetryAttemptListSuccessEnvelope(
+        data=RetryAttemptListResponse(
+            items=[retry_attempt_to_response(item) for item in attempts],
+            limit=limit,
+            offset=offset,
+        ),
+    ).model_dump(mode="json")
+
+
+@router.get(
+    "/dead-letter",
+    dependencies=[Depends(require_webhook_token)],
+)
+async def list_dead_letter_events(
+    tenant_id: str = Query(..., min_length=1),
+    business_id: str = Query(..., min_length=1),
+    trace_id: str | None = Query(default=None),
+    delivery_id: str | None = Query(default=None),
+    conversation_id: str | None = Query(default=None),
+    inbound_message_id: str | None = Query(default=None),
+    event_type: str | None = Query(default=None),
+    scope_type: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    try:
+        parsed_tenant_id = _parse_uuid(tenant_id, field_name="tenant_id")
+        parsed_business_id = _parse_uuid(business_id, field_name="business_id")
+        parsed_trace_id = (
+            _parse_uuid(trace_id, field_name="trace_id") if trace_id else None
+        )
+        parsed_delivery_id = (
+            _parse_uuid(delivery_id, field_name="delivery_id") if delivery_id else None
+        )
+        parsed_conversation_id = (
+            _parse_uuid(conversation_id, field_name="conversation_id")
+            if conversation_id
+            else None
+        )
+        parsed_inbound_message_id = (
+            _parse_uuid(inbound_message_id, field_name="inbound_message_id")
+            if inbound_message_id
+            else None
+        )
+    except ValueError as exc:
+        return _validation_error(str(exc))
+
+    events = await dead_letter_service.list_events(
+        session,
+        tenant_id=parsed_tenant_id,
+        business_id=parsed_business_id,
+        trace_id=parsed_trace_id,
+        delivery_id=parsed_delivery_id,
+        conversation_id=parsed_conversation_id,
+        inbound_message_id=parsed_inbound_message_id,
+        event_type=event_type,
+        scope_type=scope_type,
+        limit=limit,
+        offset=offset,
+    )
+
+    return DeadLetterEventListSuccessEnvelope(
+        data=DeadLetterEventListResponse(
+            items=[dead_letter_event_to_response(event) for event in events],
             limit=limit,
             offset=offset,
         ),

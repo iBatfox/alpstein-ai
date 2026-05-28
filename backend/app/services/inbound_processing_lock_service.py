@@ -149,7 +149,7 @@ class InboundProcessingLockService:
         business_id: uuid.UUID,
         conversation_id: uuid.UUID,
         idempotency_key: str,
-    ) -> None:
+    ) -> InboundProcessingLock | None:
         lock = await self.get_by_scope(
             session,
             tenant_id=tenant_id,
@@ -158,10 +158,11 @@ class InboundProcessingLockService:
             idempotency_key=idempotency_key,
         )
         if lock is None:
-            return
+            return None
         lock.replay_count = (lock.replay_count or 0) + 1
         lock.last_seen_at = datetime.utcnow()
         await session.flush()
+        return lock
 
     def _resolve_existing_lock(
         self,

@@ -266,6 +266,24 @@ Response `data.items[]`: `id`, scope ids, `source` (`webhook` | `delivery_patch`
 
 Illegal delivery PATCH transitions are recorded as `illegal_transition` with `metadata.from_status` / `metadata.to_status`; delivery row state is unchanged (terminal-safe).
 
+## GET /api/v1/observability/retries
+
+**E3.2c** — List operational retry attempts (`retry_attempts`).
+
+Required query: `tenant_id`, `business_id`.
+
+Optional: `trace_id`, `delivery_id`, `conversation_id`, `scope_type`, `status`, `limit`, `offset`.
+
+## GET /api/v1/observability/dead-letter
+
+**E3.2c** — List dead-letter rows (`dead_letter_events`).
+
+Required query: `tenant_id`, `business_id`.
+
+Optional: `trace_id`, `delivery_id`, `conversation_id`, `inbound_message_id`, `event_type`, `scope_type`, `limit`, `offset`.
+
+**Delivery PATCH (E3.2):** Repeated `failed` PATCH increments `retry_count` even when n8n never sends `retrying`. At `ALPSTEIN_DELIVERY_MAX_RETRIES` (default 3), delivery status becomes `dead_letter`. Terminal `error_type` values (e.g. `chat_not_found`) may dead-letter on first failure.
+
 ---
 
 # 8. Incoming Message Endpoint

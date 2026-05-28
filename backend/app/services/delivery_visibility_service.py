@@ -1,4 +1,4 @@
-"""Outbound delivery lifecycle persistence (E2.6)."""
+"""Outbound delivery lifecycle persistence (E2.6, E3.1b, E3.2)."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.delivery_event import (
+    DELIVERY_STATUS_DEAD_LETTER,
     DELIVERY_STATUS_DELIVERED,
     DELIVERY_STATUS_FAILED,
     DELIVERY_STATUS_PENDING,
@@ -20,10 +21,18 @@ from app.models.delivery_event import (
 )
 from app.models.replay_event import (
     REPLAY_EVENT_ILLEGAL_TRANSITION,
+    REPLAY_EVENT_RETRY_EXHAUSTED,
     REPLAY_SOURCE_DELIVERY_PATCH,
 )
+from app.models.retry_attempt import RETRY_STATUS_EXHAUSTED, RETRY_STATUS_FAILED, RETRY_STATUS_RETRYING
+from app.services.dead_letter_service import DeadLetterService
 from app.services.delivery_state_machine import is_delivery_transition_allowed
 from app.services.replay_event_service import ReplayEventService
+from app.services.retry_lifecycle_service import RetryLifecycleService
+from app.services.retry_policy import (
+    delivery_retries_exhausted,
+    is_terminal_delivery_error,
+)
 
 ERROR_MESSAGE_MAX_LENGTH = 500
 LIST_DEFAULT_LIMIT = 20
@@ -31,8 +40,15 @@ LIST_MAX_LIMIT = 100
 
 
 class DeliveryVisibilityService:
-    def __init__(self, replay_event_service: ReplayEventService | None = None) -> None:
+    def __init__(
+        self,
+        replay_event_service: ReplayEventService | None = None,
+        retry_lifecycle_service: RetryLifecycleService | None = None,
+        dead_letter_service: DeadLetterService | None = None,
+    ) -> None:
         self.replay_event_service = replay_event_service or ReplayEventService()
+        self.retry_lifecycle_service = retry_lifecycle_service or RetryLifecycleService()
+        self.dead_letter_service = dead_letter_service or DeadLetterService()
 
     async def get_by_id(
         self,
@@ -252,6 +268,9 @@ class DeliveryVisibilityService:
         if event is None:
             return None
 
+        if event.status == DELIVERY_STATUS_DEAD_LETTER:
+            return event
+
         if not is_delivery_transition_allowed(event.status, status):
             if event.status != status:
                 await self.replay_event_service.record(
@@ -281,9 +300,11 @@ class DeliveryVisibilityService:
                 metadata=metadata,
             )
         if status == DELIVERY_STATUS_FAILED:
-            return await self.mark_failed(
+            return await self._report_failed(
                 session,
                 event,
+                tenant_id=tenant_id,
+                business_id=business_id,
                 error_type=error_type or "DELIVERY_FAILED",
                 error_message=error_message or "Delivery failed",
                 provider_status=provider_status,
@@ -292,9 +313,169 @@ class DeliveryVisibilityService:
         if status == DELIVERY_STATUS_SKIPPED:
             return await self.mark_skipped(session, event, metadata=metadata)
         if status == DELIVERY_STATUS_RETRYING:
-            return await self.increment_retry(session, event, metadata=metadata)
+            return await self._report_retrying(
+                session,
+                event,
+                tenant_id=tenant_id,
+                business_id=business_id,
+                metadata=metadata,
+            )
 
         raise ValueError(f"Unsupported delivery status: {status}")
+
+    async def _report_failed(
+        self,
+        session: AsyncSession,
+        event: DeliveryEvent,
+        *,
+        tenant_id: uuid.UUID,
+        business_id: uuid.UUID,
+        error_type: str,
+        error_message: str,
+        provider_status: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> DeliveryEvent:
+        terminal = is_terminal_delivery_error(error_type)
+
+        if event.status == DELIVERY_STATUS_FAILED:
+            event.retry_count = (event.retry_count or 0) + 1
+            event.failed_at = datetime.utcnow()
+            event.error_type = _truncate(error_type, 100)
+            event.error_message = _truncate(error_message, ERROR_MESSAGE_MAX_LENGTH)
+            if provider_status is not None:
+                event.provider_status = provider_status
+            if metadata:
+                event.metadata_ = _merge_metadata(event.metadata_, metadata)
+        else:
+            await self.mark_failed(
+                session,
+                event,
+                error_type=error_type,
+                error_message=error_message,
+                provider_status=provider_status,
+                metadata=metadata,
+            )
+            if (event.retry_count or 0) < 1:
+                event.retry_count = 1
+
+        await self.retry_lifecycle_service.record_delivery_attempt(
+            session,
+            tenant_id=tenant_id,
+            business_id=business_id,
+            delivery_id=event.id,
+            status=RETRY_STATUS_FAILED,
+            attempt_number=event.retry_count,
+            trace_id=event.trace_id,
+            conversation_id=event.conversation_id,
+            error_type=error_type,
+            error_message=error_message,
+        )
+
+        if terminal or delivery_retries_exhausted(event.retry_count or 0):
+            await self._exhaust_delivery(
+                session,
+                event,
+                tenant_id=tenant_id,
+                business_id=business_id,
+                error_type=error_type,
+                error_message=error_message,
+                terminal=terminal,
+            )
+        else:
+            await session.flush()
+
+        return event
+
+    async def _report_retrying(
+        self,
+        session: AsyncSession,
+        event: DeliveryEvent,
+        *,
+        tenant_id: uuid.UUID,
+        business_id: uuid.UUID,
+        metadata: dict[str, Any] | None = None,
+    ) -> DeliveryEvent:
+        if delivery_retries_exhausted(event.retry_count or 0):
+            await self.retry_lifecycle_service.record_delivery_attempt(
+                session,
+                tenant_id=tenant_id,
+                business_id=business_id,
+                delivery_id=event.id,
+                status=RETRY_STATUS_EXHAUSTED,
+                attempt_number=(event.retry_count or 0) + 1,
+                trace_id=event.trace_id,
+                conversation_id=event.conversation_id,
+                metadata={"blocked_status": DELIVERY_STATUS_RETRYING},
+            )
+            await self._exhaust_delivery(
+                session,
+                event,
+                tenant_id=tenant_id,
+                business_id=business_id,
+                error_type=event.error_type,
+                error_message=event.error_message or "Delivery retry limit reached",
+                terminal=False,
+            )
+            return event
+
+        await self.increment_retry(session, event, metadata=metadata)
+        await self.retry_lifecycle_service.record_delivery_attempt(
+            session,
+            tenant_id=tenant_id,
+            business_id=business_id,
+            delivery_id=event.id,
+            status=RETRY_STATUS_RETRYING,
+            attempt_number=event.retry_count,
+            trace_id=event.trace_id,
+            conversation_id=event.conversation_id,
+        )
+        return event
+
+    async def _exhaust_delivery(
+        self,
+        session: AsyncSession,
+        event: DeliveryEvent,
+        *,
+        tenant_id: uuid.UUID,
+        business_id: uuid.UUID,
+        error_type: str | None,
+        error_message: str,
+        terminal: bool,
+    ) -> None:
+        event.status = DELIVERY_STATUS_DEAD_LETTER
+        await session.flush()
+
+        await self.dead_letter_service.record_delivery_exhausted(
+            session,
+            tenant_id=tenant_id,
+            business_id=business_id,
+            delivery_id=event.id,
+            flow_id=event.flow_id,
+            conversation_id=event.conversation_id,
+            trace_id=event.trace_id,
+            outbound_message_id=event.outbound_message_id,
+            retry_count=event.retry_count or 0,
+            error_type=error_type,
+            failure_reason=error_message or "Delivery retries exhausted",
+            terminal=terminal,
+        )
+        await self.replay_event_service.record(
+            session,
+            tenant_id=tenant_id,
+            business_id=business_id,
+            source=REPLAY_SOURCE_DELIVERY_PATCH,
+            event_type=REPLAY_EVENT_RETRY_EXHAUSTED,
+            flow_id=event.flow_id,
+            conversation_id=event.conversation_id,
+            trace_id=event.trace_id,
+            delivery_id=event.id,
+            outbound_message_id=event.outbound_message_id,
+            metadata={
+                "retry_count": event.retry_count,
+                "error_type": error_type,
+                "terminal": terminal,
+            },
+        )
 
 
 def _merge_metadata(

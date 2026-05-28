@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from app.models.delivery_event import (
+    DELIVERY_STATUS_DEAD_LETTER,
     DELIVERY_STATUS_DELIVERED,
     DELIVERY_STATUS_FAILED,
     DELIVERY_STATUS_PENDING,
@@ -26,9 +27,16 @@ ALLOWED_DELIVERY_TRANSITIONS: dict[str, frozenset[str]] = {
             DELIVERY_STATUS_RETRYING,
         }
     ),
-    DELIVERY_STATUS_FAILED: frozenset({DELIVERY_STATUS_RETRYING}),
+    DELIVERY_STATUS_FAILED: frozenset(
+        {
+            DELIVERY_STATUS_RETRYING,
+            DELIVERY_STATUS_FAILED,
+            DELIVERY_STATUS_DEAD_LETTER,
+        }
+    ),
     DELIVERY_STATUS_DELIVERED: frozenset({DELIVERY_STATUS_DELIVERED}),
     DELIVERY_STATUS_SKIPPED: frozenset({DELIVERY_STATUS_SKIPPED}),
+    DELIVERY_STATUS_DEAD_LETTER: frozenset({DELIVERY_STATUS_DEAD_LETTER}),
 }
 
 

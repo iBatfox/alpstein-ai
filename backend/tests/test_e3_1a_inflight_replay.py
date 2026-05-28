@@ -79,8 +79,16 @@ async def test_inflight_lock_conflict_skips_ai_and_preserves_processing_trace():
     trace_service.record_duplicate_retry = AsyncMock(side_effect=_preserve_processing)
 
     lock_service = MagicMock()
+    conflict_lock = MagicMock()
+    conflict_lock.replay_count = 0
+    conflict_lock.id = uuid.uuid4()
+    conflict_lock.idempotency_key = "ext:tg:99:1"
     lock_service.acquire_processing_owner = AsyncMock(
-        return_value=ProcessingLockAcquireResult(acquired=False, conflict=True, lock=None)
+        return_value=ProcessingLockAcquireResult(
+            acquired=False,
+            conflict=True,
+            lock=conflict_lock,
+        )
     )
     lock_service.record_replay_attempt = AsyncMock()
 
@@ -110,6 +118,8 @@ async def test_inflight_lock_conflict_skips_ai_and_preserves_processing_trace():
         delivery_visibility_service=delivery_visibility_service_mock(),
         inbound_processing_lock_service=lock_service,
         replay_event_service=replay_service,
+        dead_letter_service=MagicMock(record_inbound_exhausted=AsyncMock()),
+        retry_lifecycle_service=MagicMock(record_inbound_attempt=AsyncMock()),
         ai_reply_coordinator=coordinator,
     )
 
@@ -131,7 +141,6 @@ async def test_inflight_lock_conflict_skips_ai_and_preserves_processing_trace():
     assert len(non_duplicate_ai_calls) == 0
     message_service.save_outgoing_ai_message.assert_not_awaited()
     trace_service.mark_processing.assert_not_awaited()
-    lock_service.record_replay_attempt.assert_awaited()
     replay_calls = [
         c
         for c in replay_service.record.await_args_list

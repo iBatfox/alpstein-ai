@@ -136,9 +136,19 @@ async def test_duplicate_inbound_records_replay_event():
         lead_service=_lead_service_mock(business, customer, conversation),
         message_trace_service=trace_service,
         delivery_visibility_service=delivery_visibility_service_mock(),
-        inbound_processing_lock_service=inbound_processing_lock_service_mock(),
+        inbound_processing_lock_service=MagicMock(
+            record_replay_attempt=AsyncMock(
+                return_value=MagicMock(
+                    replay_count=0,
+                    id=uuid.uuid4(),
+                    idempotency_key="ext:ext-dup",
+                )
+            )
+        ),
         ai_reply_coordinator=coordinator,
         replay_event_service=replay_service,
+        dead_letter_service=MagicMock(record_inbound_exhausted=AsyncMock()),
+        retry_lifecycle_service=MagicMock(record_inbound_attempt=AsyncMock()),
     )
 
     session = MagicMock()
@@ -161,8 +171,16 @@ async def test_inflight_duplicate_records_replay_ignored():
     replay_service.record = AsyncMock()
 
     lock_service = MagicMock()
+    processing_lock = MagicMock()
+    processing_lock.replay_count = 0
+    processing_lock.id = uuid.uuid4()
+    processing_lock.idempotency_key = "ext:ext-inflight"
     lock_service.acquire_processing_owner = AsyncMock(
-        return_value=ProcessingLockAcquireResult(acquired=False, conflict=True, lock=None)
+        return_value=ProcessingLockAcquireResult(
+            acquired=False,
+            conflict=True,
+            lock=processing_lock,
+        )
     )
     lock_service.record_replay_attempt = AsyncMock()
 
@@ -234,6 +252,8 @@ async def test_inflight_duplicate_records_replay_ignored():
         delivery_visibility_service=delivery_visibility_service_mock(),
         inbound_processing_lock_service=lock_service,
         replay_event_service=replay_service,
+        dead_letter_service=MagicMock(record_inbound_exhausted=AsyncMock()),
+        retry_lifecycle_service=MagicMock(record_inbound_attempt=AsyncMock()),
         ai_reply_coordinator=MagicMock(execute_for_incoming_message=AsyncMock()),
     )
 
@@ -274,7 +294,11 @@ async def test_illegal_delivery_transition_records_replay_event():
         updated_at=now,
     )
 
-    service = DeliveryVisibilityService(replay_event_service=replay_service)
+    service = DeliveryVisibilityService(
+        replay_event_service=replay_service,
+        retry_lifecycle_service=MagicMock(record_delivery_attempt=AsyncMock()),
+        dead_letter_service=MagicMock(),
+    )
     service.get_by_id = AsyncMock(return_value=event)  # type: ignore[method-assign]
 
     result = await service.report_status(

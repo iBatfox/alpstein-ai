@@ -1023,7 +1023,79 @@ These can be added later.
 
 ---
 
-# 22. Success Criteria
+# 22. Observability and retry tables (E2–E3)
+
+## delivery_events (E2.6, E3.2)
+
+Outbound channel delivery lifecycle per `outbound_message_id`.
+
+**status values:** `pending`, `delivered`, `failed`, `skipped`, `retrying`, `dead_letter` (E3.2 terminal).
+
+**retry_count:** increments on each `failed` PATCH (including repeated `failed` without `retrying`) and on allowed `retrying` PATCH.
+
+## replay_events (E3.1c)
+
+Append-only duplicate/replay audit (`duplicate_retry`, `replay_ignored`, `illegal_transition`, `retry_exhausted`). Not the operational retry log.
+
+## retry_attempts (E3.2a)
+
+Append-only operational retry lifecycle per scope.
+
+```text
+id UUID PRIMARY KEY
+tenant_id UUID NOT NULL REFERENCES tenants(id)
+business_id UUID NOT NULL REFERENCES businesses(id)
+scope_type TEXT NOT NULL          -- delivery | inbound
+scope_id UUID NOT NULL
+trace_id UUID NULL
+conversation_id UUID NULL
+attempt_number INTEGER NOT NULL
+status TEXT NOT NULL              -- retrying | failed | exhausted
+error_type TEXT NULL
+error_message TEXT NULL
+correlation_id TEXT NULL
+metadata JSONB NULL
+created_at TIMESTAMP NOT NULL
+```
+
+Indexes: `(business_id, scope_type, scope_id, created_at)`, `(business_id, conversation_id, created_at)`, `trace_id`.
+
+## dead_letter_events (E3.2b)
+
+Permanently failed operations after retry exhaustion or terminal delivery error.
+
+```text
+id UUID PRIMARY KEY
+tenant_id UUID NOT NULL REFERENCES tenants(id)
+business_id UUID NOT NULL REFERENCES businesses(id)
+flow_id UUID NULL
+conversation_id UUID NULL
+trace_id UUID NULL
+delivery_id UUID NULL
+inbound_message_id UUID NULL
+outbound_message_id UUID NULL
+scope_type TEXT NOT NULL          -- delivery | inbound
+scope_id UUID NOT NULL
+event_type TEXT NOT NULL
+failure_reason TEXT NOT NULL
+error_type TEXT NULL
+retry_count INTEGER NOT NULL
+correlation_id TEXT NULL
+metadata JSONB NULL
+resolved_at TIMESTAMP NULL
+created_at TIMESTAMP NOT NULL
+last_seen_at TIMESTAMP NOT NULL
+```
+
+**Unique (active):** `(business_id, scope_type, scope_id)` WHERE `resolved_at IS NULL`.
+
+## inbound_processing_locks (E3.1a)
+
+Single-owner lock per `(business_id, conversation_id, idempotency_key)`; `replay_count` for provider redelivery cap (E3.2).
+
+---
+
+# 23. Success Criteria
 
 The database schema is successful if:
 

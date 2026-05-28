@@ -135,6 +135,8 @@ Re-PATCH of an already-`delivered` row is idempotent on the backend (`mark_deliv
 
 **Retry guidance:** Do not auto-retry PATCH in n8n (avoid storms). Ops may manually PATCH or replay from observability tools once root cause fixed.
 
+**E3.2 backend behavior:** Each `failed` PATCH increments `retry_count` even without a `retrying` status. After `ALPSTEIN_AI_DELIVERY_MAX_RETRIES` (default 3), status becomes `dead_letter` and a row appears in `GET /api/v1/observability/dead-letter`. Optional n8n transport retry may PATCH `retrying` before re-send when implemented.
+
 **Pending is expected** until n8n reports outcome or ops intervenes.
 
 ---

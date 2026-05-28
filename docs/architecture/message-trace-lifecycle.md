@@ -52,6 +52,7 @@ save inbound message
   → if duplicate: return (no mark_processing / AI); replay_events.duplicate_retry
   → acquire inbound_processing_lock (E3.1a)
   → if lock conflict: in-flight replay (is_duplicate, no AI); replay_events.replay_ignored
+  → if lock replay_count >= max: dead_letter_events.inbound_exhausted (E3.2)
   → mark_processing
   → lead + AI
   → release lock (completed|failed)

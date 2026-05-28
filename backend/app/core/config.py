@@ -26,6 +26,18 @@ class Settings(BaseSettings):
         default=False,
         validation_alias="LANGFUSE_TRACING_ENABLED",
     )
+    delivery_max_retries: int = Field(
+        default=3,
+        validation_alias="DELIVERY_MAX_RETRIES",
+    )
+    inbound_provider_retry_max: int = Field(
+        default=5,
+        validation_alias="INBOUND_PROVIDER_RETRY_MAX",
+    )
+    delivery_terminal_error_types: str = Field(
+        default="chat_not_found,invalid_chat_id",
+        validation_alias="DELIVERY_TERMINAL_ERROR_TYPES",
+    )
 
     model_config = SettingsConfigDict(
         env_prefix="ALPSTEIN_AI_",

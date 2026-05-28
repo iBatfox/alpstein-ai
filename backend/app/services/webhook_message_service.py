@@ -38,9 +38,15 @@ from app.services.message_idempotency import build_inbound_idempotency_key
 from app.models.replay_event import (
     REPLAY_EVENT_DUPLICATE_RETRY,
     REPLAY_EVENT_REPLAY_IGNORED,
+    REPLAY_EVENT_RETRY_EXHAUSTED,
     REPLAY_SOURCE_WEBHOOK,
 )
+from app.models.inbound_processing_lock import InboundProcessingLock
+from app.models.retry_attempt import RETRY_STATUS_EXHAUSTED
+from app.services.dead_letter_service import DeadLetterService
 from app.services.replay_event_service import ReplayEventService
+from app.services.retry_lifecycle_service import RetryLifecycleService
+from app.services.retry_policy import inbound_replays_exhausted
 from app.services.message_trace_service import (
     MessageTraceService,
     build_trace_metadata,
@@ -112,6 +118,8 @@ class WebhookMessageService:
         delivery_visibility_service: DeliveryVisibilityService | None = None,
         inbound_processing_lock_service: InboundProcessingLockService | None = None,
         replay_event_service: ReplayEventService | None = None,
+        retry_lifecycle_service: RetryLifecycleService | None = None,
+        dead_letter_service: DeadLetterService | None = None,
     ) -> None:
         self.business_service = business_service or BusinessService()
         self.customer_service = customer_service or CustomerService()
@@ -140,6 +148,8 @@ class WebhookMessageService:
             inbound_processing_lock_service or InboundProcessingLockService()
         )
         self.replay_event_service = replay_event_service or ReplayEventService()
+        self.retry_lifecycle_service = retry_lifecycle_service or RetryLifecycleService()
+        self.dead_letter_service = dead_letter_service or DeadLetterService()
 
     async def process_incoming_message(
         self,
@@ -247,12 +257,23 @@ class WebhookMessageService:
         )
 
         if save_result.is_duplicate:
-            await self._record_lock_replay_attempt(
+            replay_lock = await self._record_lock_replay_attempt(
                 session,
                 tenant_id=tenant_id,
                 business_id=business.id,
                 conversation_id=conversation.id,
                 idempotency_key=save_result.message.idempotency_key,
+            )
+            await self._maybe_handle_inbound_exhaustion(
+                session,
+                tenant_id=tenant_id,
+                business_id=business.id,
+                flow=flow,
+                conversation=conversation,
+                message=save_result.message,
+                message_trace=message_trace,
+                observability=observability,
+                lock=replay_lock,
             )
             await self._record_webhook_replay_event(
                 session,
@@ -330,6 +351,17 @@ class WebhookMessageService:
             external_message_id=save_result.message.external_message_id,
         )
         if lock_acquire.conflict:
+            await self._maybe_handle_inbound_exhaustion(
+                session,
+                tenant_id=tenant_id,
+                business_id=business.id,
+                flow=flow,
+                conversation=conversation,
+                message=save_result.message,
+                message_trace=message_trace,
+                observability=observability,
+                lock=lock_acquire.lock,
+            )
             return await self._respond_inflight_replay(
                 session,
                 tenant_id=tenant_id,
@@ -692,15 +724,72 @@ class WebhookMessageService:
         business_id: uuid.UUID,
         conversation_id: uuid.UUID,
         idempotency_key: str | None,
-    ) -> None:
+    ) -> InboundProcessingLock | None:
         if not idempotency_key:
-            return
-        await self.inbound_processing_lock_service.record_replay_attempt(
+            return None
+        return await self.inbound_processing_lock_service.record_replay_attempt(
             session,
             tenant_id=tenant_id,
             business_id=business_id,
             conversation_id=conversation_id,
             idempotency_key=idempotency_key,
+        )
+
+    async def _maybe_handle_inbound_exhaustion(
+        self,
+        session: AsyncSession,
+        *,
+        tenant_id: uuid.UUID,
+        business_id: uuid.UUID,
+        flow: Flow,
+        conversation: Conversation,
+        message: Message,
+        message_trace: MessageTrace | None,
+        observability: ObservabilityContext,
+        lock: InboundProcessingLock | None,
+    ) -> None:
+        if lock is None:
+            return
+        if not inbound_replays_exhausted(lock.replay_count or 0):
+            return
+
+        await self.retry_lifecycle_service.record_inbound_attempt(
+            session,
+            tenant_id=tenant_id,
+            business_id=business_id,
+            lock_id=lock.id,
+            attempt_number=lock.replay_count or 0,
+            status=RETRY_STATUS_EXHAUSTED,
+            trace_id=message_trace.id if message_trace is not None else None,
+            conversation_id=conversation.id,
+            correlation_id=str(observability.correlation_id),
+        )
+        await self.dead_letter_service.record_inbound_exhausted(
+            session,
+            tenant_id=tenant_id,
+            business_id=business_id,
+            lock_id=lock.id,
+            flow_id=flow.id,
+            conversation_id=conversation.id,
+            inbound_message_id=message.id,
+            trace_id=message_trace.id if message_trace is not None else None,
+            retry_count=lock.replay_count or 0,
+            correlation_id=str(observability.correlation_id),
+        )
+        await self.replay_event_service.record(
+            session,
+            tenant_id=tenant_id,
+            business_id=business_id,
+            source=REPLAY_SOURCE_WEBHOOK,
+            event_type=REPLAY_EVENT_RETRY_EXHAUSTED,
+            flow_id=flow.id,
+            conversation_id=conversation.id,
+            trace_id=message_trace.id if message_trace is not None else None,
+            inbound_message_id=message.id,
+            idempotency_key=lock.idempotency_key,
+            external_message_id=message.external_message_id,
+            correlation_id=str(observability.correlation_id),
+            metadata={"replay_count": lock.replay_count},
         )
 
     async def _respond_inflight_replay(
@@ -725,13 +814,6 @@ class WebhookMessageService:
                 message_trace,
             )
 
-        await self._record_lock_replay_attempt(
-            session,
-            tenant_id=tenant_id,
-            business_id=business.id,
-            conversation_id=conversation.id,
-            idempotency_key=message.idempotency_key,
-        )
         await self._record_webhook_replay_event(
             session,
             tenant_id=tenant_id,

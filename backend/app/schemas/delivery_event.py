@@ -13,6 +13,7 @@ DeliveryStatus = Literal[
     "failed",
     "skipped",
     "retrying",
+    "dead_letter",
 ]
 
 ReportableDeliveryStatus = Literal[

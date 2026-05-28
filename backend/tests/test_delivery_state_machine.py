@@ -39,7 +39,11 @@ def test_failed_to_retrying_allowed():
 async def test_report_status_delivered_to_failed_is_noop():
     replay_service = MagicMock()
     replay_service.record = AsyncMock()
-    service = DeliveryVisibilityService(replay_event_service=replay_service)
+    service = DeliveryVisibilityService(
+        replay_event_service=replay_service,
+        retry_lifecycle_service=MagicMock(record_delivery_attempt=AsyncMock()),
+        dead_letter_service=MagicMock(),
+    )
     session = MagicMock()
     session.flush = AsyncMock()
     now = datetime(2026, 5, 28, 16, 0, 0)
@@ -81,7 +85,11 @@ async def test_report_status_delivered_to_failed_is_noop():
 async def test_report_status_delivered_to_delivered_idempotent():
     replay_service = MagicMock()
     replay_service.record = AsyncMock()
-    service = DeliveryVisibilityService(replay_event_service=replay_service)
+    service = DeliveryVisibilityService(
+        replay_event_service=replay_service,
+        retry_lifecycle_service=MagicMock(record_delivery_attempt=AsyncMock()),
+        dead_letter_service=MagicMock(),
+    )
     session = MagicMock()
     session.flush = AsyncMock()
     now = datetime(2026, 5, 28, 16, 0, 0)
