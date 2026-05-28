@@ -110,8 +110,10 @@ def orchestration_mocks():
 
 
 def _mock_langfuse_trace_context(mocks: dict) -> None:
+    recorder = MagicMock()
+    recorder.langfuse_trace_id = None
     trace_cm = AsyncMock()
-    trace_cm.__aenter__.return_value = MagicMock()
+    trace_cm.__aenter__.return_value = recorder
     trace_cm.__aexit__.return_value = None
     mocks["langfuse_tracing_service"].trace_ai_reply.return_value = trace_cm
 
@@ -182,7 +184,7 @@ async def test_generate_reply_calls_services_in_order(
     _mock_langfuse_trace_context(orchestration_mocks)
 
     session = AsyncMock()
-    result = await orchestrator.generate_reply(
+    result, langfuse_trace_id = await orchestrator.generate_reply(
         session,
         tenant_id=tenant_id,
         business=business,
@@ -194,6 +196,7 @@ async def test_generate_reply_calls_services_in_order(
     )
 
     assert call_order == ["config", "knowledge", "history", "build", "gateway", "prompt_run"]
+    assert langfuse_trace_id is None
     assert result.is_success is True
     assert result.text == "Tomorrow at 10:00 works."
     assert result.prompt_run_id == prompt_run.id
@@ -359,7 +362,7 @@ async def test_generate_reply_gateway_failure_creates_failure_prompt_run(
     )
     _mock_langfuse_trace_context(orchestration_mocks)
 
-    result = await orchestrator.generate_reply(
+    result, _langfuse_trace_id = await orchestrator.generate_reply(
         AsyncMock(),
         tenant_id=tenant_id,
         business=business,

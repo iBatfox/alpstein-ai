@@ -287,12 +287,14 @@ async def test_http_tenant_context_error_returns_validation_envelope(
     from app.services.webhook_message_service import WebhookMessageService
 
     from tests.test_webhook_message_ai_wiring import _flow_service_mock
+    from tests.webhook_test_helpers import message_trace_service_mock
 
     service = WebhookMessageService(
         business_service=MagicMock(
             get_by_external_id=AsyncMock(return_value=business),
         ),
         flow_service=_flow_service_mock(business),
+        message_trace_service=message_trace_service_mock(),
         customer_service=MagicMock(
             get_or_create_customer=AsyncMock(return_value=mismatched_customer),
         ),

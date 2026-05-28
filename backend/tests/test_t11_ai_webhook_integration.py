@@ -46,6 +46,7 @@ from app.services.webhook_message_service import (
     WebhookMessageService,
 )
 from tests.test_ai_gateway_service import MockOpenAIChatClient
+from tests.webhook_test_helpers import message_trace_service_mock
 
 
 def _webhook_request(**overrides: Any) -> NormalizedWebhookMessageRequest:
@@ -167,6 +168,7 @@ class _IntegratedStack:
             lead_service=lead_service,
             ai_reply_coordinator=coordinator,
             ai_configuration_service=config_service,
+            message_trace_service=message_trace_service_mock(),
         )
 
     def _capture_add(self, obj: object) -> None:

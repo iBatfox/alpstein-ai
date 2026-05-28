@@ -31,6 +31,7 @@ from app.services.webhook_message_service import (
     DUPLICATE_SAFE_ACKNOWLEDGMENT,
     WebhookMessageService,
 )
+from tests.webhook_test_helpers import message_trace_service_mock
 
 
 def _request(**overrides) -> NormalizedWebhookMessageRequest:
@@ -196,6 +197,7 @@ def _base_service_mocks(
         "message_service": message_service,
         "lead_service": lead_service,
         "flow_service": _flow_service_mock(business),
+        "message_trace_service": message_trace_service_mock(),
     }
 
 

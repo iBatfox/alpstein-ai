@@ -17,6 +17,7 @@ from app.schemas.ai_reply_orchestration import AiReplyOrchestrationOutcome
 from app.services.ai_reply_orchestration_coordinator import REASON_AI_CHAIN_EXECUTED
 from app.services.webhook_message_service import WebhookMessageService
 from tests.test_webhook_message_ai_wiring import _flow_service_mock
+from tests.webhook_test_helpers import message_trace_service_mock
 
 
 def _none_result() -> MagicMock:
@@ -160,6 +161,7 @@ async def test_process_incoming_message_orchestrates_services(
         lead_service=_lead_service_mock(business, customer, conversation),
         ai_reply_coordinator=ai_reply_coordinator,
         flow_service=flow_service,
+        message_trace_service=message_trace_service_mock(),
     )
     request = _request()
 
@@ -233,6 +235,7 @@ async def test_process_incoming_message_returns_duplicate_flag(
         message_service=message_service,
         lead_service=lead_service,
         ai_reply_coordinator=ai_reply_coordinator,
+        message_trace_service=message_trace_service_mock(),
     )
     session = MagicMock()
     session.flush = AsyncMock()
@@ -268,6 +271,7 @@ async def test_process_incoming_message_creates_customer_via_customer_service(
             get_by_external_id=AsyncMock(return_value=business)
         ),
         flow_service=_flow_service_mock(business),
+        message_trace_service=message_trace_service_mock(),
         customer_service=customer_service,
         conversation_service=MagicMock(
             get_or_create_open_conversation=AsyncMock(return_value=conversation)
@@ -332,6 +336,7 @@ async def test_process_incoming_message_creates_open_conversation_when_none_reus
             get_by_external_id=AsyncMock(return_value=business)
         ),
         flow_service=_flow_service_mock(business),
+        message_trace_service=message_trace_service_mock(),
         customer_service=MagicMock(
             get_or_create_customer=AsyncMock(return_value=customer)
         ),

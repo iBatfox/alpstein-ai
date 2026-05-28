@@ -343,3 +343,19 @@ def test_message_inbound_idempotency_migration():
     assert "messages_business_external_message_id_unique" in migration_source
     downgrade_source = migration_source.split("def downgrade")[1]
     assert "op.drop_column" in downgrade_source and "idempotency_key" in downgrade_source
+
+
+def test_message_traces_migration():
+    migration_path = (
+        Path(__file__).resolve().parents[1]
+        / "alembic"
+        / "versions"
+        / "0011_message_traces.py"
+    )
+    migration_source = migration_path.read_text()
+    assert 'revision: str = "0011"' in migration_source
+    assert 'down_revision: str | None = "0010"' in migration_source
+    assert "message_traces" in migration_source
+    assert "message_traces_inbound_message_id_unique" in migration_source
+    downgrade_source = migration_source.split("def downgrade")[1]
+    assert "op.drop_table" in downgrade_source

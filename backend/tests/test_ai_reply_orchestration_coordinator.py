@@ -16,13 +16,16 @@ from app.services.ai_reply_orchestration_coordinator import (
 def orchestration_service() -> MagicMock:
     service = MagicMock()
     service.generate_reply = AsyncMock(
-        return_value=AiReplyResult(
-            text="AI reply",
-            is_success=True,
-            prompt_run_id=uuid.uuid4(),
-            model="gpt-4o-mini",
-            provider="openai",
-            error=None,
+        return_value=(
+            AiReplyResult(
+                text="AI reply",
+                is_success=True,
+                prompt_run_id=uuid.uuid4(),
+                model="gpt-4o-mini",
+                provider="openai",
+                error=None,
+            ),
+            None,
         )
     )
     return service
