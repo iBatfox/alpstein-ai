@@ -216,6 +216,8 @@ Open questions:
 3. adapter-level error taxonomy in n8n — workflow convention, not backend API
 4. website `visitor_id` fallback — strict upstream preferred; deployment-specific adapter fallback only if documented
 
-## 8) Next recommended task
+## 8) Website Chat architecture (E1.3)
 
-Website chat adapter/runtime implementation or backend `message.text` max-length enforcement — after human review of E1.2 (`tasks/done/T-e1.2-api-spec-alignment-channel-contract.md`).
+Full ingress/egress design (widget, n8n, sync MVP, reconnect, rate limits, E1.4–E1.6 phases): [`website-chat-architecture.md`](website-chat-architecture.md).
+
+Field mapping tables in §2 remain authoritative for normalize → `POST /api/v1/webhook/message`.

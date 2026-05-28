@@ -288,6 +288,8 @@ Ops detail: [`docs/ops/telegram-customer-ingress.md`](../../docs/ops/telegram-cu
 
 If widget omits `message_id`, adapter synthesizes stable `message_id` before forming `web:…` key (E1.1).
 
+**Architecture (E1.3):** widget/n8n/session model and E1.4–E1.6 implementation bounds — [`docs/architecture/website-chat-architecture.md`](../../docs/architecture/website-chat-architecture.md).
+
 ---
 
 ## 11. Resolved E1.0 open questions
