@@ -18,6 +18,12 @@ from app.models.delivery_event import (
     DELIVERY_STATUS_SKIPPED,
     DeliveryEvent,
 )
+from app.models.replay_event import (
+    REPLAY_EVENT_ILLEGAL_TRANSITION,
+    REPLAY_SOURCE_DELIVERY_PATCH,
+)
+from app.services.delivery_state_machine import is_delivery_transition_allowed
+from app.services.replay_event_service import ReplayEventService
 
 ERROR_MESSAGE_MAX_LENGTH = 500
 LIST_DEFAULT_LIMIT = 20
@@ -25,6 +31,9 @@ LIST_MAX_LIMIT = 100
 
 
 class DeliveryVisibilityService:
+    def __init__(self, replay_event_service: ReplayEventService | None = None) -> None:
+        self.replay_event_service = replay_event_service or ReplayEventService()
+
     async def get_by_id(
         self,
         session: AsyncSession,
@@ -242,6 +251,26 @@ class DeliveryVisibilityService:
         )
         if event is None:
             return None
+
+        if not is_delivery_transition_allowed(event.status, status):
+            if event.status != status:
+                await self.replay_event_service.record(
+                    session,
+                    tenant_id=tenant_id,
+                    business_id=business_id,
+                    source=REPLAY_SOURCE_DELIVERY_PATCH,
+                    event_type=REPLAY_EVENT_ILLEGAL_TRANSITION,
+                    flow_id=event.flow_id,
+                    conversation_id=event.conversation_id,
+                    trace_id=event.trace_id,
+                    delivery_id=event.id,
+                    outbound_message_id=event.outbound_message_id,
+                    metadata={
+                        "from_status": event.status,
+                        "to_status": status,
+                    },
+                )
+            return event
 
         if status == DELIVERY_STATUS_DELIVERED:
             return await self.mark_delivered(

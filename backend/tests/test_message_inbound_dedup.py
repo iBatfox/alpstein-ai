@@ -26,6 +26,7 @@ from tests.test_webhook_message_service import (
 )
 from tests.webhook_test_helpers import (
     delivery_visibility_service_mock,
+    inbound_processing_lock_service_mock,
     message_trace_service_mock,
 )
 
@@ -148,6 +149,7 @@ async def test_telegram_webhook_retry_does_not_duplicate_ai_response():
         channel="telegram",
         message_text="Привет",
         external_message_id="tg:12345:99",
+        idempotency_key="ext:tg:12345:99",
     )
 
     message_service = MagicMock()
@@ -199,6 +201,7 @@ async def test_telegram_webhook_retry_does_not_duplicate_ai_response():
         ai_reply_coordinator=coordinator,
         message_trace_service=message_trace_service_mock(),
         delivery_visibility_service=delivery_visibility_service_mock(),
+        inbound_processing_lock_service=inbound_processing_lock_service_mock(),
     )
 
     request = _request(
@@ -259,6 +262,7 @@ async def test_website_chat_webhook_retry_uses_hash_idempotency_without_external
         direction="incoming",
         channel="website_chat",
         message_text="Hello",
+        idempotency_key="hash:website-retry-test",
     )
 
     message_service = MagicMock()
@@ -284,6 +288,7 @@ async def test_website_chat_webhook_retry_uses_hash_idempotency_without_external
         ai_reply_coordinator=_webhook_success_ai_coordinator(),
         message_trace_service=message_trace_service_mock(),
         delivery_visibility_service=delivery_visibility_service_mock(),
+        inbound_processing_lock_service=inbound_processing_lock_service_mock(),
     )
 
     request = _request(

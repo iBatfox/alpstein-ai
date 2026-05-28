@@ -48,6 +48,7 @@ from app.services.webhook_message_service import (
 from tests.test_ai_gateway_service import MockOpenAIChatClient
 from tests.webhook_test_helpers import (
     delivery_visibility_service_mock,
+    inbound_processing_lock_service_mock,
     message_trace_service_mock,
 )
 
@@ -180,6 +181,7 @@ class _IntegratedStack:
             ai_configuration_service=config_service,
             message_trace_service=message_trace_service_mock(),
             delivery_visibility_service=delivery_visibility_service_mock(),
+            inbound_processing_lock_service=inbound_processing_lock_service_mock(),
         )
 
     def _capture_add(self, obj: object) -> None:

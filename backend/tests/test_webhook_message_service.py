@@ -19,6 +19,7 @@ from app.services.webhook_message_service import WebhookMessageService
 from tests.test_webhook_message_ai_wiring import _flow_service_mock
 from tests.webhook_test_helpers import (
     delivery_visibility_service_mock,
+    inbound_processing_lock_service_mock,
     message_trace_service_mock,
 )
 
@@ -166,6 +167,7 @@ async def test_process_incoming_message_orchestrates_services(
         flow_service=flow_service,
         message_trace_service=message_trace_service_mock(),
         delivery_visibility_service=delivery_visibility_service_mock(),
+        inbound_processing_lock_service=inbound_processing_lock_service_mock(),
     )
     request = _request()
 
@@ -241,6 +243,7 @@ async def test_process_incoming_message_returns_duplicate_flag(
         ai_reply_coordinator=ai_reply_coordinator,
         message_trace_service=message_trace_service_mock(),
         delivery_visibility_service=delivery_visibility_service_mock(),
+        inbound_processing_lock_service=inbound_processing_lock_service_mock(),
     )
     session = MagicMock()
     session.flush = AsyncMock()
@@ -278,6 +281,7 @@ async def test_process_incoming_message_creates_customer_via_customer_service(
         flow_service=_flow_service_mock(business),
         message_trace_service=message_trace_service_mock(),
         delivery_visibility_service=delivery_visibility_service_mock(),
+        inbound_processing_lock_service=inbound_processing_lock_service_mock(),
         customer_service=customer_service,
         conversation_service=MagicMock(
             get_or_create_open_conversation=AsyncMock(return_value=conversation)
@@ -344,6 +348,7 @@ async def test_process_incoming_message_creates_open_conversation_when_none_reus
         flow_service=_flow_service_mock(business),
         message_trace_service=message_trace_service_mock(),
         delivery_visibility_service=delivery_visibility_service_mock(),
+        inbound_processing_lock_service=inbound_processing_lock_service_mock(),
         customer_service=MagicMock(
             get_or_create_customer=AsyncMock(return_value=customer)
         ),

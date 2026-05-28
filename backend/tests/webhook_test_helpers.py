@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from app.models.delivery_event import DELIVERY_STATUS_PENDING, DeliveryEvent
 from app.models.message_trace import TRACE_STATUS_ACCEPTED
+from app.services.inbound_processing_lock_service import ProcessingLockAcquireResult
 
 
 def delivery_visibility_service_mock(
@@ -32,6 +33,21 @@ def delivery_visibility_service_mock(
     return service
 
 
+def inbound_processing_lock_service_mock() -> MagicMock:
+    lock = MagicMock()
+    service = MagicMock()
+    service.acquire_processing_owner = AsyncMock(
+        return_value=ProcessingLockAcquireResult(
+            acquired=True,
+            conflict=False,
+            lock=lock,
+        )
+    )
+    service.release = AsyncMock(return_value=lock)
+    service.record_replay_attempt = AsyncMock()
+    return service
+
+
 def message_trace_service_mock(*, trace_id: uuid.UUID | None = None):
     trace = SimpleNamespace(
         id=trace_id or uuid.uuid4(),
@@ -46,11 +62,18 @@ def message_trace_service_mock(*, trace_id: uuid.UUID | None = None):
         active_trace.status = "skipped_duplicate"
         return active_trace
 
+    async def _record_duplicate_retry(_session, active_trace):
+        if active_trace.status in ("completed", "processing", "accepted"):
+            return active_trace
+        active_trace.status = "skipped_duplicate"
+        return active_trace
+
     service = MagicMock()
     service.record_inbound_turn = AsyncMock(return_value=trace)
     service.mark_processing = AsyncMock(return_value=trace)
     service.mark_completed = AsyncMock(side_effect=_mark_completed)
     service.mark_skipped_duplicate = AsyncMock(side_effect=_mark_skipped)
+    service.record_duplicate_retry = AsyncMock(side_effect=_record_duplicate_retry)
     service.mark_failed = AsyncMock(return_value=trace)
     service.find_by_inbound_message_id = AsyncMock(return_value=None)
     return service

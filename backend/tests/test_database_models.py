@@ -49,6 +49,8 @@ def test_metadata_contains_persistence_slice_tables():
         "flows",
         "message_traces",
         "delivery_events",
+        "inbound_processing_locks",
+        "replay_events",
     }
     assert Tenant.__tablename__ == "tenants"
     assert Business.__tablename__ == "businesses"

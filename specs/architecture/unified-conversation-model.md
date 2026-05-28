@@ -241,7 +241,8 @@ prompt_runs ── AI execution audit; references conversation_id, message_id
 | `external_conversation_id` on row | Column exists; **not used in lookup** | Used for thread continuity |
 | Message idempotency | `(business_id, external_message_id)` | `(flow_id, channel, external_message_id)` |
 | Trace table | `prompt_runs` + Langfuse only | **`message_traces` + read APIs (E2.4–E2.5)** + `prompt_runs` + Langfuse |
-| Delivery visibility | n8n-only (implicit) | **`delivery_events` + read/report APIs (E2.6)**; backend `pending`, n8n reports delivered/failed |
+| Delivery visibility | n8n-only (implicit) | **`delivery_events` + read/report APIs (E2.6)**; backend `pending`, n8n reports delivered/failed; **E3.1b** terminal PATCH |
+| Replay / retry audit | None | **`replay_events` + GET `/observability/replays` (E3.1c)**; **`inbound_processing_locks` (E3.1a)** |
 | n8n `flow_key` | Not in webhook body | Optional field → resolve `flow_id` |
 
 ---

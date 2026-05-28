@@ -79,7 +79,8 @@ Specification-driven MVP with **backend AI orchestration complete**, **n8n test 
 - **History Safety (HF-1):** §7 preamble + non-authoritative `ai` labels in `PromptBuilderService` — **implemented**
 - **Langfuse (dev):** `LangfuseTracingService` + `ObservabilityContext` (D2); flat metadata §16.2; intent keys wired in orchestration path — **implemented**; production off by default
 - **Observability metadata (D4):** `prompt_runs.metadata` JSON-safe (`json_safe_metadata`); scalar lineage; production-safe envelope per D4.4
-- pytest: **452** passed in `backend/tests/` (as-of 2026-05-28 E2.7)
+- pytest: **467** passed in `backend/tests/` (as-of 2026-05-28 E3.1)
+- **E3.1 retry/replay protection (done):** `inbound_processing_locks` (0013), terminal delivery PATCH (E3.1b), `replay_events` + replays API (0014) — audit [`e3-1-retry-replay-protection.md`](../audits/e3-1-retry-replay-protection.md)
 
 ### Missing / deferred
 

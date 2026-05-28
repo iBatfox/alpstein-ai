@@ -24,7 +24,10 @@ from tests.test_webhook_message_ai_wiring import (
     _request,
 )
 from tests.test_webhook_message_service import _lead_service_mock
-from tests.webhook_test_helpers import message_trace_service_mock
+from tests.webhook_test_helpers import (
+    inbound_processing_lock_service_mock,
+    message_trace_service_mock,
+)
 
 
 @pytest.mark.anyio
@@ -106,6 +109,7 @@ async def test_new_inbound_marks_trace_processing_then_completed():
         lead_service=_lead_service_mock(business, customer, conversation),
         message_trace_service=trace_service,
         delivery_visibility_service=delivery_service,
+        inbound_processing_lock_service=inbound_processing_lock_service_mock(),
         ai_reply_coordinator=MagicMock(
             execute_for_incoming_message=AsyncMock(
                 return_value=AiReplyOrchestrationOutcome(
@@ -230,6 +234,7 @@ async def test_webhook_process_result_includes_trace_metadata():
         lead_service=_lead_service_mock(business, customer, conversation),
         message_trace_service=trace_service,
         delivery_visibility_service=delivery_service,
+        inbound_processing_lock_service=inbound_processing_lock_service_mock(),
         ai_reply_coordinator=MagicMock(
             execute_for_incoming_message=AsyncMock(
                 return_value=AiReplyOrchestrationOutcome(
@@ -354,6 +359,7 @@ async def test_duplicate_inbound_does_not_mark_processing_or_completed():
         lead_service=_lead_service_mock(business, customer, conversation),
         message_trace_service=trace_service,
         delivery_visibility_service=delivery_service,
+        inbound_processing_lock_service=inbound_processing_lock_service_mock(),
         ai_reply_coordinator=MagicMock(
             execute_for_incoming_message=AsyncMock(
                 return_value=AiReplyOrchestrationOutcome(

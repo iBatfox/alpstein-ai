@@ -41,6 +41,7 @@ from tests.test_webhook_message_ai_wiring import (
     _request,
 )
 from tests.test_webhook_message_service import _lead_service_mock
+from tests.webhook_test_helpers import inbound_processing_lock_service_mock
 from tests.webhook_test_helpers import (
     delivery_visibility_service_mock,
     message_trace_service_mock,
@@ -75,14 +76,14 @@ def test_e2_persistence_tables_in_model_metadata():
     assert "delivery_events" in tables
 
 
-def test_alembic_head_is_0012():
+def test_alembic_head_is_0014():
     from alembic.config import Config
     from alembic.script import ScriptDirectory
 
     cfg = Config(str(BACKEND_DIR / "alembic.ini"))
     script = ScriptDirectory.from_config(cfg)
     heads = script.get_heads()
-    assert heads == ["0012"]
+    assert heads == ["0014"]
 
 
 def test_trace_and_delivery_mappers_share_outbound_message_id():
@@ -223,6 +224,7 @@ async def test_webhook_channel_links_trace_outbound_and_delivery_pending(channel
         lead_service=_lead_service_mock(business, customer, conversation),
         message_trace_service=trace_service,
         delivery_visibility_service=delivery_service,
+        inbound_processing_lock_service=inbound_processing_lock_service_mock(),
         ai_reply_coordinator=MagicMock(
             execute_for_incoming_message=AsyncMock(
                 return_value=AiReplyOrchestrationOutcome(
@@ -337,6 +339,7 @@ async def test_langfuse_absent_trace_and_delivery_still_complete():
         lead_service=_lead_service_mock(business, customer, conversation),
         message_trace_service=trace_service,
         delivery_visibility_service=delivery_service,
+        inbound_processing_lock_service=inbound_processing_lock_service_mock(),
         ai_reply_coordinator=MagicMock(
             execute_for_incoming_message=AsyncMock(
                 return_value=AiReplyOrchestrationOutcome(
@@ -427,6 +430,7 @@ async def test_duplicate_inbound_skips_delivery_and_reuses_trace():
         lead_service=_lead_service_mock(business, customer, conversation),
         message_trace_service=trace_service,
         delivery_visibility_service=delivery_service,
+        inbound_processing_lock_service=inbound_processing_lock_service_mock(),
         ai_reply_coordinator=MagicMock(
             execute_for_incoming_message=AsyncMock(
                 return_value=AiReplyOrchestrationOutcome(

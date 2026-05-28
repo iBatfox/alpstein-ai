@@ -40,6 +40,8 @@ Langfuse and `prompt_runs` remain optional/supplementary. Internal traces work w
 | `skipped_duplicate` | Inbound dedup retry (E2.3); no second AI/lead |
 | `failed` | Unhandled exception during processing |
 
+**E3.1a:** Active traces in `accepted` / `processing` / `completed` are **not** downgraded to `skipped_duplicate` on duplicate or in-flight replay.
+
 ---
 
 ## Webhook flow
@@ -47,9 +49,12 @@ Langfuse and `prompt_runs` remain optional/supplementary. Internal traces work w
 ```text
 save inbound message
   → record_inbound_turn (create or skip_duplicate)
-  → if duplicate: return (no mark_processing / AI)
+  → if duplicate: return (no mark_processing / AI); replay_events.duplicate_retry
+  → acquire inbound_processing_lock (E3.1a)
+  → if lock conflict: in-flight replay (is_duplicate, no AI); replay_events.replay_ignored
   → mark_processing
   → lead + AI
+  → release lock (completed|failed)
   → mark_completed (outbound + observability ids)
   → on exception: mark_failed (re-raise)
 ```

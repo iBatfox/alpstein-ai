@@ -254,6 +254,18 @@ Webhook success `data` may include optional `delivery` object:
 }
 ```
 
+## GET /api/v1/observability/replays
+
+**E3.1c** — List retry/replay audit rows for ops. Auth: same webhook/internal token as other observability routes.
+
+Required query: `tenant_id`, `business_id`.
+
+Optional filters: `trace_id`, `delivery_id`, `conversation_id`, `idempotency_key`, `event_type`, `limit` (max 100), `offset`.
+
+Response `data.items[]`: `id`, scope ids, `source` (`webhook` | `delivery_patch`), `event_type` (`duplicate_retry`, `replay_ignored`, `illegal_transition`, …), `idempotency_key`, `correlation_id`, safe `metadata`, `created_at`. No raw provider payloads or secrets.
+
+Illegal delivery PATCH transitions are recorded as `illegal_transition` with `metadata.from_status` / `metadata.to_status`; delivery row state is unchanged (terminal-safe).
+
 ---
 
 # 8. Incoming Message Endpoint

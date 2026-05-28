@@ -5,6 +5,8 @@ from app.models.customer import Customer
 from app.models.lead import Lead
 from app.models.message import Message
 from app.models.delivery_event import DeliveryEvent
+from app.models.inbound_processing_lock import InboundProcessingLock
+from app.models.replay_event import ReplayEvent
 from app.models.message_trace import MessageTrace
 from app.models.prompt_run import PromptRun
 from app.models.prompt_template import PromptTemplate
@@ -22,6 +24,8 @@ __all__ = [
     "Lead",
     "Message",
     "DeliveryEvent",
+    "InboundProcessingLock",
+    "ReplayEvent",
     "MessageTrace",
     "PromptRun",
     "PromptTemplate",

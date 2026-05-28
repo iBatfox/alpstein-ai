@@ -205,7 +205,7 @@ class MessageTraceService:
             )
             if existing is None:
                 return None
-            return await self.mark_skipped_duplicate(session, existing)
+            return await self.record_duplicate_retry(session, existing)
 
         trace = await self.get_or_create_for_inbound(
             session,
@@ -262,7 +262,22 @@ class MessageTraceService:
         session: AsyncSession,
         trace: MessageTrace,
     ) -> MessageTrace:
-        if trace.status == TRACE_STATUS_COMPLETED:
+        """Backward-compatible alias for duplicate retry handling."""
+        return await self.record_duplicate_retry(session, trace)
+
+    async def record_duplicate_retry(
+        self,
+        session: AsyncSession,
+        trace: MessageTrace,
+    ) -> MessageTrace:
+        """Duplicate inbound retry — never downgrade active or completed processing."""
+        if trace.status in (
+            TRACE_STATUS_COMPLETED,
+            TRACE_STATUS_PROCESSING,
+            TRACE_STATUS_ACCEPTED,
+        ):
+            return trace
+        if trace.status == TRACE_STATUS_SKIPPED_DUPLICATE:
             return trace
         trace.status = TRACE_STATUS_SKIPPED_DUPLICATE
         await session.flush()

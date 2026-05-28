@@ -4,7 +4,9 @@
 
 # Next Steps
 
-## Recommended next task: **E2.8 ops gate** or **n8n delivery PATCH wiring** or **Live Telegram DM confirmation**
+## Recommended next task: **E2.8 ops gate** or **n8n delivery PATCH operator import** or **Live Telegram DM confirmation**
+
+**E3.1 (done):** Retry/replay protection — [`T-e3.1a-in-flight-replay-protection.md`](../../tasks/done/T-e3.1a-in-flight-replay-protection.md), [`T-e3.1b-terminal-delivery-state-machine.md`](../../tasks/done/T-e3.1b-terminal-delivery-state-machine.md), [`T-e3.1c-replay-observability.md`](../../tasks/done/T-e3.1c-replay-observability.md); audit [`e3-1-retry-replay-protection.md`](../audits/e3-1-retry-replay-protection.md). Deploy: `alembic upgrade head` (0013–0014) + backend restart.
 
 **E2.7 (done):** E2 observability verification — [`T-e2.7-end-to-end-observability-verification.md`](../../tasks/done/T-e2.7-end-to-end-observability-verification.md), audit [`e2-observability-verification.md`](../audits/e2-observability-verification.md).
 

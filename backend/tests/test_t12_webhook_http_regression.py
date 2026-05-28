@@ -289,6 +289,7 @@ async def test_http_tenant_context_error_returns_validation_envelope(
     from tests.test_webhook_message_ai_wiring import _flow_service_mock
     from tests.webhook_test_helpers import (
         delivery_visibility_service_mock,
+        inbound_processing_lock_service_mock,
         message_trace_service_mock,
     )
 
@@ -299,6 +300,7 @@ async def test_http_tenant_context_error_returns_validation_envelope(
         flow_service=_flow_service_mock(business),
         message_trace_service=message_trace_service_mock(),
         delivery_visibility_service=delivery_visibility_service_mock(),
+        inbound_processing_lock_service=inbound_processing_lock_service_mock(),
         customer_service=MagicMock(
             get_or_create_customer=AsyncMock(return_value=mismatched_customer),
         ),

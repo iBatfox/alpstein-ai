@@ -10,6 +10,7 @@ from app.models.flow import Flow
 from app.models.lead import LEAD_PRIORITY_URGENT, LEAD_STATUS_IN_PROGRESS, LEAD_STATUS_NEW, Lead
 from app.models.message import Message
 from app.models.delivery_event import DeliveryEvent
+from app.models.inbound_processing_lock import LOCK_STATUS_COMPLETED, LOCK_STATUS_FAILED
 from app.models.message_trace import MessageTrace
 from app.schemas.ai_reply import AiReplyResult
 from app.schemas.lead_signal import LeadSignalDetectionResult
@@ -32,6 +33,14 @@ from app.services.lead_service import LeadService
 from app.services.lead_signal_detection_service import LeadSignalDetectionService
 from app.services.message_service import MessageService
 from app.services.delivery_visibility_service import DeliveryVisibilityService
+from app.services.inbound_processing_lock_service import InboundProcessingLockService
+from app.services.message_idempotency import build_inbound_idempotency_key
+from app.models.replay_event import (
+    REPLAY_EVENT_DUPLICATE_RETRY,
+    REPLAY_EVENT_REPLAY_IGNORED,
+    REPLAY_SOURCE_WEBHOOK,
+)
+from app.services.replay_event_service import ReplayEventService
 from app.services.message_trace_service import (
     MessageTraceService,
     build_trace_metadata,
@@ -101,6 +110,8 @@ class WebhookMessageService:
         ai_fallback_service: AiReplyFallbackService | None = None,
         message_trace_service: MessageTraceService | None = None,
         delivery_visibility_service: DeliveryVisibilityService | None = None,
+        inbound_processing_lock_service: InboundProcessingLockService | None = None,
+        replay_event_service: ReplayEventService | None = None,
     ) -> None:
         self.business_service = business_service or BusinessService()
         self.customer_service = customer_service or CustomerService()
@@ -125,6 +136,10 @@ class WebhookMessageService:
         self.delivery_visibility_service = (
             delivery_visibility_service or DeliveryVisibilityService()
         )
+        self.inbound_processing_lock_service = (
+            inbound_processing_lock_service or InboundProcessingLockService()
+        )
+        self.replay_event_service = replay_event_service or ReplayEventService()
 
     async def process_incoming_message(
         self,
@@ -232,6 +247,26 @@ class WebhookMessageService:
         )
 
         if save_result.is_duplicate:
+            await self._record_lock_replay_attempt(
+                session,
+                tenant_id=tenant_id,
+                business_id=business.id,
+                conversation_id=conversation.id,
+                idempotency_key=save_result.message.idempotency_key,
+            )
+            await self._record_webhook_replay_event(
+                session,
+                tenant_id=tenant_id,
+                business_id=business.id,
+                flow_id=flow.id,
+                conversation_id=conversation.id,
+                message_trace=message_trace,
+                inbound_message_id=save_result.message.id,
+                idempotency_key=save_result.message.idempotency_key,
+                external_message_id=save_result.message.external_message_id,
+                correlation_id=str(observability.correlation_id),
+                event_type=REPLAY_EVENT_DUPLICATE_RETRY,
+            )
             reply_resolution = await self._resolve_reply_to_customer(
                 session,
                 tenant_id=tenant_id,
@@ -271,6 +306,46 @@ class WebhookMessageService:
         if message_trace is None:
             raise RuntimeError("message trace missing for new inbound message")
 
+        idempotency_key = save_result.message.idempotency_key
+        if not idempotency_key:
+            idempotency_key = build_inbound_idempotency_key(
+                business_id=business.id,
+                flow_id=flow.id,
+                conversation_id=conversation.id,
+                channel=channel,
+                external_message_id=save_result.message.external_message_id,
+                message_text=request.message.text,
+                message_timestamp=request.message.timestamp,
+            )
+
+        lock_acquire = await self.inbound_processing_lock_service.acquire_processing_owner(
+            session,
+            tenant_id=tenant_id,
+            business_id=business.id,
+            flow_id=flow.id,
+            conversation_id=conversation.id,
+            channel=channel,
+            idempotency_key=idempotency_key,
+            owner_correlation_id=str(observability.correlation_id),
+            external_message_id=save_result.message.external_message_id,
+        )
+        if lock_acquire.conflict:
+            return await self._respond_inflight_replay(
+                session,
+                tenant_id=tenant_id,
+                business=business,
+                flow=flow,
+                conversation=conversation,
+                customer=customer,
+                message=save_result.message,
+                message_trace=message_trace,
+                channel=channel,
+                customer_message_text=request.message.text,
+                observability=observability,
+                flow_id=flow.id,
+            )
+
+        processing_lock = lock_acquire.lock
         await self.message_trace_service.mark_processing(session, message_trace)
 
         delivery_event: DeliveryEvent | None = None
@@ -326,6 +401,12 @@ class WebhookMessageService:
                 outbound_message_id=reply_resolution.outbound_message_id,
                 channel=channel,
             )
+            if processing_lock is not None:
+                await self.inbound_processing_lock_service.release(
+                    session,
+                    processing_lock,
+                    status=LOCK_STATUS_COMPLETED,
+                )
         except Exception as exc:
             await self.message_trace_service.mark_failed(
                 session,
@@ -334,6 +415,12 @@ class WebhookMessageService:
                 error_message=str(exc),
                 trace_metadata=trace_metadata,
             )
+            if processing_lock is not None:
+                await self.inbound_processing_lock_service.release(
+                    session,
+                    processing_lock,
+                    status=LOCK_STATUS_FAILED,
+                )
             raise
 
         notification_decision = self.notification_policy_service.decide(
@@ -565,6 +652,131 @@ class WebhookMessageService:
             ai_failed=False,
             langfuse_trace_id=langfuse_trace_id,
             prompt_run_id=prompt_run_id,
+        )
+
+    async def _record_webhook_replay_event(
+        self,
+        session: AsyncSession,
+        *,
+        tenant_id: uuid.UUID,
+        business_id: uuid.UUID,
+        flow_id: uuid.UUID,
+        conversation_id: uuid.UUID,
+        message_trace: MessageTrace | None,
+        inbound_message_id: uuid.UUID,
+        idempotency_key: str | None,
+        external_message_id: str | None,
+        correlation_id: str,
+        event_type: str,
+    ) -> None:
+        await self.replay_event_service.record(
+            session,
+            tenant_id=tenant_id,
+            business_id=business_id,
+            source=REPLAY_SOURCE_WEBHOOK,
+            event_type=event_type,
+            flow_id=flow_id,
+            conversation_id=conversation_id,
+            trace_id=message_trace.id if message_trace is not None else None,
+            inbound_message_id=inbound_message_id,
+            idempotency_key=idempotency_key,
+            external_message_id=external_message_id,
+            correlation_id=correlation_id,
+        )
+
+    async def _record_lock_replay_attempt(
+        self,
+        session: AsyncSession,
+        *,
+        tenant_id: uuid.UUID,
+        business_id: uuid.UUID,
+        conversation_id: uuid.UUID,
+        idempotency_key: str | None,
+    ) -> None:
+        if not idempotency_key:
+            return
+        await self.inbound_processing_lock_service.record_replay_attempt(
+            session,
+            tenant_id=tenant_id,
+            business_id=business_id,
+            conversation_id=conversation_id,
+            idempotency_key=idempotency_key,
+        )
+
+    async def _respond_inflight_replay(
+        self,
+        session: AsyncSession,
+        *,
+        tenant_id: uuid.UUID,
+        business: object,
+        flow: Flow,
+        conversation: Conversation,
+        customer: object,
+        message: Message,
+        message_trace: MessageTrace | None,
+        channel: str,
+        customer_message_text: str,
+        observability: ObservabilityContext,
+        flow_id: uuid.UUID,
+    ) -> WebhookMessageProcessResult:
+        if message_trace is not None:
+            message_trace = await self.message_trace_service.record_duplicate_retry(
+                session,
+                message_trace,
+            )
+
+        await self._record_lock_replay_attempt(
+            session,
+            tenant_id=tenant_id,
+            business_id=business.id,
+            conversation_id=conversation.id,
+            idempotency_key=message.idempotency_key,
+        )
+        await self._record_webhook_replay_event(
+            session,
+            tenant_id=tenant_id,
+            business_id=business.id,
+            flow_id=flow_id,
+            conversation_id=conversation.id,
+            message_trace=message_trace,
+            inbound_message_id=message.id,
+            idempotency_key=message.idempotency_key,
+            external_message_id=message.external_message_id,
+            correlation_id=str(observability.correlation_id),
+            event_type=REPLAY_EVENT_REPLAY_IGNORED,
+        )
+
+        reply_resolution = await self._resolve_reply_to_customer(
+            session,
+            tenant_id=tenant_id,
+            business=business,
+            conversation=conversation,
+            customer=customer,
+            incoming_message=message,
+            customer_message_text=customer_message_text,
+            channel=channel,
+            is_duplicate=True,
+            flow_id=flow_id,
+            observability=observability,
+        )
+        trace_id, trace_status, trace_correlation = _trace_fields_for_response(
+            message_trace,
+            observability=observability,
+        )
+        return WebhookMessageProcessResult(
+            conversation=conversation,
+            message=message,
+            flow=flow,
+            is_duplicate=True,
+            reply_to_customer=reply_resolution.reply_to_customer,
+            lead_created=False,
+            lead_updated=False,
+            notify_owner=False,
+            lead=None,
+            notification=None,
+            message_trace_id=trace_id,
+            processing_status=trace_status,
+            correlation_id=trace_correlation,
         )
 
     async def _create_pending_delivery_if_outbound(

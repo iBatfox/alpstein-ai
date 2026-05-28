@@ -33,6 +33,7 @@ from app.services.webhook_message_service import (
 )
 from tests.webhook_test_helpers import (
     delivery_visibility_service_mock,
+    inbound_processing_lock_service_mock,
     message_trace_service_mock,
 )
 
@@ -202,6 +203,7 @@ def _base_service_mocks(
         "flow_service": _flow_service_mock(business),
         "message_trace_service": message_trace_service_mock(),
         "delivery_visibility_service": delivery_visibility_service_mock(),
+        "inbound_processing_lock_service": inbound_processing_lock_service_mock(),
     }
 
 
