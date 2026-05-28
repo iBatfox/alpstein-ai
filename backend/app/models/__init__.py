@@ -4,6 +4,7 @@ from app.models.conversation import Conversation
 from app.models.customer import Customer
 from app.models.lead import Lead
 from app.models.message import Message
+from app.models.message_trace import MessageTrace
 from app.models.prompt_run import PromptRun
 from app.models.prompt_template import PromptTemplate
 from app.models.tenant import Tenant
@@ -19,6 +20,7 @@ __all__ = [
     "Customer",
     "Lead",
     "Message",
+    "MessageTrace",
     "PromptRun",
     "PromptTemplate",
     "Tenant",

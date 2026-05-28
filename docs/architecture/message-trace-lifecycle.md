@@ -1,0 +1,77 @@
+# Message trace lifecycle (E2.4 — implemented)
+
+**Status:** implemented in backend (`message_traces` table, Alembic `0011`)  
+**Spec reference:** [`specs/observability/message-trace-lifecycle.md`](../../specs/observability/message-trace-lifecycle.md)
+
+---
+
+## Purpose
+
+One durable PostgreSQL row per **inbound customer turn** (keyed by `inbound_message_id`). Traces describe what happened; they do not control orchestration.
+
+Langfuse and `prompt_runs` remain optional/supplementary. Internal traces work when Langfuse is disabled.
+
+---
+
+## Schema (summary)
+
+| Column | Role |
+|--------|------|
+| `id` | Trace PK (`message_trace_id` in APIs/docs) |
+| `tenant_id`, `business_id`, `flow_id`, `conversation_id` | Scope |
+| `inbound_message_id` | **UNIQUE** — one trace per inbound message |
+| `outbound_message_id` | AI/outbound message when saved |
+| `channel`, `status` | Channel + lifecycle status |
+| `external_trace_id` | Correlation / external observability id (e.g. `correlation_id`) |
+| `langfuse_trace_id` | Optional Langfuse trace id when tracing is active |
+| `flow_key`, `external_conversation_id`, `external_message_id`, `idempotency_key` | Ingress context |
+| `error_type`, `error_message` | Failure metadata (truncated) |
+| `metadata` | JSONB: `correlation_id`, `n8n_execution_id`, `prompt_run_id`, … |
+
+---
+
+## Status values
+
+| Status | Meaning |
+|--------|---------|
+| `accepted` | Trace row created for new inbound |
+| `processing` | Lead/AI path started |
+| `completed` | Processing finished (outbound linked when applicable) |
+| `skipped_duplicate` | Inbound dedup retry (E2.3); no second AI/lead |
+| `failed` | Unhandled exception during processing |
+
+---
+
+## Webhook flow
+
+```text
+save inbound message
+  → record_inbound_turn (create or skip_duplicate)
+  → if duplicate: return (no mark_processing / AI)
+  → mark_processing
+  → lead + AI
+  → mark_completed (outbound + observability ids)
+  → on exception: mark_failed (re-raise)
+```
+
+---
+
+## Ops queries
+
+```sql
+SELECT * FROM message_traces
+WHERE inbound_message_id = '…';
+
+SELECT * FROM message_traces
+WHERE business_id = '…' AND status = 'failed'
+ORDER BY created_at DESC
+LIMIT 20;
+```
+
+---
+
+## Out of scope (this slice)
+
+- `reply_sent` / n8n delivery stage persistence
+- Latency columns (`backend_total_latency_ms`, …)
+- Dedicated `correlation_id` column (stored in `metadata` + `external_trace_id`)

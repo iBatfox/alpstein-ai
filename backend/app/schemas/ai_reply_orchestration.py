@@ -15,3 +15,4 @@ class AiReplyOrchestrationOutcome:
     ai_executed: bool
     reason: str
     ai_reply: AiReplyResult | None
+    langfuse_trace_id: str | None = None

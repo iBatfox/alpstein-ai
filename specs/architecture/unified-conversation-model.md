@@ -180,7 +180,7 @@ tenants
                     ├── customers (contact identity)
                     └── messages (N) ── belongs to exactly one conversation
 
-message_traces (future) ── links correlation_id, n8n_execution_id, prompt_run_id, message_id, flow_id
+message_traces ── one row per inbound_message_id; links flow, conversation, inbound/outbound messages, observability ids (E2.4)
 prompt_runs ── AI execution audit; references conversation_id, message_id
 ```
 
@@ -239,7 +239,7 @@ prompt_runs ── AI execution audit; references conversation_id, message_id
 | Conversation lookup | `(business_id, customer_id, channel)` | `(flow_id, channel, external_conversation_id)` primary |
 | `external_conversation_id` on row | Column exists; **not used in lookup** | Used for thread continuity |
 | Message idempotency | `(business_id, external_message_id)` | `(flow_id, channel, external_message_id)` |
-| Trace table | `prompt_runs` + Langfuse only | `message_traces` lifecycle table |
+| Trace table | `prompt_runs` + Langfuse only | **`message_traces` shipped (E2.4)** + `prompt_runs` + Langfuse |
 | n8n `flow_key` | Not in webhook body | Optional field → resolve `flow_id` |
 
 ---

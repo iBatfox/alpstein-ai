@@ -39,12 +39,20 @@ class AiReplyTraceRecorder(Protocol):
 class _SpanHandle:
     span: Any | None = None
 
+    @property
+    def langfuse_trace_id(self) -> str | None:
+        return _try_extract_langfuse_trace_id(self.span)
+
     def update_trace_metadata(self, metadata: dict[str, str]) -> None:
         if self.span is not None:
             self.span.update(metadata=metadata)
 
 
 class _NoOpTraceRecorder:
+    @property
+    def langfuse_trace_id(self) -> str | None:
+        return None
+
     def record_gateway_result(
         self,
         *,
@@ -61,6 +69,10 @@ class _NoOpTraceRecorder:
 class _LangfuseTraceRecorder:
     def __init__(self, client: Langfuse) -> None:
         self._client = client
+
+    @property
+    def langfuse_trace_id(self) -> str | None:
+        return None
 
     def record_gateway_result(
         self,
@@ -221,6 +233,10 @@ class _CompositeTraceRecorder:
         self._generation_recorder = generation_recorder
         self._span_handle = span_handle
 
+    @property
+    def langfuse_trace_id(self) -> str | None:
+        return self._span_handle.langfuse_trace_id
+
     def record_gateway_result(
         self,
         *,
@@ -258,3 +274,19 @@ def _truncate(text: str, max_chars: int) -> str:
     if len(text) <= max_chars:
         return text
     return text[: max_chars - 3] + "..."
+
+
+def _try_extract_langfuse_trace_id(span: Any | None) -> str | None:
+    if span is None:
+        return None
+    for attr in ("trace_id", "traceId"):
+        value = getattr(span, attr, None)
+        if value:
+            return str(value)
+    trace_context = getattr(span, "trace_context", None)
+    if trace_context is not None:
+        for attr in ("trace_id", "traceId"):
+            value = getattr(trace_context, attr, None)
+            if value:
+                return str(value)
+    return None

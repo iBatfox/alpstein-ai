@@ -29,6 +29,10 @@ from app.services.customer_service import CustomerService
 from app.services.lead_service import LeadService
 from app.services.lead_signal_detection_service import LeadSignalDetectionService
 from app.services.message_service import MessageService
+from app.services.message_trace_service import (
+    MessageTraceService,
+    build_trace_metadata,
+)
 from app.services.notification_policy_service import NotificationPolicyService
 from app.services.tenant_context_validator import validate_tenant_context
 
@@ -60,6 +64,9 @@ class WebhookMessageProcessResult:
 class _ReplyResolution:
     reply_to_customer: str
     ai_failed: bool
+    outbound_message_id: uuid.UUID | None = None
+    langfuse_trace_id: str | None = None
+    prompt_run_id: uuid.UUID | None = None
 
 
 @dataclass(frozen=True)
@@ -83,6 +90,7 @@ class WebhookMessageService:
         ai_reply_coordinator: AiReplyOrchestrationCoordinator | None = None,
         ai_configuration_service: AiConfigurationService | None = None,
         ai_fallback_service: AiReplyFallbackService | None = None,
+        message_trace_service: MessageTraceService | None = None,
     ) -> None:
         self.business_service = business_service or BusinessService()
         self.customer_service = customer_service or CustomerService()
@@ -103,6 +111,7 @@ class WebhookMessageService:
             ai_configuration_service or AiConfigurationService()
         )
         self.ai_fallback_service = ai_fallback_service or AiReplyFallbackService()
+        self.message_trace_service = message_trace_service or MessageTraceService()
 
     async def process_incoming_message(
         self,
@@ -188,6 +197,27 @@ class WebhookMessageService:
             customer_message_text=request.message.text,
         )
 
+        trace_metadata = build_trace_metadata(
+            correlation_id=observability.correlation_id,
+            n8n_execution_id=observability.n8n_execution_id,
+        )
+        message_trace = await self.message_trace_service.record_inbound_turn(
+            session,
+            tenant_id=tenant_id,
+            business_id=business.id,
+            flow_id=flow.id,
+            conversation_id=conversation.id,
+            inbound_message_id=save_result.message.id,
+            channel=channel,
+            is_duplicate=save_result.is_duplicate,
+            flow_key=flow.flow_key,
+            external_conversation_id=request.message.external_conversation_id,
+            external_message_id=save_result.message.external_message_id,
+            idempotency_key=save_result.message.idempotency_key,
+            trace_metadata=trace_metadata,
+            external_trace_id=str(observability.correlation_id),
+        )
+
         if save_result.is_duplicate:
             reply_resolution = await self._resolve_reply_to_customer(
                 session,
@@ -218,33 +248,61 @@ class WebhookMessageService:
                 notification=None,
             )
 
-        lead_outcome = await self._process_lead_for_incoming_message(
-            session,
-            tenant_id=tenant_id,
-            business=business,
-            customer=customer,
-            conversation=conversation,
-            channel=channel,
-            customer_message_text=request.message.text,
-            signals=signals,
-        )
+        if message_trace is None:
+            raise RuntimeError("message trace missing for new inbound message")
 
-        reply_resolution = await self._resolve_reply_to_customer(
-            session,
-            tenant_id=tenant_id,
-            business=business,
-            conversation=conversation,
-            customer=customer,
-            incoming_message=save_result.message,
-            customer_message_text=request.message.text,
-            channel=channel,
-            is_duplicate=False,
-            operator_business_context=request.operator_business_context,
-            message_timestamp=request.message.timestamp,
-            raw_payload=request.message.raw_payload,
-            observability=observability,
-            flow_id=flow.id,
-        )
+        await self.message_trace_service.mark_processing(session, message_trace)
+
+        try:
+            lead_outcome = await self._process_lead_for_incoming_message(
+                session,
+                tenant_id=tenant_id,
+                business=business,
+                customer=customer,
+                conversation=conversation,
+                channel=channel,
+                customer_message_text=request.message.text,
+                signals=signals,
+            )
+
+            reply_resolution = await self._resolve_reply_to_customer(
+                session,
+                tenant_id=tenant_id,
+                business=business,
+                conversation=conversation,
+                customer=customer,
+                incoming_message=save_result.message,
+                customer_message_text=request.message.text,
+                channel=channel,
+                is_duplicate=False,
+                operator_business_context=request.operator_business_context,
+                message_timestamp=request.message.timestamp,
+                raw_payload=request.message.raw_payload,
+                observability=observability,
+                flow_id=flow.id,
+            )
+
+            await self.message_trace_service.mark_completed(
+                session,
+                message_trace,
+                outbound_message_id=reply_resolution.outbound_message_id,
+                external_trace_id=str(observability.correlation_id),
+                langfuse_trace_id=reply_resolution.langfuse_trace_id,
+                trace_metadata=build_trace_metadata(
+                    correlation_id=observability.correlation_id,
+                    n8n_execution_id=observability.n8n_execution_id,
+                    prompt_run_id=reply_resolution.prompt_run_id,
+                ),
+            )
+        except Exception as exc:
+            await self.message_trace_service.mark_failed(
+                session,
+                message_trace,
+                error_type=type(exc).__name__,
+                error_message=str(exc),
+                trace_metadata=trace_metadata,
+            )
+            raise
 
         notification_decision = self.notification_policy_service.decide(
             is_duplicate=False,
@@ -379,6 +437,8 @@ class WebhookMessageService:
             observability=observability,
         )
 
+        prompt_run_id = None
+        langfuse_trace_id = orchestration_outcome.langfuse_trace_id
         if orchestration_outcome.is_duplicate:
             reply_text = await self._duplicate_reply_to_customer(
                 session,
@@ -389,6 +449,7 @@ class WebhookMessageService:
             return _ReplyResolution(
                 reply_to_customer=reply_text,
                 ai_failed=False,
+                langfuse_trace_id=langfuse_trace_id,
             )
 
         ai_reply = orchestration_outcome.ai_reply
@@ -396,11 +457,14 @@ class WebhookMessageService:
             return _ReplyResolution(
                 reply_to_customer=DUPLICATE_SAFE_ACKNOWLEDGMENT,
                 ai_failed=False,
+                langfuse_trace_id=langfuse_trace_id,
             )
+
+        prompt_run_id = ai_reply.prompt_run_id
 
         if _ai_reply_text_is_usable(ai_reply):
             reply_text = ai_reply.text.strip()
-            await self.message_service.save_outgoing_ai_message(
+            outbound_message = await self.message_service.save_outgoing_ai_message(
                 session,
                 tenant_id=tenant_id,
                 business=business,
@@ -414,6 +478,9 @@ class WebhookMessageService:
             return _ReplyResolution(
                 reply_to_customer=reply_text,
                 ai_failed=False,
+                outbound_message_id=outbound_message.id,
+                langfuse_trace_id=langfuse_trace_id,
+                prompt_run_id=prompt_run_id,
             )
 
         configuration = await self.ai_configuration_service.load_for_message(
@@ -429,7 +496,7 @@ class WebhookMessageService:
             channel=channel,
         )
         if fallback_decision.should_reply and fallback_decision.fallback_text:
-            await self.message_service.save_outgoing_ai_message(
+            outbound_message = await self.message_service.save_outgoing_ai_message(
                 session,
                 tenant_id=tenant_id,
                 business=business,
@@ -443,11 +510,16 @@ class WebhookMessageService:
             return _ReplyResolution(
                 reply_to_customer=fallback_decision.fallback_text,
                 ai_failed=True,
+                outbound_message_id=outbound_message.id,
+                langfuse_trace_id=langfuse_trace_id,
+                prompt_run_id=prompt_run_id,
             )
 
         return _ReplyResolution(
             reply_to_customer=DUPLICATE_SAFE_ACKNOWLEDGMENT,
             ai_failed=False,
+            langfuse_trace_id=langfuse_trace_id,
+            prompt_run_id=prompt_run_id,
         )
 
     async def _duplicate_reply_to_customer(

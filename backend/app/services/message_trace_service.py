@@ -1,0 +1,239 @@
+"""Durable per-inbound-turn processing traces (E2.4)."""
+
+from __future__ import annotations
+
+import uuid
+from typing import Any
+
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.message_trace import (
+    TRACE_STATUS_ACCEPTED,
+    TRACE_STATUS_COMPLETED,
+    TRACE_STATUS_FAILED,
+    TRACE_STATUS_PROCESSING,
+    TRACE_STATUS_SKIPPED_DUPLICATE,
+    MessageTrace,
+)
+
+ERROR_MESSAGE_MAX_LENGTH = 500
+
+
+class MessageTraceService:
+    async def find_by_inbound_message_id(
+        self,
+        session: AsyncSession,
+        *,
+        tenant_id: uuid.UUID,
+        business_id: uuid.UUID,
+        inbound_message_id: uuid.UUID,
+    ) -> MessageTrace | None:
+        result = await session.execute(
+            select(MessageTrace).where(
+                MessageTrace.tenant_id == tenant_id,
+                MessageTrace.business_id == business_id,
+                MessageTrace.inbound_message_id == inbound_message_id,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def get_or_create_for_inbound(
+        self,
+        session: AsyncSession,
+        *,
+        tenant_id: uuid.UUID,
+        business_id: uuid.UUID,
+        flow_id: uuid.UUID,
+        conversation_id: uuid.UUID,
+        inbound_message_id: uuid.UUID,
+        channel: str,
+        flow_key: str | None = None,
+        external_conversation_id: str | None = None,
+        external_message_id: str | None = None,
+        idempotency_key: str | None = None,
+        trace_metadata: dict[str, Any] | None = None,
+        external_trace_id: str | None = None,
+    ) -> MessageTrace:
+        existing = await self.find_by_inbound_message_id(
+            session,
+            tenant_id=tenant_id,
+            business_id=business_id,
+            inbound_message_id=inbound_message_id,
+        )
+        if existing is not None:
+            return existing
+
+        trace = MessageTrace(
+            tenant_id=tenant_id,
+            business_id=business_id,
+            flow_id=flow_id,
+            conversation_id=conversation_id,
+            inbound_message_id=inbound_message_id,
+            channel=channel,
+            status=TRACE_STATUS_ACCEPTED,
+            flow_key=flow_key,
+            external_conversation_id=external_conversation_id,
+            external_message_id=external_message_id,
+            idempotency_key=idempotency_key,
+            external_trace_id=external_trace_id,
+            metadata_=trace_metadata,
+        )
+        session.add(trace)
+
+        try:
+            async with session.begin_nested():
+                await session.flush()
+        except IntegrityError:
+            existing = await self.find_by_inbound_message_id(
+                session,
+                tenant_id=tenant_id,
+                business_id=business_id,
+                inbound_message_id=inbound_message_id,
+            )
+            if existing is None:
+                raise
+            return existing
+
+        return trace
+
+    async def record_inbound_turn(
+        self,
+        session: AsyncSession,
+        *,
+        tenant_id: uuid.UUID,
+        business_id: uuid.UUID,
+        flow_id: uuid.UUID,
+        conversation_id: uuid.UUID,
+        inbound_message_id: uuid.UUID,
+        channel: str,
+        is_duplicate: bool,
+        flow_key: str | None = None,
+        external_conversation_id: str | None = None,
+        external_message_id: str | None = None,
+        idempotency_key: str | None = None,
+        trace_metadata: dict[str, Any] | None = None,
+        external_trace_id: str | None = None,
+    ) -> MessageTrace | None:
+        """Create trace for new inbound; on duplicate retry update existing only."""
+        if is_duplicate:
+            existing = await self.find_by_inbound_message_id(
+                session,
+                tenant_id=tenant_id,
+                business_id=business_id,
+                inbound_message_id=inbound_message_id,
+            )
+            if existing is None:
+                return None
+            return await self.mark_skipped_duplicate(session, existing)
+
+        trace = await self.get_or_create_for_inbound(
+            session,
+            tenant_id=tenant_id,
+            business_id=business_id,
+            flow_id=flow_id,
+            conversation_id=conversation_id,
+            inbound_message_id=inbound_message_id,
+            channel=channel,
+            flow_key=flow_key,
+            external_conversation_id=external_conversation_id,
+            external_message_id=external_message_id,
+            idempotency_key=idempotency_key,
+            trace_metadata=trace_metadata,
+            external_trace_id=external_trace_id,
+        )
+        return trace
+
+    async def mark_processing(
+        self,
+        session: AsyncSession,
+        trace: MessageTrace,
+    ) -> MessageTrace:
+        if trace.status == TRACE_STATUS_COMPLETED:
+            return trace
+        trace.status = TRACE_STATUS_PROCESSING
+        await session.flush()
+        return trace
+
+    async def mark_completed(
+        self,
+        session: AsyncSession,
+        trace: MessageTrace,
+        *,
+        outbound_message_id: uuid.UUID | None = None,
+        external_trace_id: str | None = None,
+        langfuse_trace_id: str | None = None,
+        trace_metadata: dict[str, Any] | None = None,
+    ) -> MessageTrace:
+        trace.status = TRACE_STATUS_COMPLETED
+        if outbound_message_id is not None:
+            trace.outbound_message_id = outbound_message_id
+        if external_trace_id is not None:
+            trace.external_trace_id = external_trace_id
+        if langfuse_trace_id is not None:
+            trace.langfuse_trace_id = langfuse_trace_id
+        if trace_metadata:
+            trace.metadata_ = _merge_metadata(trace.metadata_, trace_metadata)
+        await session.flush()
+        return trace
+
+    async def mark_skipped_duplicate(
+        self,
+        session: AsyncSession,
+        trace: MessageTrace,
+    ) -> MessageTrace:
+        if trace.status == TRACE_STATUS_COMPLETED:
+            return trace
+        trace.status = TRACE_STATUS_SKIPPED_DUPLICATE
+        await session.flush()
+        return trace
+
+    async def mark_failed(
+        self,
+        session: AsyncSession,
+        trace: MessageTrace,
+        *,
+        error_type: str,
+        error_message: str,
+        trace_metadata: dict[str, Any] | None = None,
+    ) -> MessageTrace:
+        trace.status = TRACE_STATUS_FAILED
+        trace.error_type = _truncate_error_field(error_type, 100)
+        trace.error_message = _truncate_error_field(error_message, ERROR_MESSAGE_MAX_LENGTH)
+        if trace_metadata:
+            trace.metadata_ = _merge_metadata(trace.metadata_, trace_metadata)
+        await session.flush()
+        return trace
+
+
+def build_trace_metadata(
+    *,
+    correlation_id: uuid.UUID | None = None,
+    n8n_execution_id: str | None = None,
+    prompt_run_id: uuid.UUID | None = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {}
+    if correlation_id is not None:
+        payload["correlation_id"] = str(correlation_id)
+    if n8n_execution_id:
+        payload["n8n_execution_id"] = n8n_execution_id
+    if prompt_run_id is not None:
+        payload["prompt_run_id"] = str(prompt_run_id)
+    return payload
+
+
+def _merge_metadata(
+    existing: dict[str, Any] | None,
+    updates: dict[str, Any],
+) -> dict[str, Any]:
+    merged = dict(existing or {})
+    merged.update(updates)
+    return merged
+
+
+def _truncate_error_field(value: str, max_length: int) -> str:
+    normalized = value.strip()
+    if len(normalized) <= max_length:
+        return normalized
+    return normalized[: max_length - 3] + "..."

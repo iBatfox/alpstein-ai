@@ -4,7 +4,9 @@
 
 # Next Steps
 
-## Recommended next task: **E2.4 message traces** or **Live Telegram DM confirmation**
+## Recommended next task: **E2.5 webhook trace fields** or **Live Telegram DM confirmation**
+
+**E2.4 (done):** `message_traces` persistence — Alembic `0011`, [`T-e2.4-message-trace-persistence.md`](../../tasks/done/T-e2.4-message-trace-persistence.md).
 
 **E2.3 (done):** inbound message uniqueness — Alembic `0010`, [`T-e2.3-message-uniqueness-hardening.md`](../../tasks/done/T-e2.3-message-uniqueness-hardening.md).
 
@@ -57,8 +59,8 @@ Implementation follow-up: E1.6.3 runtime compatibility fix and E1.6.6 activation
 | E2.1 | **done** | [`e2-1-flows-migration-default-flows-2026-05-28.md`](../audits/e2-1-flows-migration-default-flows-2026-05-28.md) — `flows` table + default flows + webhook resolution |
 | E2.2 | **done** | [`T-e2.2-conversation-flow-scoping.md`](../../tasks/done/T-e2.2-conversation-flow-scoping.md) — `conversations.flow_id` + flow-scoped lookup (Alembic `0009`) |
 | E2.3 | **done** | [`T-e2.3-message-uniqueness-hardening.md`](../../tasks/done/T-e2.3-message-uniqueness-hardening.md) — conversation-scoped inbound dedup (Alembic `0010`) |
-| E2.4 | planned | `message_traces` persistence + lifecycle stages |
-| E2.5 | planned | API/webhooks.md response fields (`conversation_id`, `message_id`, `trace_id`) |
+| E2.4 | **done** | [`T-e2.4-message-trace-persistence.md`](../../tasks/done/T-e2.4-message-trace-persistence.md) — `message_traces` + webhook lifecycle (Alembic `0011`) |
+| E2.5 | **next** | API/webhooks.md response fields (`trace_id`, …) |
 | E2.6 | planned | n8n `flow_key` + delivery-stage logging (same workflow) |
 | E2.7 | planned | Ops gate + Langfuse on compose verification |
 

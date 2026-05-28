@@ -50,7 +50,7 @@ class AiReplyOrchestrationCoordinator:
                 ai_reply=None,
             )
 
-        ai_reply = await self.orchestration_service.generate_reply(
+        ai_reply, langfuse_trace_id = await self.orchestration_service.generate_reply(
             session,
             tenant_id=tenant_id,
             business=business,
@@ -69,4 +69,5 @@ class AiReplyOrchestrationCoordinator:
             ai_executed=True,
             reason=REASON_AI_CHAIN_EXECUTED,
             ai_reply=ai_reply,
+            langfuse_trace_id=langfuse_trace_id,
         )

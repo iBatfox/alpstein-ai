@@ -73,7 +73,7 @@ class AiReplyOrchestrationService:
         message_timestamp: datetime | None = None,
         raw_payload: dict[str, Any] | None = None,
         observability: ObservabilityContext | None = None,
-    ) -> AiReplyResult:
+    ) -> tuple[AiReplyResult, str | None]:
         business_id = business.id
         business_external_id = str(getattr(business, "external_id", business_id))
         observability = _resolve_observability_context(
@@ -151,11 +151,13 @@ class AiReplyOrchestrationService:
             assembled_section_ids=assembled_prompt.section_ids(),
         )
 
+        langfuse_trace_id: str | None = None
         async with self.langfuse_tracing_service.trace_ai_reply(
             observability=observability,
             customer_message_preview=customer_message_text,
             assembled_prompt=assembled_prompt,
         ) as trace_recorder:
+            langfuse_trace_id = getattr(trace_recorder, "langfuse_trace_id", None)
             gateway_result = await self.ai_gateway_service.complete(assembled_prompt)
             trace_recorder.record_gateway_result(
                 assembled_prompt=assembled_prompt,
@@ -191,7 +193,10 @@ class AiReplyOrchestrationService:
                 {"prompt_run_id": str(prompt_run.id)},
             )
 
-        return _map_reply_result(gateway_result, prompt_run_id=prompt_run.id)
+        return (
+            _map_reply_result(gateway_result, prompt_run_id=prompt_run.id),
+            langfuse_trace_id,
+        )
 
 
 def _resolve_observability_context(
