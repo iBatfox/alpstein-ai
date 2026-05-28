@@ -18,7 +18,7 @@ Specification-driven MVP with **backend AI orchestration complete**, **n8n test 
 
 **Phase E0 (Telegram stability gate):** **PASS WITH WARNINGS** — [`e0-telegram-regression-2026-05-28.md`](../audits/e0-telegram-regression-2026-05-28.md) + [`e0-telegram-reference-channel-remediation-2026-05-28.md`](../audits/e0-telegram-reference-channel-remediation-2026-05-28.md). **Telegram reference channel: YES WITH WARNINGS** — portable `alpstein_n8n_compose` exec **222**, full n8n → `http://backend:8000` → AI path; synthetic Telegram Send (`chat not found`); Langfuse trace not on running compose backend yet.
 
-**Primary open engineering:** Optional real DM + Langfuse compose recreate; compose `up n8n` fix; **CIP-D**, ATTR-3, and Website Chat follow-up hardening. E1.6.6 now enforces explicit runtime kill-switch semantics (`ALPSTEIN_WEBSITE_CHAT_ENABLED`) instead of relying on workflow active toggle assumptions; evidence in [`e1-6-6-website-chat-activation-semantics-2026-05-28.md`](../audits/e1-6-6-website-chat-activation-semantics-2026-05-28.md).
+**Primary open engineering:** Optional real DM + Langfuse compose recreate; compose `up n8n` fix; **CIP-D**, ATTR-3, and Website Chat follow-up hardening. **E1.7 (design):** unified customer ingress workflow specified — implementation deferred to a follow-on task; see [`unified-customer-ingress-workflow.md`](../architecture/unified-customer-ingress-workflow.md).
 
 ---
 
