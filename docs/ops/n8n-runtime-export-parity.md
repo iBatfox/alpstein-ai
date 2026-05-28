@@ -13,7 +13,7 @@
 
 | Category | Stack | Telegram ingress | Backend target |
 |----------|--------|------------------|----------------|
-| **Compose (verification SoT)** | `alpstein_postgres` + `alpstein_backend` + `alpstein_n8n_compose` on `alpstein_internal` | Target for E0/E1; Trigger smoke **open** | `http://backend:8000` |
+| **Compose (verification SoT)** | `alpstein_postgres` + `alpstein_backend` + `alpstein_n8n_compose` on `alpstein_internal` | **E0 remediated** — exec **222** on portable | `http://backend:8000` |
 | **Legacy (Contabo live)** | `alpstein_n8n` @ `127.0.0.1:15679`, project `alpstein-n8n` | **Production path today** (`n8n.alpstein-ai.ch`) | `http://172.20.0.1:8010` (host uvicorn — **often down** on this host) |
 | **Historical** | Prior execution IDs in ops docs | Evidence only (e.g. exec **89–91**) | Same-era backend |
 

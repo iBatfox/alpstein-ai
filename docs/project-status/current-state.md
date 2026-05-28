@@ -12,9 +12,9 @@ Specification-driven MVP with **backend AI orchestration complete**, **n8n test 
 
 **Phase D4 operational verification:** **complete** (D4.1–D4.4, U1, OPS-C1). Portable **Docker Compose** is the **operational source of truth** for backend verification; see [`d4-operational-wrap-up-2026-05-27.md`](../audits/d4-operational-wrap-up-2026-05-27.md).
 
-**Phase E0 (Telegram stability gate):** **PASS WITH WARNINGS** — [`e0-telegram-regression-2026-05-28.md`](../audits/e0-telegram-regression-2026-05-28.md). Portable postgres + backend healthy; portable n8n via **`docker run` workaround** reaches `http://backend:8000`; Telegram-shaped webhook **200** from `alpstein_internal`. **Telegram is not yet the signed-off reference ingress** (no portable n8n execution ID; legacy host `:8010` down). Follow-up: [`T-e0-telegram-reference-channel-remediation.md`](../../tasks/todo/T-e0-telegram-reference-channel-remediation.md).
+**Phase E0 (Telegram stability gate):** **PASS WITH WARNINGS** — [`e0-telegram-regression-2026-05-28.md`](../audits/e0-telegram-regression-2026-05-28.md) + [`e0-telegram-reference-channel-remediation-2026-05-28.md`](../audits/e0-telegram-reference-channel-remediation-2026-05-28.md). **Telegram reference channel: YES WITH WARNINGS** — portable `alpstein_n8n_compose` exec **222**, full n8n → `http://backend:8000` → AI path; synthetic Telegram Send (`chat not found`); Langfuse trace not on running compose backend yet.
 
-**Primary open engineering:** E0 remediation (portable Telegram Trigger smoke, compose `n8n` fix), **CIP-D** live smoke, ATTR-3. **Phase B** complete. **C1/C2** done; C3–C5 partial.
+**Primary open engineering:** Optional real DM + Langfuse compose recreate; compose `up n8n` fix; **E1 blocked until operator accepts YES WITH WARNINGS or clears WARN items**. **CIP-D**, ATTR-3 remain.
 
 ---
 
@@ -101,7 +101,7 @@ Specification-driven MVP with **backend AI orchestration complete**, **n8n test 
 
 ### Missing / partial
 
-- **T14.5 E0** — **PASS WITH WARNINGS**; full portable Telegram Trigger + owner notify execution IDs **open** (remediation task)
+- **T14.5 / T-e0 remediation** — **done (WARN)** — exec **222**; reference channel **YES WITH WARNINGS**
 - C1 runtime/export parity policy — [`n8n-runtime-export-parity.md`](../ops/n8n-runtime-export-parity.md) (E0 runtime categories §0)
 - C2/T14.6 export scrub gate — [`scripts/n8n/export-scrub.sh`](../../scripts/n8n/export-scrub.sh) (G-EXP-2)
 - T13.6 retries/errors, T13.7 full E2E (**deferred**)

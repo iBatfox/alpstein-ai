@@ -26,7 +26,7 @@
 
 | Path | Export file | Runtime workflow ID | `active` | Notes |
 |------|-------------|---------------------|----------|-------|
-| Telegram customer ingress | `t14_workflow_telegram_customer_ingress_skeleton.json` | `2lMuaSWD1XFOXLEK` (shared volume) | **false** (E0 post-test) | E0 2026-05-28: network POST to backend **200**; no new n8n exec ID on portable Trigger |
+| Telegram customer ingress | `t14_workflow_telegram_customer_ingress_skeleton.json` | `2lMuaSWD1XFOXLEK` (shared volume) | **false** (E0 post-test) | E0 remediation **2026-05-28**: portable `alpstein_n8n_compose` exec **222**; ingress owner on **15679** |
 
 After operator import on a **fresh** volume, add rows here. On Contabo, portable n8n shares `alpstein_n8n_data` with legacy — IDs match legacy table above.
 
@@ -38,3 +38,4 @@ After operator import on a **fresh** volume, add rows here. On Contabo, portable
 |------|--------|----------|
 | 2026-05-27 | C1 registry created; Contabo IDs from ops docs | audit |
 | 2026-05-28 | E0 portable smoke; workflow deactivated post-test | audit |
+| 2026-05-28 | E0 remediation exec **222**; portable owns 15679 during test | audit |

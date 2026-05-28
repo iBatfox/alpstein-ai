@@ -6,18 +6,16 @@
 **Branch:** `stabilization/runtime-baseline`  
 **Git HEAD:** `f4ff036` (audit start); continuation includes `docker-compose.yml` Langfuse passthrough (uncommitted)  
 **Task:** [`tasks/done/T14.5-telegram-compose-regression.md`](../../tasks/done/T14.5-telegram-compose-regression.md)  
-**Follow-up:** [`tasks/todo/T-e0-telegram-reference-channel-remediation.md`](../../tasks/todo/T-e0-telegram-reference-channel-remediation.md)
+**Remediation:** [`e0-telegram-reference-channel-remediation-2026-05-28.md`](e0-telegram-reference-channel-remediation-2026-05-28.md) · [`tasks/done/T-e0-telegram-reference-channel-remediation.md`](../../tasks/done/T-e0-telegram-reference-channel-remediation.md)
 
-## Final verdict (after continuation)
+## Final verdict (after remediation 2026-05-28)
 
 | Verdict | **PASS WITH WARNINGS** |
 |---------|-------------------------|
 
 ### Telegram reference channel status
 
-**NO** — not yet the stable reference ingress for controlled multi-channel expansion.
-
-**YES WITH WARNINGS** only after operator accepts: portable **network** proof (n8n container → `http://backend:8000`) + backend Telegram contract PASS, **without** a fresh portable n8n workflow execution ID or live Telegram delivery on the portable stack.
+**YES WITH WARNINGS** — portable `alpstein_n8n_compose` full path proven (**execution 222**). See remediation audit for warnings (synthetic Telegram Send, Langfuse, compose `up n8n`, **15679** container naming).
 
 ---
 

@@ -4,20 +4,18 @@
 
 # Next Steps
 
-## Recommended next task: **E0 remediation — Telegram reference channel sign-off**
+## Recommended next task: **Operator acceptance of E0 — then E1 planning only after explicit go**
 
-Phase **D4** is **complete**. **E0** audit: [`e0-telegram-regression-2026-05-28.md`](../audits/e0-telegram-regression-2026-05-28.md) — **PASS WITH WARNINGS**.
+Phase **E0** closed: [`e0-telegram-reference-channel-remediation-2026-05-28.md`](../audits/e0-telegram-reference-channel-remediation-2026-05-28.md) — **PASS WITH WARNINGS** · Telegram reference channel **YES WITH WARNINGS**.
 
-**Do not** start **E1** or new channels (WhatsApp, etc.) until [`T-e0-telegram-reference-channel-remediation.md`](../../tasks/todo/T-e0-telegram-reference-channel-remediation.md) closes portable Telegram Trigger smoke + compose `n8n` stability.
+**Do not** start **E1** channel work until operator accepts warnings (real DM optional, Langfuse compose recreate, **15679** owner: `alpstein_n8n_compose` vs legacy `alpstein_n8n`).
 
 | Step | Status | Notes |
 |------|--------|-------|
-| **T14.5 E0** | **done (WARN)** | Network + backend contract PASS; portable n8n exec IDs **open** |
-| **T-e0 remediation** | **todo** | Portable Trigger smoke, `ContainerConfig`, Langfuse recreate, cutover notes |
-| **CIP-D** | **planned** | Live smoke on `alpstein_ai_demo_001` for intent metadata in DB |
-| **D4.3-R2** (optional) | **planned** | Disposable failure drill for `prompt_runs.error` |
-| **C3 / C4** | **planned** | Runtime vs export diff; pre-deploy parity script |
-| **Phase E1 channel expansion** | **blocked** | Until Telegram reference channel = **YES** |
+| **T14.5 / T-e0** | **done (WARN)** | Exec **222**; prompt_run `e426d4bc-…` |
+| **E0 optional hardening** | planned | Real DM; `docker-compose up n8n`; Langfuse on compose backend |
+| **CIP-D** | **planned** | Live intent metadata smoke |
+| **Phase E1** | **blocked** | Until operator sign-off on **YES WITH WARNINGS** |
 
 **Ingress policy (P0):** [`operational-ingress-policy.md`](../ops/operational-ingress-policy.md) — compose SoT; no stale `:8010` for validation.
 

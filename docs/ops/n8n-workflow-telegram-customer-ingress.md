@@ -23,7 +23,26 @@
 | Prompt runs (portable backend) | `11b52702-addd-4cf3-9f02-e967082c21d8`, `96686c6c-2a59-4dda-a2cb-c80b6cce310e` |
 | Post-test activation | `2lMuaSWD1XFOXLEK` **deactivated**; legacy `alpstein_n8n` restored on **15679** |
 
-**Reference channel:** **Not signed off** — see [`T-e0-telegram-reference-channel-remediation.md`](../../tasks/todo/T-e0-telegram-reference-channel-remediation.md).
+**Reference channel:** **YES WITH WARNINGS** — see remediation below.
+
+### E0 reference channel remediation (2026-05-28)
+
+**Audit:** [`e0-telegram-reference-channel-remediation-2026-05-28.md`](../audits/e0-telegram-reference-channel-remediation-2026-05-28.md)  
+**Task:** [`tasks/done/T-e0-telegram-reference-channel-remediation.md`](../../tasks/done/T-e0-telegram-reference-channel-remediation.md)
+
+| Check | Result |
+|-------|--------|
+| Ingress owner during smoke | **`alpstein_n8n_compose`** on `127.0.0.1:15679` (legacy `alpstein_n8n` **stopped**) |
+| `BACKEND_BASE_URL` | `http://backend:8000` |
+| Telegram `getWebhookInfo` URL | `https://n8n.alpstein-ai.ch/webhook/alpstein-telegram-customer-trigger/webhook` |
+| **Execution ID** | **222** (webhook inject, RU greeting) |
+| POST Backend | `success: true`, `reply_to_customer` present |
+| Telegram Send | **`chat not found`** (synthetic chat `990203`) |
+| Owner notify | Branch executed (`notify_owner: true`) |
+| `prompt_runs.id` | `e426d4bc-b91e-4d4d-872c-2bcf2b32cf3a` · intent `social_greeting` |
+| Post-test | Workflow **`active=false`** |
+
+**Webhook inject:** Header `X-Telegram-Bot-Api-Secret-Token` = `{workflowId}_{triggerNodeId}` (n8n Telegram Trigger convention).
 
 ---
 
