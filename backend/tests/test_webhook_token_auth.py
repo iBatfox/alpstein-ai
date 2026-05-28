@@ -6,6 +6,7 @@ from httpx import ASGITransport, AsyncClient
 
 from app.main import app
 from app.models.conversation import Conversation
+from app.models.flow import Flow
 from app.models.message import Message
 from app.services.webhook_message_service import (
     WebhookMessageProcessResult,
@@ -150,10 +151,20 @@ async def test_valid_token_allows_webhook_processing(
         channel="whatsapp",
         message_text="Hello",
     )
+    flow = Flow(
+        id=uuid.uuid4(),
+        tenant_id=conversation.tenant_id,
+        business_id=conversation.business_id,
+        flow_key="default",
+        flow_name="Default flow",
+        status="active",
+        is_default=True,
+    )
     mock_webhook_message_service.process_incoming_message = AsyncMock(
         return_value=WebhookMessageProcessResult(
             conversation=conversation,
             message=message,
+            flow=flow,
             is_duplicate=False,
             reply_to_customer="Authenticated reply",
             lead_created=False,

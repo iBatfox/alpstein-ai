@@ -15,7 +15,7 @@ Define the **canonical data model** for multi-channel conversation continuity un
 
 A **flow** is a configured business scenario (persona, rules, knowledge scope). A **channel** is transport (Telegram, Website Chat, WhatsApp). A **conversation** is one customer dialogue **inside exactly one flow**. A **message** is one inbound/outbound/system event **inside exactly one conversation**.
 
-This spec extends MVP tables (`conversations`, `messages`, `customers`) with **`flows`** and stricter scoping. Implementation is deferred to E2.1+ migrations.
+This spec extends MVP tables (`conversations`, `messages`, `customers`) with **`flows`** and stricter scoping. **`flows` table shipped in E2.1** (Alembic `0008`); `conversations.flow_id` and flow-scoped lookup remain E2.2+.
 
 ---
 
@@ -44,20 +44,24 @@ This spec extends MVP tables (`conversations`, `messages`, `customers`) with **`
 | `flow_key` | VARCHAR(100) | yes | Stable external key, e.g. `alpstein_assistant`, `barbershop_booking` |
 | `flow_name` | VARCHAR(255) | yes | Operator label |
 | `status` | VARCHAR(50) | yes | `active` \| `inactive` \| `archived` |
-| `default_channel_settings` | JSONB | no | Optional defaults; channel overrides in `tenant_channel_settings` remain |
+| `is_default` | BOOLEAN | yes | **E2.1 implemented** — exactly one `true` per `business_id` (partial unique index) |
+| `default_channel_settings` | JSONB | no | Optional defaults; channel overrides in `tenant_channel_settings` remain (not in E2.1 DDL) |
 | `metadata` | JSONB | no | Non-secret tags only |
 | `created_at` / `updated_at` | TIMESTAMP | yes | Standard |
 
 **Uniqueness:** `UNIQUE (business_id, flow_key)`
 
-**MVP bridge (E2.1 backfill):** one default flow per existing `businesses` row:
+**E2.1 backfill (implemented):** one default flow per `businesses` row; deterministic UUIDs for demo businesses:
 
-| `business.external_id` | Suggested `flow_key` |
-|------------------------|----------------------|
-| `alpstein_ai_demo_001` | `alpstein_assistant` |
-| `demo_barbershop_001` | `barbershop_default` |
+| `business.external_id` | `flow_key` (default) | Flow UUID |
+|------------------------|----------------------|-----------|
+| `alpstein_ai_demo_001` | `default` | `aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa11` |
+| `demo_barbershop_001` | `barbershop_default` | `aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa10` |
+| other businesses | `default` | `uuid5(NAMESPACE_URL, f"alpstein-ai:flow:default:{business_id}")` |
 
-n8n unified ingress resolves `business_id` + **`flow_key`** (or implicit default flow for business until explicit flow routing exists).
+**Webhook resolution (E2.1):** optional `flow_key` on normalized webhook; omitted/blank → row with `is_default=true` for business; unknown key → `404 FLOW_NOT_FOUND` (no silent fallback). Success response includes `data.flow: { id, flow_key }`. Conversation/message rows are **not** flow-scoped yet (E2.2+).
+
+n8n may pass **`flow_key`** when ready; until E2.6, ingress may omit it and backend uses default flow per business.
 
 ### 3.2 Conversation (extended)
 

@@ -12,6 +12,19 @@ class BusinessNotFoundError(Exception):
         super().__init__(message)
 
 
+class FlowNotFoundError(Exception):
+    """Raised when no flow exists for the given business and flow_key."""
+
+    def __init__(
+        self,
+        message: str = "Flow not found",
+        *,
+        flow_key: str | None = None,
+    ) -> None:
+        self.flow_key = flow_key
+        super().__init__(message)
+
+
 class PromptTemplateNotFoundError(Exception):
     """Raised when no active platform prompt template exists for the given key."""
 

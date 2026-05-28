@@ -1,4 +1,5 @@
 from app.models.business import Business
+from app.models.flow import Flow
 from app.models.conversation import Conversation
 from app.models.customer import Customer
 from app.models.lead import Lead
@@ -13,6 +14,7 @@ from app.models.tenant_knowledge_source import TenantKnowledgeSource
 
 __all__ = [
     "Business",
+    "Flow",
     "Conversation",
     "Customer",
     "Lead",

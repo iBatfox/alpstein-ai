@@ -277,10 +277,14 @@ async def test_http_webhook_response_omits_operator_business_context(
     app.dependency_overrides[get_db_session] = _override_session
 
     service = MagicMock()
+    flow = MagicMock()
+    flow.id = uuid.uuid4()
+    flow.flow_key = "default"
     service.process_incoming_message = AsyncMock(
         return_value=MagicMock(
             conversation=conversation,
             message=message,
+            flow=flow,
             is_duplicate=False,
             reply_to_customer="Thanks for reaching out.",
             lead_created=False,

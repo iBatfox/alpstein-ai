@@ -269,3 +269,39 @@ def test_leads_migration_is_leads_only():
 
     downgrade_source = migration_source.split("def downgrade")[1]
     assert "op.drop_table(\"leads\")" in downgrade_source or 'op.drop_table("leads")' in downgrade_source
+
+
+def test_flows_migration_is_flows_only():
+    migration_path = (
+        Path(__file__).resolve().parents[1]
+        / "alembic"
+        / "versions"
+        / "0008_create_flows.py"
+    )
+    spec = importlib.util.spec_from_file_location("migration_0008", migration_path)
+    assert spec is not None
+    assert spec.loader is not None
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    assert module.revision == "0008"
+    assert module.down_revision == "0007"
+    assert callable(module.upgrade)
+    assert callable(module.downgrade)
+
+    migration_source = migration_path.read_text()
+    assert migration_source.count("op.create_table") == 1
+    assert '"flows"' in migration_source
+    assert '"tenant_id"' in migration_source
+    assert '"business_id"' in migration_source
+    assert '"flow_key"' in migration_source
+    assert '"flow_name"' in migration_source
+    assert '"is_default"' in migration_source
+    assert "flows_business_flow_key_unique" in migration_source
+    assert "flows_business_default_unique" in migration_source
+    assert '"conversations"' not in migration_source
+    assert '"messages"' not in migration_source
+
+    downgrade_source = migration_source.split("def downgrade")[1]
+    assert 'op.drop_table("flows")' in downgrade_source

@@ -46,6 +46,7 @@ from app.services.webhook_message_service import (
 )
 from tests.test_webhook_message_ai_wiring import (
     _configuration_bundle,
+    _flow_service_mock,
     _request,
 )
 
@@ -209,6 +210,7 @@ async def test_duplicate_skips_lead_and_notification(
         business_service=MagicMock(
             get_by_external_id=AsyncMock(return_value=business)
         ),
+        flow_service=_flow_service_mock(business),
         customer_service=MagicMock(
             get_or_create_customer=AsyncMock(return_value=customer)
         ),
@@ -259,6 +261,7 @@ async def test_first_message_creates_lead_and_new_lead_notification(
         business_service=MagicMock(
             get_by_external_id=AsyncMock(return_value=business)
         ),
+        flow_service=_flow_service_mock(business),
         customer_service=MagicMock(
             get_or_create_customer=AsyncMock(return_value=customer)
         ),
@@ -317,6 +320,7 @@ async def test_follow_up_updates_lead_without_notification(
         business_service=MagicMock(
             get_by_external_id=AsyncMock(return_value=business)
         ),
+        flow_service=_flow_service_mock(business),
         customer_service=MagicMock(
             get_or_create_customer=AsyncMock(return_value=customer)
         ),
@@ -361,6 +365,7 @@ async def test_urgent_message_sets_lead_priority_and_urgent_lead_notification(
         business_service=MagicMock(
             get_by_external_id=AsyncMock(return_value=business)
         ),
+        flow_service=_flow_service_mock(business),
         customer_service=MagicMock(
             get_or_create_customer=AsyncMock(return_value=customer)
         ),
@@ -406,6 +411,7 @@ async def test_handoff_message_returns_human_handoff_notification(
         business_service=MagicMock(
             get_by_external_id=AsyncMock(return_value=business)
         ),
+        flow_service=_flow_service_mock(business),
         customer_service=MagicMock(
             get_or_create_customer=AsyncMock(return_value=customer)
         ),
@@ -456,6 +462,7 @@ async def test_ai_fallback_failure_returns_ai_failure_notification(
         business_service=MagicMock(
             get_by_external_id=AsyncMock(return_value=business)
         ),
+        flow_service=_flow_service_mock(business),
         customer_service=MagicMock(
             get_or_create_customer=AsyncMock(return_value=customer)
         ),
@@ -522,6 +529,7 @@ async def test_duplicate_safe_acknowledgment_does_not_set_ai_failed(
         business_service=MagicMock(
             get_by_external_id=AsyncMock(return_value=business)
         ),
+        flow_service=_flow_service_mock(business),
         customer_service=MagicMock(
             get_or_create_customer=AsyncMock(return_value=customer)
         ),
@@ -577,6 +585,7 @@ async def test_tenant_context_mismatch_raises_before_lead_write(
         business_service=MagicMock(
             get_by_external_id=AsyncMock(return_value=business)
         ),
+        flow_service=_flow_service_mock(business),
         customer_service=MagicMock(
             get_or_create_customer=AsyncMock(return_value=mismatched_customer)
         ),
@@ -613,6 +622,7 @@ async def test_route_envelope_includes_lead_fields_and_hides_internals(
         business_service=MagicMock(
             get_by_external_id=AsyncMock(return_value=business)
         ),
+        flow_service=_flow_service_mock(business),
         customer_service=MagicMock(
             get_or_create_customer=AsyncMock(return_value=customer)
         ),
@@ -644,6 +654,8 @@ async def test_route_envelope_includes_lead_fields_and_hides_internals(
         conversation_status=result.conversation.status,
         message_id=str(result.message.id),
         is_duplicate=result.is_duplicate,
+        flow_id=str(result.flow.id),
+        flow_key=result.flow.flow_key,
         lead=result.lead,
         notification=result.notification,
     )

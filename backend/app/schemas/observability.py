@@ -137,6 +137,8 @@ class ObservabilityContext:
     tenant_id: uuid.UUID | None = None
     business_id: uuid.UUID | None = None
     business_external_id: str | None = None
+    flow_id: uuid.UUID | None = None
+    flow_key: str | None = None
     channel: str | None = None
     conversation_id: uuid.UUID | None = None
     inbound_message_id: uuid.UUID | None = None
@@ -180,6 +182,18 @@ class ObservabilityContext:
             tenant_id=tenant_id,
             business_id=business_id,
             business_external_id=business_external_id,
+        )
+
+    def with_flow(
+        self,
+        *,
+        flow_id: uuid.UUID,
+        flow_key: str,
+    ) -> ObservabilityContext:
+        return replace(
+            self,
+            flow_id=flow_id,
+            flow_key=flow_key,
         )
 
     def with_session(
@@ -298,6 +312,8 @@ class ObservabilityContext:
         put("tenant_id", self.tenant_id)
         put("business_uuid", self.business_id)
         put("business_id", self.business_external_id)
+        put("flow_id", self.flow_id)
+        put("flow_key", self.flow_key)
         put("conversation_id", self.conversation_id)
         put("channel", self.channel)
         put("inbound_message_id", self.inbound_message_id)

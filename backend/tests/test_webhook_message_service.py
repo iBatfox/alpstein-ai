@@ -16,6 +16,7 @@ from app.schemas.ai_reply import AiReplyResult
 from app.schemas.ai_reply_orchestration import AiReplyOrchestrationOutcome
 from app.services.ai_reply_orchestration_coordinator import REASON_AI_CHAIN_EXECUTED
 from app.services.webhook_message_service import WebhookMessageService
+from tests.test_webhook_message_ai_wiring import _flow_service_mock
 
 
 def _none_result() -> MagicMock:
@@ -149,6 +150,7 @@ async def test_process_incoming_message_orchestrates_services(
     session = MagicMock()
     session.flush = AsyncMock()
 
+    flow_service = _flow_service_mock(business)
     service = WebhookMessageService(
         business_service=business_service,
         customer_service=customer_service,
@@ -156,11 +158,14 @@ async def test_process_incoming_message_orchestrates_services(
         message_service=message_service,
         lead_service=_lead_service_mock(business, customer, conversation),
         ai_reply_coordinator=ai_reply_coordinator,
+        flow_service=flow_service,
     )
     request = _request()
 
     result = await service.process_incoming_message(session, request)
 
+    flow_service.resolve_for_webhook.assert_awaited_once()
+    assert result.flow.flow_key == "default"
     business_service.get_by_external_id.assert_awaited_once_with(
         session,
         "demo_barbershop_001",
@@ -212,6 +217,7 @@ async def test_process_incoming_message_returns_duplicate_flag(
         business_service=MagicMock(
             get_by_external_id=AsyncMock(return_value=business)
         ),
+        flow_service=_flow_service_mock(business),
         customer_service=MagicMock(
             get_or_create_customer=AsyncMock(return_value=customer)
         ),
@@ -255,6 +261,7 @@ async def test_process_incoming_message_creates_customer_via_customer_service(
         business_service=MagicMock(
             get_by_external_id=AsyncMock(return_value=business)
         ),
+        flow_service=_flow_service_mock(business),
         customer_service=customer_service,
         conversation_service=MagicMock(
             get_or_create_open_conversation=AsyncMock(return_value=conversation)
@@ -318,6 +325,7 @@ async def test_process_incoming_message_creates_open_conversation_when_none_reus
         business_service=MagicMock(
             get_by_external_id=AsyncMock(return_value=business)
         ),
+        flow_service=_flow_service_mock(business),
         customer_service=MagicMock(
             get_or_create_customer=AsyncMock(return_value=customer)
         ),

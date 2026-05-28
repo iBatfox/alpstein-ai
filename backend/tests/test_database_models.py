@@ -6,6 +6,7 @@ from app.models import (
     Business,
     Conversation,
     Customer,
+    Flow,
     Lead,
     Message,
     PromptRun,
@@ -43,6 +44,7 @@ def test_metadata_contains_persistence_slice_tables():
         "tenant_channel_settings",
         "prompt_templates",
         "prompt_runs",
+        "flows",
     }
     assert Tenant.__tablename__ == "tenants"
     assert Business.__tablename__ == "businesses"

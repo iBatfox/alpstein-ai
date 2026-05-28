@@ -6,6 +6,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.conversation import Conversation
+from app.models.flow import Flow
 from app.models.lead import LEAD_PRIORITY_URGENT, LEAD_STATUS_IN_PROGRESS, LEAD_STATUS_NEW, Lead
 from app.models.message import Message
 from app.schemas.ai_reply import AiReplyResult
@@ -23,6 +24,7 @@ from app.services.ai_reply_fallback_service import AiReplyFallbackService
 from app.services.ai_reply_orchestration_coordinator import AiReplyOrchestrationCoordinator
 from app.services.business_service import BusinessService
 from app.services.conversation_service import ConversationService
+from app.services.flow_service import FlowService
 from app.services.customer_service import CustomerService
 from app.services.lead_service import LeadService
 from app.services.lead_signal_detection_service import LeadSignalDetectionService
@@ -44,6 +46,7 @@ CUSTOMER_NOTE_MAX_LENGTH = 2000
 class WebhookMessageProcessResult:
     conversation: Conversation
     message: Message
+    flow: Flow
     is_duplicate: bool
     reply_to_customer: str
     lead_created: bool
@@ -72,6 +75,7 @@ class WebhookMessageService:
         business_service: BusinessService | None = None,
         customer_service: CustomerService | None = None,
         conversation_service: ConversationService | None = None,
+        flow_service: FlowService | None = None,
         message_service: MessageService | None = None,
         lead_service: LeadService | None = None,
         lead_signal_detection_service: LeadSignalDetectionService | None = None,
@@ -83,6 +87,7 @@ class WebhookMessageService:
         self.business_service = business_service or BusinessService()
         self.customer_service = customer_service or CustomerService()
         self.conversation_service = conversation_service or ConversationService()
+        self.flow_service = flow_service or FlowService()
         self.message_service = message_service or MessageService()
         self.lead_service = lead_service or LeadService()
         self.lead_signal_detection_service = (
@@ -123,6 +128,17 @@ class WebhookMessageService:
             tenant_id=tenant_id,
             business_id=business.id,
             business_external_id=business.external_id,
+        )
+
+        flow = await self.flow_service.resolve_for_webhook(
+            session,
+            tenant_id=tenant_id,
+            business_id=business.id,
+            flow_key=request.flow_key,
+        )
+        observability = observability.with_flow(
+            flow_id=flow.id,
+            flow_key=flow.flow_key,
         )
 
         customer = await self.customer_service.get_or_create_customer(
@@ -187,6 +203,7 @@ class WebhookMessageService:
             return WebhookMessageProcessResult(
                 conversation=conversation,
                 message=save_result.message,
+                flow=flow,
                 is_duplicate=True,
                 reply_to_customer=reply_resolution.reply_to_customer,
                 lead_created=False,
@@ -241,6 +258,7 @@ class WebhookMessageService:
         return WebhookMessageProcessResult(
             conversation=conversation,
             message=save_result.message,
+            flow=flow,
             is_duplicate=False,
             reply_to_customer=reply_resolution.reply_to_customer,
             lead_created=lead_outcome.lead_created,

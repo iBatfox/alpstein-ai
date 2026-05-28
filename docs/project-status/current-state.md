@@ -20,7 +20,7 @@ Specification-driven MVP with **backend AI orchestration complete**, **n8n test 
 
 **Phase E0 (Telegram stability gate):** **PASS WITH WARNINGS** — [`e0-telegram-regression-2026-05-28.md`](../audits/e0-telegram-regression-2026-05-28.md) + [`e0-telegram-reference-channel-remediation-2026-05-28.md`](../audits/e0-telegram-reference-channel-remediation-2026-05-28.md). **Telegram reference channel: YES WITH WARNINGS** — portable `alpstein_n8n_compose` exec **222**, full n8n → `http://backend:8000` → AI path; synthetic Telegram Send (`chat not found`); Langfuse trace not on running compose backend yet.
 
-**Primary open engineering:** E2.1+ implementation (flows + conversation lookup + message traces); Live Telegram DM confirmation post E1.9; Langfuse on compose backend; **CIP-D**, ATTR-3. **E1.9 (done):** Production ingress on **`alpstein-customer-ingress`** (`aYrRmAGKhP4TJbG9`) — [`e1-9-unified-ingress-cutover-2026-05-28.md`](../audits/e1-9-unified-ingress-cutover-2026-05-28.md). Legacy workflows archived (`2lMuaSWD1XFOXLEK`, `hAJ3TFYn69in0vd5`). **E2.0 (done, design-only):** [`unified-conversation-observability.md`](../architecture/unified-conversation-observability.md) — **PASS WITH NOTES**.
+**Primary open engineering:** E2.2+ (conversation `flow_id`, flow-scoped lookup, message traces); Live Telegram DM confirmation post E1.9; Langfuse on compose backend; **CIP-D**, ATTR-3. **E1.9 (done):** Production ingress on **`alpstein-customer-ingress`** (`aYrRmAGKhP4TJbG9`) — [`e1-9-unified-ingress-cutover-2026-05-28.md`](../audits/e1-9-unified-ingress-cutover-2026-05-28.md). Legacy workflows archived (`2lMuaSWD1XFOXLEK`, `hAJ3TFYn69in0vd5`). **E2.0 (done, design-only):** [`unified-conversation-observability.md`](../architecture/unified-conversation-observability.md) — **PASS WITH NOTES**.
 
 ---
 
@@ -64,12 +64,12 @@ Specification-driven MVP with **backend AI orchestration complete**, **n8n test 
 ### Existing
 
 - `GET /api/v1/health`
-- async SQLAlchemy + Alembic migrations `0001`–`0007`
+- async SQLAlchemy + Alembic migrations `0001`–`0008` (`flows` in E2.1)
 - models: tenants, businesses, customers, conversations, messages, leads, AI config tables, `prompt_runs`
 - domain exceptions + tenant context validator
-- `BusinessService`, `CustomerService`, `ConversationService`, `MessageService`, `LeadService`
+- `BusinessService`, `CustomerService`, `ConversationService`, `MessageService`, `LeadService`, `FlowService`
 - `NotificationPolicyService`, `LeadSignalDetectionService`
-- `POST /api/v1/webhook/message` — token auth (`T10-F1`); full T11–T12 orchestration in `WebhookMessageService`
+- `POST /api/v1/webhook/message` — token auth (`T10-F1`); full T11–T12 orchestration in `WebhookMessageService`; optional `flow_key`; success `data.flow` (E2.1)
 - message idempotency: partial unique index on `(business_id, external_message_id)`
 - normalized webhook schemas + ATTR-2 attribution fields (`webhook_attribution.py`)
 - `operator_business_context` on webhook → PromptBuilder overlay (`T14-OC-2`)
@@ -79,7 +79,7 @@ Specification-driven MVP with **backend AI orchestration complete**, **n8n test 
 - **History Safety (HF-1):** §7 preamble + non-authoritative `ai` labels in `PromptBuilderService` — **implemented**
 - **Langfuse (dev):** `LangfuseTracingService` + `ObservabilityContext` (D2); flat metadata §16.2; intent keys wired in orchestration path — **implemented**; production off by default
 - **Observability metadata (D4):** `prompt_runs.metadata` JSON-safe (`json_safe_metadata`); scalar lineage; production-safe envelope per D4.4
-- pytest: **308** test functions in `backend/tests/` (as-of 2026-05-27; run `pytest` in venv to verify green)
+- pytest: **400** passed in `backend/tests/` (as-of 2026-05-28 E2.1)
 
 ### Missing / deferred
 
@@ -93,7 +93,7 @@ Specification-driven MVP with **backend AI orchestration complete**, **n8n test 
 
 ### Existing
 
-- Alembic `0001`–`0007` (tenants → `prompt_runs`, `leads`)
+- Alembic `0001`–`0008` (tenants → `prompt_runs`, `leads`, `flows`)
 - SQLAlchemy models + async session
 - dev seed: `demo_barbershop_001` + separate `alpstein_ai_demo_001` demo business
 
@@ -101,7 +101,8 @@ Specification-driven MVP with **backend AI orchestration complete**, **n8n test 
 
 - repositories (services use `AsyncSession` directly)
 - attribution columns / persistence
-- **`flows` table** and **`message_traces` table** (E2.1+ — designed in E2.0)
+- **`flows` table** — **E2.1 done**; default flow per business; webhook flow resolution
+- **`message_traces` table** (E2.4 — designed in E2.0)
 - **`conversations.flow_id`** and lookup by `(flow_id, channel, external_conversation_id)` (E2.2 — today: customer+channel only)
 - flow-scoped message idempotency `(flow_id, channel, external_message_id)` (E2.3 — today: `business_id` only)
 

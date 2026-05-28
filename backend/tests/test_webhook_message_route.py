@@ -9,6 +9,7 @@ from app.main import app
 from app.models.business import Business
 from app.models.conversation import Conversation
 from app.models.customer import Customer
+from app.models.flow import Flow
 from app.models.message import Message
 from app.services.webhook_message_service import (
     DUPLICATE_SAFE_ACKNOWLEDGMENT,
@@ -35,6 +36,18 @@ def _valid_payload(**overrides) -> dict:
 
 def _auth_headers() -> dict[str, str]:
     return {"X-Alpstein-Webhook-Token": TEST_WEBHOOK_TOKEN}
+
+
+def _sample_flow(*, tenant_id: uuid.UUID, business_id: uuid.UUID) -> Flow:
+    return Flow(
+        id=uuid.uuid4(),
+        tenant_id=tenant_id,
+        business_id=business_id,
+        flow_key="default",
+        flow_name="Default flow",
+        status="active",
+        is_default=True,
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -115,10 +128,12 @@ async def test_webhook_message_valid_payload_returns_success(
         channel="whatsapp",
         message_text="Hello",
     )
+    flow = _sample_flow(tenant_id=tenant_id, business_id=business_id)
     mock_webhook_message_service.process_incoming_message = AsyncMock(
         return_value=WebhookMessageProcessResult(
             conversation=conversation,
             message=message,
+            flow=flow,
             is_duplicate=False,
             reply_to_customer=DUPLICATE_SAFE_ACKNOWLEDGMENT,
             lead_created=False,
@@ -150,6 +165,10 @@ async def test_webhook_message_valid_payload_returns_success(
             "message": {
                 "id": str(message_id),
                 "is_duplicate": False,
+            },
+            "flow": {
+                "id": str(flow.id),
+                "flow_key": "default",
             },
         },
     }
@@ -211,6 +230,10 @@ async def test_webhook_message_duplicate_returns_is_duplicate_true(
         return_value=WebhookMessageProcessResult(
             conversation=conversation,
             message=message,
+            flow=_sample_flow(
+                tenant_id=conversation.tenant_id,
+                business_id=conversation.business_id,
+            ),
             is_duplicate=True,
             reply_to_customer=DUPLICATE_SAFE_ACKNOWLEDGMENT,
             lead_created=False,
@@ -256,6 +279,10 @@ async def test_webhook_message_has_no_ai_lead_or_notification_side_effects(
         return_value=WebhookMessageProcessResult(
             conversation=conversation,
             message=message,
+            flow=_sample_flow(
+                tenant_id=conversation.tenant_id,
+                business_id=conversation.business_id,
+            ),
             is_duplicate=False,
             reply_to_customer=DUPLICATE_SAFE_ACKNOWLEDGMENT,
             lead_created=False,
@@ -326,6 +353,10 @@ async def test_webhook_message_reusable_conversation_status_in_response(
         return_value=WebhookMessageProcessResult(
             conversation=conversation,
             message=message,
+            flow=_sample_flow(
+                tenant_id=conversation.tenant_id,
+                business_id=conversation.business_id,
+            ),
             is_duplicate=False,
             reply_to_customer=DUPLICATE_SAFE_ACKNOWLEDGMENT,
             lead_created=False,
@@ -371,6 +402,10 @@ async def test_webhook_message_new_open_conversation_after_non_reusable_status(
         return_value=WebhookMessageProcessResult(
             conversation=conversation,
             message=message,
+            flow=_sample_flow(
+                tenant_id=conversation.tenant_id,
+                business_id=conversation.business_id,
+            ),
             is_duplicate=False,
             reply_to_customer=DUPLICATE_SAFE_ACKNOWLEDGMENT,
             lead_created=False,
@@ -396,26 +431,29 @@ async def test_webhook_message_passes_correlation_id_to_service(
 ):
     correlation_id = uuid.uuid4()
     n8n_execution_id = "n8n-exec-42"
+    tenant_id = uuid.uuid4()
+    business_id = uuid.uuid4()
     mock_webhook_message_service.process_incoming_message = AsyncMock(
         return_value=WebhookMessageProcessResult(
             conversation=Conversation(
                 id=uuid.uuid4(),
-                tenant_id=uuid.uuid4(),
-                business_id=uuid.uuid4(),
+                tenant_id=tenant_id,
+                business_id=business_id,
                 customer_id=uuid.uuid4(),
                 channel="whatsapp",
                 status="open",
             ),
             message=Message(
                 id=uuid.uuid4(),
-                tenant_id=uuid.uuid4(),
-                business_id=uuid.uuid4(),
+                tenant_id=tenant_id,
+                business_id=business_id,
                 conversation_id=uuid.uuid4(),
                 sender_type="customer",
                 direction="incoming",
                 channel="whatsapp",
                 message_text="Hello",
             ),
+            flow=_sample_flow(tenant_id=tenant_id, business_id=business_id),
             is_duplicate=False,
             reply_to_customer="OK",
             lead_created=False,

@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from app.models.business import Business
+from app.models.flow import Flow
 from app.models.conversation import Conversation
 from app.models.customer import Customer
 from app.models.lead import LEAD_PRIORITY_NORMAL, LEAD_STATUS_NEW, Lead
@@ -96,6 +97,24 @@ def incoming_message(
     )
 
 
+def _default_flow(business: Business) -> Flow:
+    return Flow(
+        id=uuid.uuid4(),
+        tenant_id=business.tenant_id,
+        business_id=business.id,
+        flow_key="default",
+        flow_name="Default flow",
+        status="active",
+        is_default=True,
+    )
+
+
+def _flow_service_mock(business: Business) -> MagicMock:
+    flow_service = MagicMock()
+    flow_service.resolve_for_webhook = AsyncMock(return_value=_default_flow(business))
+    return flow_service
+
+
 def _configuration_bundle(business: Business) -> AiConfigurationBundle:
     return AiConfigurationBundle(
         tenant_id=business.tenant_id,
@@ -176,6 +195,7 @@ def _base_service_mocks(
         ),
         "message_service": message_service,
         "lead_service": lead_service,
+        "flow_service": _flow_service_mock(business),
     }
 
 

@@ -75,6 +75,8 @@ def _webhook_response_envelope(result) -> dict:
         conversation_status=result.conversation.status,
         message_id=str(result.message.id),
         is_duplicate=result.is_duplicate,
+        flow_id=str(result.flow.id),
+        flow_key=result.flow.flow_key,
         lead=result.lead,
         notification=result.notification,
     )
@@ -148,10 +150,13 @@ class _IntegratedStack:
         )
 
         self.lead_service = lead_service
+        from tests.test_webhook_message_ai_wiring import _flow_service_mock
+
         self.webhook_service = WebhookMessageService(
             business_service=MagicMock(
                 get_by_external_id=AsyncMock(return_value=business),
             ),
+            flow_service=_flow_service_mock(business),
             customer_service=MagicMock(
                 get_or_create_customer=AsyncMock(return_value=customer),
             ),

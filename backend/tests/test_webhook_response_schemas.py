@@ -21,6 +21,13 @@ from app.schemas.webhook_response import (
 
 SCHEMA_MODULE_PATH = Path(__file__).resolve().parents[1] / "app" / "schemas" / "webhook_response.py"
 
+FLOW_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa11"
+FLOW_KEY = "default"
+
+
+def _flow_kwargs() -> dict[str, str]:
+    return {"flow_id": FLOW_ID, "flow_key": FLOW_KEY}
+
 
 def test_backward_compatible_minimal_serialization():
     """Existing clients: core flags + conversation/message; no lead/notification keys."""
@@ -34,6 +41,7 @@ def test_backward_compatible_minimal_serialization():
         conversation_status="open",
         message_id=message_id,
         is_duplicate=False,
+        **_flow_kwargs(),
     )
 
     assert payload["success"] is True
@@ -44,6 +52,7 @@ def test_backward_compatible_minimal_serialization():
     assert data["notify_owner"] is False
     assert data["conversation"] == {"id": conversation_id, "status": "open"}
     assert data["message"] == {"id": message_id, "is_duplicate": False}
+    assert data["flow"] == {"id": FLOW_ID, "flow_key": FLOW_KEY}
     assert "lead" not in data
     assert "notification" not in data
 
@@ -55,6 +64,7 @@ def test_lead_updated_defaults_false():
         notify_owner=False,
         conversation={"id": str(uuid.uuid4()), "status": "open"},
         message={"id": str(uuid.uuid4()), "is_duplicate": False},
+        flow={"id": FLOW_ID, "flow_key": FLOW_KEY},
     )
     assert data.lead_updated is False
 
@@ -70,6 +80,7 @@ def test_optional_lead_and_notification_included_when_set():
         conversation_status="open",
         message_id=str(uuid.uuid4()),
         is_duplicate=False,
+        **_flow_kwargs(),
         lead=WebhookLeadSummary(id=lead_id, status="new", priority="normal"),
         notification=WebhookNotificationPayload(
             should_notify_owner=True,
@@ -104,6 +115,7 @@ def test_lead_updated_without_lead_object():
         conversation_status="open",
         message_id=str(uuid.uuid4()),
         is_duplicate=False,
+        **_flow_kwargs(),
     )
     assert payload["data"]["lead_updated"] is True
     assert "lead" not in payload["data"]
@@ -118,6 +130,7 @@ def test_notification_omitted_when_none():
         conversation_status="open",
         message_id=str(uuid.uuid4()),
         is_duplicate=False,
+        **_flow_kwargs(),
         notification=None,
     )
     assert "notification" not in payload["data"]
@@ -133,6 +146,7 @@ def test_notification_type_none_omitted_from_json():
         conversation_status="open",
         message_id=str(uuid.uuid4()),
         is_duplicate=False,
+        **_flow_kwargs(),
         notification=WebhookNotificationPayload(
             should_notify_owner=False,
             notification_type=None,
@@ -158,6 +172,7 @@ def test_envelope_rejects_extra_fields():
                     "notify_owner": False,
                     "conversation": {"id": "c", "status": "open"},
                     "message": {"id": "m", "is_duplicate": False},
+                    "flow": {"id": FLOW_ID, "flow_key": FLOW_KEY},
                     "final_prompt": "secret",
                 },
             }
@@ -210,6 +225,7 @@ def test_build_envelope_matches_serialize_helper():
         "conversation_status": "waiting_for_customer",
         "message_id": str(uuid.uuid4()),
         "is_duplicate": False,
+        **_flow_kwargs(),
         "lead": WebhookLeadSummary(
             id=str(uuid.uuid4()),
             status="in_progress",

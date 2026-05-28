@@ -58,3 +58,4 @@ class Tenant(Base):
     )
     prompt_runs: Mapped[list["PromptRun"]] = relationship(back_populates="tenant")
     leads: Mapped[list["Lead"]] = relationship(back_populates="tenant")
+    flows: Mapped[list["Flow"]] = relationship(back_populates="tenant")

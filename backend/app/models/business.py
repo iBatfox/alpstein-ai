@@ -89,3 +89,4 @@ class Business(Base):
     )
     prompt_runs: Mapped[list["PromptRun"]] = relationship(back_populates="business")
     leads: Mapped[list["Lead"]] = relationship(back_populates="business")
+    flows: Mapped[list["Flow"]] = relationship(back_populates="business")

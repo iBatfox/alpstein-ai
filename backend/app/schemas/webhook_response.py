@@ -61,6 +61,13 @@ class WebhookMessageSummary(BaseModel):
     is_duplicate: bool
 
 
+class WebhookFlowSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(min_length=1)
+    flow_key: str = Field(min_length=1)
+
+
 class WebhookMessageResponseData(BaseModel):
     """`data` object for successful `POST /api/v1/webhook/message`."""
 
@@ -72,6 +79,7 @@ class WebhookMessageResponseData(BaseModel):
     notify_owner: bool
     conversation: WebhookConversationSummary
     message: WebhookMessageSummary
+    flow: WebhookFlowSummary
     lead: WebhookLeadSummary | None = None
     notification: WebhookNotificationPayload | None = None
 
@@ -92,6 +100,8 @@ def build_webhook_message_success_envelope(
     conversation_status: str,
     message_id: str,
     is_duplicate: bool,
+    flow_id: str,
+    flow_key: str,
     lead_updated: bool = False,
     lead: WebhookLeadSummary | None = None,
     notification: WebhookNotificationPayload | None = None,
@@ -112,6 +122,10 @@ def build_webhook_message_success_envelope(
                 id=message_id,
                 is_duplicate=is_duplicate,
             ),
+            flow=WebhookFlowSummary(
+                id=flow_id,
+                flow_key=flow_key,
+            ),
             lead=lead,
             notification=notification,
         ),
@@ -127,6 +141,8 @@ def serialize_webhook_message_success(
     conversation_status: str,
     message_id: str,
     is_duplicate: bool,
+    flow_id: str,
+    flow_key: str,
     lead_updated: bool = False,
     lead: WebhookLeadSummary | None = None,
     notification: WebhookNotificationPayload | None = None,
@@ -141,6 +157,8 @@ def serialize_webhook_message_success(
         conversation_status=conversation_status,
         message_id=message_id,
         is_duplicate=is_duplicate,
+        flow_id=flow_id,
+        flow_key=flow_key,
         lead=lead,
         notification=notification,
     ).model_dump(mode="json", exclude_none=True)

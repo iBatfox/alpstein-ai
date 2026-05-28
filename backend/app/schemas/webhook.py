@@ -69,6 +69,7 @@ class NormalizedWebhookMessageRequest(BaseModel):
 
     correlation_id: str | None = Field(default=None)
     business_id: str = Field(min_length=1)
+    flow_key: str | None = Field(default=None, max_length=100)
     channel: WebhookChannel
     source: WebhookSource | None = None
     attribution: WebhookAttribution | None = None
@@ -78,6 +79,16 @@ class NormalizedWebhookMessageRequest(BaseModel):
         default=None,
         max_length=OPERATOR_BUSINESS_CONTEXT_MAX_LENGTH,
     )
+
+    @field_validator("flow_key", mode="before")
+    @classmethod
+    def normalize_flow_key(cls, value: object) -> str | None:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            return value  # type: ignore[return-value]
+        stripped = value.strip()
+        return stripped if stripped else None
 
     @field_validator("correlation_id", mode="before")
     @classmethod

@@ -11,7 +11,7 @@ from app.core.observability_context import (
     set_observability_context,
 )
 from app.db.session import get_db_session
-from app.exceptions import BusinessNotFoundError, TenantContextError
+from app.exceptions import BusinessNotFoundError, FlowNotFoundError, TenantContextError
 from app.schemas.observability import (
     InvalidCorrelationIdError,
     X_CORRELATION_ID_HEADER,
@@ -91,6 +91,18 @@ async def post_webhook_message(
                 },
             },
         )
+    except FlowNotFoundError as exc:
+        await session.rollback()
+        return JSONResponse(
+            status_code=404,
+            content={
+                "success": False,
+                "error": {
+                    "code": "FLOW_NOT_FOUND",
+                    "message": str(exc),
+                },
+            },
+        )
     except TenantContextError:
         await session.rollback()
         return JSONResponse(
@@ -116,6 +128,8 @@ async def post_webhook_message(
         conversation_status=result.conversation.status,
         message_id=str(result.message.id),
         is_duplicate=result.is_duplicate,
+        flow_id=str(result.flow.id),
+        flow_key=result.flow.flow_key,
         lead=result.lead,
         notification=result.notification,
     )
