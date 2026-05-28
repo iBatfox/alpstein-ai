@@ -182,3 +182,4 @@ Expected: HTTP 502 with safe error body from `Respond Website Error`.
 - This workflow is exported with `"active": false` in repo.
 - Runtime activation/deactivation is an operator step.
 - Website Chat remains text-only in MVP.
+- E1.6.3 runtime stabilization removed unsupported `require('crypto')` from Normalize node for n8n Code VM compatibility.

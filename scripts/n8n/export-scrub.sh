@@ -40,6 +40,7 @@ MODE = os.environ["MODE"]
 CANONICAL_FILES = {
     "t13_workflow1_test_webhook_skeleton.json": "alpstein-incoming-message-test",
     "t14_workflow_telegram_customer_ingress_skeleton.json": "alpstein-incoming-message-telegram",
+    "e1_6_workflow_website_chat_mvp_skeleton.json": "alpstein-incoming-message-website-chat",
 }
 
 NON_CANONICAL_BLOCKLIST = {"My_workflow.json"}
@@ -119,7 +120,7 @@ def discover_json_files() -> list[Path]:
                 )
             continue
         if path.name not in CANONICAL_FILES and path.parent == WORKFLOWS_DIR:
-            fail(f"unexpected workflow JSON at repo root: {rel}")
+            fail(f"unexpected workflow JSON at workflow directory root: {rel}")
             continue
         if path.name in CANONICAL_FILES:
             files.append(path)

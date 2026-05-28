@@ -4,7 +4,7 @@
 
 # Alpstein AI — Current State
 
-**As-of:** 2026-05-28 (E0 Telegram regression continuation)
+**As-of:** 2026-05-28 (E1.6.3 runtime stabilization)
 
 ## Project Phase
 
@@ -14,7 +14,7 @@ Specification-driven MVP with **backend AI orchestration complete**, **n8n test 
 
 **Phase E0 (Telegram stability gate):** **PASS WITH WARNINGS** — [`e0-telegram-regression-2026-05-28.md`](../audits/e0-telegram-regression-2026-05-28.md) + [`e0-telegram-reference-channel-remediation-2026-05-28.md`](../audits/e0-telegram-reference-channel-remediation-2026-05-28.md). **Telegram reference channel: YES WITH WARNINGS** — portable `alpstein_n8n_compose` exec **222**, full n8n → `http://backend:8000` → AI path; synthetic Telegram Send (`chat not found`); Langfuse trace not on running compose backend yet.
 
-**Primary open engineering:** Optional real DM + Langfuse compose recreate; compose `up n8n` fix; **CIP-D**, ATTR-3, and Website Chat runtime smoke/hardening (post-E1.6 implementation). **E1.0–E1.6 channel / website-chat slices are complete in specs + minimal runtime assets.**
+**Primary open engineering:** Optional real DM + Langfuse compose recreate; compose `up n8n` fix; **CIP-D**, ATTR-3, and Website Chat follow-up hardening after **E1.6.3** runtime blocker fix. E1.6 live smoke is no longer blocked by the previous n8n `crypto` module error; retest evidence is in [`e1-6-2-website-chat-live-smoke-2026-05-28.md`](../audits/e1-6-2-website-chat-live-smoke-2026-05-28.md).
 
 ---
 
@@ -38,6 +38,7 @@ Specification-driven MVP with **backend AI orchestration complete**, **n8n test 
 - **Multi-channel identity strategy (E1.4)** — **implemented as spec only** in `docs/architecture/multi-channel-identity-strategy.md`; conservative non-merge rules locked; runtime unchanged
 - **Channel capability matrix (E1.5)** — **implemented as spec only** in `docs/architecture/channel-capability-matrix.md`; Telegram vs Website operational differences and placeholder-channel boundaries documented; runtime unchanged
 - **Website Chat MVP runtime (E1.6)** — minimal runtime slice implemented: widget assets + n8n workflow + ops runbook using existing backend orchestration path; no backend redesign
+- **E1.6.2 + E1.6.3 live compose smoke/retest** — runtime blocker fixed (`Cannot find module 'crypto'` removed from Normalize node); see [`e1-6-2-website-chat-live-smoke-2026-05-28.md`](../audits/e1-6-2-website-chat-live-smoke-2026-05-28.md), [`T-e1.6.2-website-chat-live-smoke-verification.md`](../../tasks/done/T-e1.6.2-website-chat-live-smoke-verification.md), and [`T-e1.6.3-website-chat-runtime-stabilization.md`](../../tasks/done/T-e1.6.3-website-chat-runtime-stabilization.md)
 
 ---
 

@@ -4,7 +4,7 @@
 
 # Next Steps
 
-## Recommended next task: **E1.6 Website Chat runtime smoke + hardening**
+## Recommended next task: **E1.6.3 Website Chat runtime blocker fix + re-smoke**
 
 Phase **E0** closed: [`e0-telegram-reference-channel-remediation-2026-05-28.md`](../audits/e0-telegram-reference-channel-remediation-2026-05-28.md) — **PASS WITH WARNINGS** · Telegram reference channel baseline established.
 
@@ -14,7 +14,7 @@ Phase **E0** closed: [`e0-telegram-reference-channel-remediation-2026-05-28.md`]
 **E1.5 completed (spec-only):** [`channel-capability-matrix.md`](../architecture/channel-capability-matrix.md) · [`T-e1.5-channel-capability-matrix.md`](../../tasks/done/T-e1.5-channel-capability-matrix.md).  
 **E1.6 implemented (runtime slice):** [`n8n-workflow-website-chat-mvp.md`](../ops/n8n-workflow-website-chat-mvp.md) · [`T-e1.6-website-chat-mvp-runtime.md`](../../tasks/done/T-e1.6-website-chat-mvp-runtime.md).
 
-Implementation follow-up: run live smoke checklist, validate owner-notify path, and apply retry/abuse hardening as separate slices. Do **not** change Telegram runtime.
+Implementation follow-up: E1.6.2 live smoke is complete and **BLOCKED** (`VMError: Cannot find module 'crypto'` in Website Chat normalization Code node). Next slice must fix runtime compatibility and re-run smoke. Do **not** change Telegram runtime.
 
 | Step | Status | Notes |
 |------|--------|-------|
@@ -24,6 +24,8 @@ Implementation follow-up: run live smoke checklist, validate owner-notify path, 
 | **Phase E1.0** | **done (design)** | Normalized ingress contract documented; no runtime changes |
 | **Phase E1.1** | **done (design)** | Telegram + Website Chat mapping matrix documented |
 | **Phase E1.2** | **done (spec)** | Canonical API/spec field matrix locked; runtime unchanged |
+| **Phase E1.6.2** | **done (BLOCKED)** | Live smoke executed; workflow errors before backend POST |
+| **Phase E1.6.3** | **next** | Minimal runtime compatibility fix + re-smoke + evidence |
 
 **Ingress policy (P0):** [`operational-ingress-policy.md`](../ops/operational-ingress-policy.md) — compose SoT; no stale `:8010` for validation.
 
@@ -90,7 +92,7 @@ Plan reference: [`tasks/todo/t14-telegram-customer-ingress.md`](../../tasks/todo
 | E1.4 Multi-channel identity strategy | **done (spec-only)** |
 | E1.5 Channel capability matrix | **done (spec-only)** |
 | E1.6 Website Chat MVP runtime slice | **implemented** |
-| E1.6 smoke verification and hardening | **next** |
+| E1.6 smoke verification and hardening | **E1.6.3 runtime blocker fixed; follow-up hardening continues** |
 | Runtime channel integrations (WhatsApp/Instagram/etc.) | **deferred** |
 
 Reference: [`website-chat-architecture.md`](../architecture/website-chat-architecture.md), [`multi-channel-identity-strategy.md`](../architecture/multi-channel-identity-strategy.md), [`channel-capability-matrix.md`](../architecture/channel-capability-matrix.md), [`n8n-workflow-website-chat-mvp.md`](../ops/n8n-workflow-website-chat-mvp.md), [`normalized-channel-contract.md`](../../specs/architecture/normalized-channel-contract.md), [`channel-ingress-contract.md`](../architecture/channel-ingress-contract.md), [`channel-mapping-telegram-website.md`](../architecture/channel-mapping-telegram-website.md), [`T-e1.0-channel-ingress-contract.md`](../../tasks/done/T-e1.0-channel-ingress-contract.md), [`T-e1.1-telegram-website-channel-mapping.md`](../../tasks/done/T-e1.1-telegram-website-channel-mapping.md), [`T-e1.2-api-spec-alignment-channel-contract.md`](../../tasks/done/T-e1.2-api-spec-alignment-channel-contract.md), [`T-e1.3-website-chat-architecture.md`](../../tasks/done/T-e1.3-website-chat-architecture.md), [`T-e1.4-multi-channel-identity-strategy.md`](../../tasks/done/T-e1.4-multi-channel-identity-strategy.md), [`T-e1.5-channel-capability-matrix.md`](../../tasks/done/T-e1.5-channel-capability-matrix.md), [`T-e1.6-website-chat-mvp-runtime.md`](../../tasks/done/T-e1.6-website-chat-mvp-runtime.md).
