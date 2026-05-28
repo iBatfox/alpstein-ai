@@ -1,21 +1,55 @@
 # Unified customer ingress — operations runbook (E1.7)
 
-**Status:** design-only companion to [`unified-customer-ingress-workflow.md`](../architecture/unified-customer-ingress-workflow.md)  
+**Status:** **E1.9 production cutover complete** (PASS WITH NOTES)  
 **Audience:** n8n operator / integration engineer  
-**No runtime changes in E1.7**
+**Audits:** [`e1-9-unified-ingress-cutover-2026-05-28.md`](../audits/e1-9-unified-ingress-cutover-2026-05-28.md) · [`e1-8-unified-ingress-inactive-implementation-2026-05-28.md`](../audits/e1-8-unified-ingress-inactive-implementation-2026-05-28.md)
 
 ---
 
 ## 1. Purpose
 
-Operational steps to introduce workflow **`alpstein-customer-ingress`** without breaking the current stable Telegram and Website Chat production paths.
+Operational reference for workflow **`alpstein-customer-ingress`** — **single production customer ingress** on `alpstein_n8n_compose`.
 
-**Current production (post RECOVERY-1/2):**
+**Current production (post E1.9):**
 
-| Workflow | Runtime ID (example) | Webhook path | Notes |
-|----------|------------------------|--------------|--------|
-| `alpstein-incoming-message-telegram` | `2lMuaSWD1XFOXLEK` | Telegram provider webhook | Reference channel (E0) |
-| `alpstein-incoming-message-website-chat` | `hAJ3TFYn69in0vd5` | `alpstein/website-chat/incoming` | Kill switch: `ALPSTEIN_WEBSITE_CHAT_ENABLED` |
+| Workflow | Runtime ID | Ingress | Notes |
+|----------|------------|---------|--------|
+| **`alpstein-customer-ingress`** | **`aYrRmAGKhP4TJbG9`** | **ACTIVE** | Telegram + Website unified pipeline |
+| Telegram webhook | — | `…/webhook/alpstein-telegram-customer-trigger-unified-inactive/webhook` | Customer bot `alpsteinai_0001bot` |
+| Website webhook | — | `…/webhook/alpstein/unified-customer-ingress/website-chat/incoming` | Kill switch: `ALPSTEIN_WEBSITE_CHAT_ENABLED` |
+| `alpstein-incoming-message-telegram-archived-e1-9` | `2lMuaSWD1XFOXLEK` | inactive / archived | Rollback only |
+| `alpstein-incoming-message-website-chat-archived-e1-9` | `hAJ3TFYn69in0vd5` | inactive / archived | Webhook path moved to `alpstein/archived-e1-9/…` |
+
+---
+
+## E1.9 production cutover (done)
+
+| Item | Value |
+|------|--------|
+| Verdict | **PASS WITH NOTES** |
+| Active ingress | **`aYrRmAGKhP4TJbG9`** only (+ test workflow) |
+| Website widget (repo example) | `website-widget/example.html` → unified path |
+| Legacy prod Website path | **500** (no owner — do not use) |
+| Backups | `n8n/workflows/backups/e1-9-cutover-2026-05-28/` |
+
+**Post-cutover operator action:** Confirm live Telegram DM to customer bot; update any deployed widgets to unified Website URL.
+
+---
+
+## E1.8 implementation (inactive import — done)
+
+| Item | Value |
+|------|--------|
+| Export file | `n8n/workflows/e1_8_unified_customer_ingress_skeleton.json` |
+| `versionId` | `e1.8-unified-customer-ingress-v1` |
+| Runtime ID | `aYrRmAGKhP4TJbG9` |
+| Telegram `webhookId` | `alpstein-telegram-customer-trigger-unified-inactive` |
+| Website path | `alpstein/unified-customer-ingress/website-chat/incoming` |
+| Import | `docker exec alpstein_n8n_compose n8n import:workflow --input=/tmp/e1_8_unified_import.json` |
+
+**Pre-cutover credential check:** After import, re-bind **customer** bot (`alpsteinai_0001bot`) on Telegram Trigger + Telegram Send Message if n8n mapped owner bot.
+
+**Inactive webhook probe (2026-05-28):** Unified path → **404**; production `alpstein/website-chat/incoming` → **200**.
 
 ---
 
@@ -51,9 +85,10 @@ Optional future:
 
 ## 4. Build unified workflow (inactive)
 
-1. Export/import canonical JSON from repo (when implementation task exists):
+1. Export/import canonical JSON from repo:
    - Target name: `alpstein-customer-ingress`
-   - File: `n8n/workflows/e1_7_unified_customer_ingress_skeleton.json` (created in implementation task, not E1.7)
+   - File: `n8n/workflows/e1_8_unified_customer_ingress_skeleton.json`
+   - Regenerate: `python3 scripts/n8n/build_e1_8_unified_workflow.py`
 
 2. In n8n UI or CLI:
    - Bind credentials: customer bot on Telegram Trigger; owner bot on Telegram Owner Notify

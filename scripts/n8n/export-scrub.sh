@@ -41,6 +41,7 @@ CANONICAL_FILES = {
     "t13_workflow1_test_webhook_skeleton.json": "alpstein-incoming-message-test",
     "t14_workflow_telegram_customer_ingress_skeleton.json": "alpstein-incoming-message-telegram",
     "e1_6_workflow_website_chat_mvp_skeleton.json": "alpstein-incoming-message-website-chat",
+    "e1_8_unified_customer_ingress_skeleton.json": "alpstein-customer-ingress",
 }
 
 NON_CANONICAL_BLOCKLIST = {"My_workflow.json"}
