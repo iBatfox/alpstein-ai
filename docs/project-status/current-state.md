@@ -79,10 +79,11 @@ Specification-driven MVP with **backend AI orchestration complete**, **n8n test 
 - **History Safety (HF-1):** §7 preamble + non-authoritative `ai` labels in `PromptBuilderService` — **implemented**
 - **Langfuse (dev):** `LangfuseTracingService` + `ObservabilityContext` (D2); flat metadata §16.2; intent keys wired in orchestration path — **implemented**; production off by default
 - **Observability metadata (D4):** `prompt_runs.metadata` JSON-safe (`json_safe_metadata`); scalar lineage; production-safe envelope per D4.4
-- pytest: **496** passed in `backend/tests/` (as-of 2026-05-28 E3.3)
+- pytest: **515** passed in `backend/tests/` (as-of 2026-05-28 E3.4)
 - **E3.1 retry/replay protection (done):** `inbound_processing_locks` (0013), terminal delivery PATCH, `replay_events` + replays API (0014) — [`e3-1-retry-replay-protection.md`](../audits/e3-1-retry-replay-protection.md)
 - **E3.2 retry/dead-letter (done):** `retry_attempts` (0015), `dead_letter_events` + `dead_letter` delivery status (0016), retries/dead-letter observability APIs — [`e3-2-retry-dead-letter.md`](../audits/e3-2-retry-dead-letter.md)
 - **E3.3 adapter monitoring (done):** derived adapter health for `telegram` / `website_chat`; `GET /observability/adapters` — no new tables — [`e3-3-adapter-monitoring.md`](../audits/e3-3-adapter-monitoring.md)
+- **E3.4 ingress failure isolation (done):** ingress/delivery status split, `isolation_summary`, optional ingress gate (default off) — [`e3-4-ingress-failure-isolation.md`](../audits/e3-4-ingress-failure-isolation.md)
 
 ### Missing / deferred
 

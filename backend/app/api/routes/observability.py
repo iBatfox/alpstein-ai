@@ -45,7 +45,10 @@ from app.schemas.adapter_health import (
     AdapterHealthListSuccessEnvelope,
     AdapterHealthSuccessEnvelope,
 )
-from app.schemas.adapter_health_mapper import adapter_health_to_response
+from app.schemas.adapter_health_mapper import (
+    adapter_health_to_response,
+    isolation_summary_to_response,
+)
 from app.services.adapter_monitoring_service import AdapterMonitoringService
 from app.services.dead_letter_service import DeadLetterService
 from app.services.replay_event_service import ReplayEventService
@@ -525,7 +528,7 @@ async def list_adapter_health(
     except ValueError as exc:
         return _validation_error(str(exc))
 
-    hours, snapshots = await adapter_monitoring_service.list_adapters(
+    hours, snapshots, summary = await adapter_monitoring_service.list_adapters(
         session,
         tenant_id=parsed_tenant_id,
         business_id=parsed_business_id,
@@ -535,6 +538,7 @@ async def list_adapter_health(
     return AdapterHealthListSuccessEnvelope(
         data=AdapterHealthListResponse(
             window_hours=hours,
+            isolation_summary=isolation_summary_to_response(summary),
             items=[adapter_health_to_response(item) for item in snapshots],
         ),
     ).model_dump(mode="json")

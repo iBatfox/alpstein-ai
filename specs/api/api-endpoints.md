@@ -299,12 +299,28 @@ Response `data`:
 ```json
 {
   "window_hours": 24,
+  "isolation_summary": {
+    "isolation_status": "intact",
+    "spread_risk": false,
+    "affected_adapters": [],
+    "healthy_adapters": ["telegram", "website_chat"],
+    "inactive_adapters": [],
+    "containment_notes": []
+  },
   "items": [
     {
       "adapter": "telegram",
       "status": "healthy",
       "status_reasons": [],
+      "ingress_status": "healthy",
+      "delivery_status": "healthy",
+      "ingress_status_reasons": [],
+      "delivery_status_reasons": [],
+      "containment_status": "normal",
       "recent_messages": 42,
+      "ingress_failed_count": 0,
+      "ingress_retry_count": 0,
+      "ingress_dead_letter_count": 0,
       "delivery_success_count": 40,
       "delivery_failure_count": 1,
       "delivery_pending_count": 1,
@@ -317,15 +333,17 @@ Response `data`:
 }
 ```
 
-`status`: `healthy` | `warning` | `degraded` | `inactive` (E3.3c, deterministic from backend metrics).
+**E3.4:** `status` is the combined worst severity of `ingress_status` and `delivery_status`. `isolation_summary` describes cross-adapter containment (`intact` | `at_risk` | `unknown`). `containment_status` per adapter: `normal` | `contained` | `peer_at_risk` | `shared_at_risk`.
+
+`status`: `healthy` | `warning` | `degraded` | `inactive` (deterministic from backend metrics).
 
 No prompts, message text, secrets, tokens, or raw provider payloads.
 
 ## GET /api/v1/observability/adapters/{adapter}
 
-**E3.3b** — Single adapter detail. Path `adapter` must be `telegram` or `website_chat`; unknown adapter → `404 NOT_FOUND`.
+**E3.3b / E3.4b** — Single adapter detail. Path `adapter` must be `telegram` or `website_chat`; unknown adapter → `404 NOT_FOUND`.
 
-Same query params as list. Response `data` includes `evaluated_at` and optional:
+Same query params as list. Response `data` includes ingress/delivery split fields, `containment_status`, optional `peer_adapter` summary (status fields only), `evaluated_at`, and optional:
 
 ```json
 {
@@ -335,11 +353,20 @@ Same query params as list. Response `data` includes `evaluated_at` and optional:
       "delivered": 40,
       "failed": 1
     }
+  },
+  "peer_adapter": {
+    "adapter": "website_chat",
+    "status": "healthy",
+    "ingress_status": "healthy",
+    "delivery_status": "healthy",
+    "containment_status": "peer_at_risk"
   }
 }
 ```
 
 Metrics are derived at read time from `message_traces`, `delivery_events`, `retry_attempts`, and `dead_letter_events` within the lookback window.
+
+**E3.4c optional ingress gate:** When `ALPSTEIN_AI_INGRESS_CONTAINMENT_ENABLED=true` (default **false**), `POST /api/v1/webhook/message` may return `503` with `error.code=ADAPTER_INGRESS_CONTAINED` for the failing adapter only (inbound dead-letter evidence + `containment_status=contained`). Peer adapter is never blocked.
 
 ---
 

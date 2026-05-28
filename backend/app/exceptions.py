@@ -38,3 +38,11 @@ class PromptTemplateNotFoundError(Exception):
     def __init__(self, template_key: str) -> None:
         self.template_key = template_key
         super().__init__(f"Active prompt template not found: {template_key!r}")
+
+
+class AdapterIngressContainedError(Exception):
+    """Raised when optional ingress containment rejects adapter traffic (E3.4c)."""
+
+    def __init__(self, channel: str) -> None:
+        self.channel = channel
+        super().__init__(f"Ingress temporarily not accepted for adapter: {channel}")

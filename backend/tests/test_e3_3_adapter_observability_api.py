@@ -12,6 +12,7 @@ from httpx import ASGITransport, AsyncClient
 from app.main import app
 from app.schemas.adapter_health import FORBIDDEN_ADAPTER_RESPONSE_FIELDS
 from app.services.adapter_monitoring_service import AdapterHealthSnapshot
+from app.services.ingress_isolation_policy import IsolationSummary
 
 TEST_TOKEN = "e3-3-adapter-monitoring-test"
 
@@ -50,7 +51,15 @@ def _snapshot(
         adapter=adapter,
         status=status,
         status_reasons=[],
+        ingress_status=status,
+        delivery_status=status,
+        ingress_status_reasons=[],
+        delivery_status_reasons=[],
+        containment_status="normal",
         recent_messages=10,
+        ingress_failed_count=0,
+        ingress_retry_count=0,
+        ingress_dead_letter_count=0,
         delivery_success_count=9,
         delivery_failure_count=1,
         delivery_pending_count=0,
@@ -76,7 +85,20 @@ async def test_list_adapters_returns_both_monitored_adapters(
     ]
     monkeypatch.setattr(
         "app.api.routes.observability.adapter_monitoring_service.list_adapters",
-        AsyncMock(return_value=(24, snapshots)),
+        AsyncMock(
+            return_value=(
+                24,
+                snapshots,
+                IsolationSummary(
+                    isolation_status="intact",
+                    spread_risk=False,
+                    affected_adapters=[],
+                    healthy_adapters=["telegram", "website_chat"],
+                    inactive_adapters=[],
+                    containment_notes=[],
+                ),
+            )
+        ),
     )
 
     async with AsyncClient(
@@ -93,6 +115,7 @@ async def test_list_adapters_returns_both_monitored_adapters(
     body = response.json()
     assert body["success"] is True
     assert body["data"]["window_hours"] == 24
+    assert body["data"]["isolation_summary"]["isolation_status"] == "intact"
     assert {item["adapter"] for item in body["data"]["items"]} == {
         "telegram",
         "website_chat",
@@ -113,6 +136,14 @@ async def test_get_adapter_detail_includes_breakdown(
     tenant_id = uuid.uuid4()
     business_id = uuid.uuid4()
     snapshot = _snapshot(adapter="telegram")
+    snapshot.ingress_status = "healthy"
+    snapshot.delivery_status = "healthy"
+    snapshot.ingress_status_reasons = []
+    snapshot.delivery_status_reasons = []
+    snapshot.containment_status = "normal"
+    snapshot.ingress_failed_count = 0
+    snapshot.ingress_retry_count = 0
+    snapshot.ingress_dead_letter_count = 0
     snapshot.breakdown = {"delivery_by_status": {"delivered": 9, "failed": 1}}
     monkeypatch.setattr(
         "app.api.routes.observability.adapter_monitoring_service.get_adapter",
@@ -183,7 +214,15 @@ async def test_adapter_response_schema_rejects_forbidden_fields():
         "adapter": "telegram",
         "status": "healthy",
         "status_reasons": [],
+        "ingress_status": "healthy",
+        "delivery_status": "healthy",
+        "ingress_status_reasons": [],
+        "delivery_status_reasons": [],
+        "containment_status": "normal",
         "recent_messages": 1,
+        "ingress_failed_count": 0,
+        "ingress_retry_count": 0,
+        "ingress_dead_letter_count": 0,
         "delivery_success_count": 1,
         "delivery_failure_count": 0,
         "delivery_pending_count": 0,

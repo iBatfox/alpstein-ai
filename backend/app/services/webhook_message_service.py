@@ -21,6 +21,7 @@ from app.schemas.webhook_response import (
     WebhookLeadSummary,
     WebhookNotificationPayload,
 )
+from app.exceptions import AdapterIngressContainedError
 from app.seed.dev_ai_configuration import PROMPT_TEMPLATE_CUSTOMER_REPLY_KEY
 from app.services.ai_configuration_service import AiConfigurationService
 from app.services.ai_reply_fallback_service import AiReplyFallbackService
@@ -44,6 +45,7 @@ from app.models.replay_event import (
 from app.models.inbound_processing_lock import InboundProcessingLock
 from app.models.retry_attempt import RETRY_STATUS_EXHAUSTED
 from app.services.dead_letter_service import DeadLetterService
+from app.services.adapter_monitoring_service import AdapterMonitoringService
 from app.services.replay_event_service import ReplayEventService
 from app.services.retry_lifecycle_service import RetryLifecycleService
 from app.services.retry_policy import inbound_replays_exhausted
@@ -120,6 +122,7 @@ class WebhookMessageService:
         replay_event_service: ReplayEventService | None = None,
         retry_lifecycle_service: RetryLifecycleService | None = None,
         dead_letter_service: DeadLetterService | None = None,
+        adapter_monitoring_service: AdapterMonitoringService | None = None,
     ) -> None:
         self.business_service = business_service or BusinessService()
         self.customer_service = customer_service or CustomerService()
@@ -150,6 +153,24 @@ class WebhookMessageService:
         self.replay_event_service = replay_event_service or ReplayEventService()
         self.retry_lifecycle_service = retry_lifecycle_service or RetryLifecycleService()
         self.dead_letter_service = dead_letter_service or DeadLetterService()
+        self.adapter_monitoring_service = (
+            adapter_monitoring_service or AdapterMonitoringService()
+        )
+
+    async def _should_reject_ingress(
+        self,
+        session: AsyncSession,
+        *,
+        tenant_id: uuid.UUID,
+        business_id: uuid.UUID,
+        channel: str,
+    ) -> bool:
+        return await self.adapter_monitoring_service.should_reject_ingress_for_channel(
+            session,
+            tenant_id=tenant_id,
+            business_id=business_id,
+            channel=channel,
+        )
 
     async def process_incoming_message(
         self,
@@ -187,6 +208,14 @@ class WebhookMessageService:
             flow_id=flow.id,
             flow_key=flow.flow_key,
         )
+
+        if await self._should_reject_ingress(
+            session,
+            tenant_id=tenant_id,
+            business_id=business.id,
+            channel=channel,
+        ):
+            raise AdapterIngressContainedError(channel)
 
         customer = await self.customer_service.get_or_create_customer(
             session,

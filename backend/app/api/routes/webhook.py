@@ -12,7 +12,12 @@ from app.core.observability_context import (
     set_observability_context,
 )
 from app.db.session import get_db_session
-from app.exceptions import BusinessNotFoundError, FlowNotFoundError, TenantContextError
+from app.exceptions import (
+    AdapterIngressContainedError,
+    BusinessNotFoundError,
+    FlowNotFoundError,
+    TenantContextError,
+)
 from app.schemas.observability import (
     InvalidCorrelationIdError,
     X_CORRELATION_ID_HEADER,
@@ -113,6 +118,18 @@ async def post_webhook_message(
                 "error": {
                     "code": "VALIDATION_ERROR",
                     "message": "Tenant context is inconsistent",
+                },
+            },
+        )
+    except AdapterIngressContainedError as exc:
+        await session.rollback()
+        return JSONResponse(
+            status_code=503,
+            content={
+                "success": False,
+                "error": {
+                    "code": "ADAPTER_INGRESS_CONTAINED",
+                    "message": "Ingress temporarily not accepted for this adapter",
                 },
             },
         )

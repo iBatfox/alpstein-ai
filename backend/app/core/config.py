@@ -66,6 +66,22 @@ class Settings(BaseSettings):
         default=3,
         validation_alias="ADAPTER_MONITOR_PENDING_STALE_MIN",
     )
+    ingress_monitor_failed_warning: int = Field(
+        default=3,
+        validation_alias="INGRESS_MONITOR_FAILED_WARNING",
+    )
+    ingress_monitor_failed_degraded: int = Field(
+        default=10,
+        validation_alias="INGRESS_MONITOR_FAILED_DEGRADED",
+    )
+    ingress_monitor_inbound_dl_degraded: int = Field(
+        default=1,
+        validation_alias="INGRESS_MONITOR_INBOUND_DL_DEGRADED",
+    )
+    ingress_containment_enabled: bool = Field(
+        default=False,
+        validation_alias="INGRESS_CONTAINMENT_ENABLED",
+    )
 
     model_config = SettingsConfigDict(
         env_prefix="ALPSTEIN_AI_",
