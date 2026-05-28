@@ -289,6 +289,106 @@ if (leadStatus) {
 
 return [{ json: { telegram_text: lines.join('\n'), notification_type: type } }];"""
 
+PREPARE_DELIVERY_PATCH = r"""// E2 post-cutover — report channel delivery outcome to backend (non-blocking)
+const backendData = $('POST Backend').first().json?.data;
+const delivery = backendData?.delivery;
+
+if (!delivery?.delivery_id) {
+  return [];
+}
+if (backendData?.message?.is_duplicate === true) {
+  return [];
+}
+
+const tenantId =
+  typeof $env !== 'undefined' ? $env.ALPSTEIN_OBSERVABILITY_TENANT_ID : null;
+const businessId =
+  typeof $env !== 'undefined' ? $env.ALPSTEIN_OBSERVABILITY_BUSINESS_ID : null;
+if (!tenantId || !businessId) {
+  return [];
+}
+
+const normalized = $('Add Business Context').first().json;
+const channel = normalized.channel;
+const item = $input.first().json;
+
+function truncate(value, max) {
+  const text = String(value ?? '').trim();
+  if (text.length <= max) return text;
+  return text.slice(0, max - 3) + '...';
+}
+
+function stripUndefined(obj) {
+  const out = {};
+  for (const [key, val] of Object.entries(obj)) {
+    if (val !== undefined && val !== null && val !== '') {
+      out[key] = val;
+    }
+  }
+  return out;
+}
+
+let patch_body;
+
+if (channel === 'telegram') {
+  const failed = !!(item.error || item.description || item.ok === false);
+  if (failed) {
+    patch_body = {
+      status: 'failed',
+      error_type: 'telegram_send_failed',
+      error_message: truncate(
+        item.error?.message || item.description || 'Telegram send failed',
+        500
+      ),
+    };
+  } else {
+    const messageId = item.message_id ?? item.result?.message_id;
+    patch_body = stripUndefined({
+      status: 'delivered',
+      provider_message_id: messageId != null ? String(messageId) : undefined,
+      provider_status: 'sent',
+    });
+  }
+} else if (channel === 'website_chat') {
+  const failed = item.success === false;
+  if (failed) {
+    patch_body = {
+      status: 'failed',
+      error_type: 'website_chat_delivery_failed',
+      error_message: truncate(
+        item.error?.message || 'Website response delivery failed',
+        500
+      ),
+    };
+  } else {
+    patch_body = stripUndefined({
+      status: 'delivered',
+      provider_message_id: item.message?.id ? String(item.message.id) : undefined,
+      provider_status: 'responded',
+    });
+  }
+} else {
+  return [];
+}
+
+return [
+  {
+    json: {
+      delivery_id: delivery.delivery_id,
+      tenant_id: tenantId,
+      business_id: businessId,
+      patch_body,
+      channel,
+    },
+  },
+];"""
+
+PATCH_DELIVERY_URL = (
+    "={{ $env.BACKEND_BASE_URL + '/api/v1/observability/deliveries/' "
+    "+ $json.delivery_id + '?tenant_id=' + encodeURIComponent($json.tenant_id) "
+    "+ '&business_id=' + encodeURIComponent($json.business_id) }}"
+)
+
 POST_JSON_BODY = (
     "={{ (() => { const j = $json; const body = { correlation_id: j.correlation_id, "
     "business_id: j.business_id, channel: j.channel, customer: j.customer, message: j.message, "
@@ -599,6 +699,53 @@ def main() -> None:
             },
         ),
         node(
+            "e1800001-0000-4000-8000-000000000015",
+            "Prepare Delivery PATCH",
+            "n8n-nodes-base.code",
+            2,
+            [2120, 360],
+            {"jsCode": PREPARE_DELIVERY_PATCH},
+            notesInFlow=True,
+            notes="E2: PATCH delivery outcome after transport. Skips duplicate / missing delivery_id.",
+        ),
+        node(
+            "e1800001-0000-4000-8000-000000000016",
+            "PATCH Delivery Outcome",
+            "n8n-nodes-base.httpRequest",
+            4.2,
+            [2380, 360],
+            {
+                "method": "PATCH",
+                "url": PATCH_DELIVERY_URL,
+                "sendHeaders": True,
+                "headerParameters": {
+                    "parameters": [
+                        {"name": "Content-Type", "value": "application/json"},
+                        {
+                            "name": "X-Alpstein-Webhook-Token",
+                            "value": "={{ $env.N8N_BACKEND_API_TOKEN }}",
+                        },
+                        {
+                            "name": "X-Correlation-Id",
+                            "value": "={{ $('Add Business Context').first().json.correlation_id }}",
+                        },
+                        {
+                            "name": "X-N8n-Execution-Id",
+                            "value": "={{ $execution.id }}",
+                        },
+                    ]
+                },
+                "sendBody": True,
+                "specifyBody": "json",
+                "jsonBody": "={{ $json.patch_body }}",
+                "options": {"timeout": 10000},
+            },
+            continueOnFail=True,
+            onError="continueRegularOutput",
+            notesInFlow=True,
+            notes="E2: Non-blocking observability PATCH. Failure leaves delivery pending.",
+        ),
+        node(
             "e1800001-0000-4000-8000-000000000011",
             "IF Notify Owner",
             "n8n-nodes-base.if",
@@ -671,7 +818,7 @@ def main() -> None:
         ),
         {
             "parameters": {
-                "content": "## E1.8 Unified customer ingress (INACTIVE)\n\nTelegram + Website → shared Add Business Context → POST Backend → Shape Canonical → channel delivery.\n\n**Non-prod webhooks only.** Do not activate while production Telegram/Website workflows are live.",
+                "content": "## Unified customer ingress + E2 delivery PATCH\n\nTelegram + Website → POST Backend → channel delivery → PATCH delivery outcome.\n\nRequires ALPSTEIN_OBSERVABILITY_TENANT_ID + ALPSTEIN_OBSERVABILITY_BUSINESS_ID (UUID).",
                 "height": 300,
                 "width": 520,
                 "color": 4,
@@ -738,11 +885,23 @@ def main() -> None:
         "Route Reply Telegram": {
             "main": [[{"node": "Telegram Send Message", "type": "main", "index": 0}]]
         },
+        "Telegram Send Message": {
+            "main": [[{"node": "Prepare Delivery PATCH", "type": "main", "index": 0}]]
+        },
         "Route Reply Website": {
             "main": [[{"node": "Respond Website Reply", "type": "main", "index": 0}]]
         },
+        "Respond Website Reply": {
+            "main": [[{"node": "Prepare Delivery PATCH", "type": "main", "index": 0}]]
+        },
         "Route Error Website": {
             "main": [[{"node": "Respond Website Error", "type": "main", "index": 0}]]
+        },
+        "Respond Website Error": {
+            "main": [[{"node": "Prepare Delivery PATCH", "type": "main", "index": 0}]]
+        },
+        "Prepare Delivery PATCH": {
+            "main": [[{"node": "PATCH Delivery Outcome", "type": "main", "index": 0}]]
         },
         "IF Notify Owner": {
             "main": [[{"node": "Shape Owner Notification", "type": "main", "index": 0}]]
@@ -758,7 +917,7 @@ def main() -> None:
         "connections": connections,
         "active": False,
         "settings": {"executionOrder": "v1"},
-        "versionId": "e1.9-unified-customer-ingress-v1",
+        "versionId": "e2-delivery-outcome-patch-v1",
         "meta": {"templateCredsSetupCompleted": False},
         "tags": [
             {
@@ -768,10 +927,10 @@ def main() -> None:
                 "id": "alpstein-tag",
             },
             {
-                "name": "e1.8",
+                "name": "e2",
                 "createdAt": "2026-05-28T00:00:00.000Z",
                 "updatedAt": "2026-05-28T00:00:00.000Z",
-                "id": "e18-tag",
+                "id": "e2-tag",
             },
         ],
     }

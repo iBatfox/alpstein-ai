@@ -22,6 +22,16 @@ Operational reference for workflow **`alpstein-customer-ingress`** — **single 
 
 ---
 
+**Post-E2 follow-up:** n8n delivery PATCH wired in repo — [`delivery-outcome-patching.md`](../n8n/delivery-outcome-patching.md) (`e2-delivery-outcome-patch-v1`). Operator: observability UUID env + re-import.
+
+---
+
+## E2 delivery PATCH (n8n)
+
+See [`delivery-outcome-patching.md`](../n8n/delivery-outcome-patching.md) for rollout and rollback.
+
+---
+
 ## E1.9 production cutover (done)
 
 | Item | Value |
@@ -30,7 +40,7 @@ Operational reference for workflow **`alpstein-customer-ingress`** — **single 
 | Active ingress | **`aYrRmAGKhP4TJbG9`** only (+ test workflow) |
 | Website widget (repo example) | `website-widget/example.html` → unified path |
 | Legacy prod Website path | **500** (no owner — do not use) |
-| Backups | `n8n/workflows/backups/e1-9-cutover-2026-05-28/` |
+| Backups | [`docs/ops/backups/e1-9-cutover-2026-05-28/`](../ops/backups/e1-9-cutover-2026-05-28/) |
 
 **Post-cutover operator action:** Confirm live Telegram DM to customer bot; update any deployed widgets to unified Website URL.
 

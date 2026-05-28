@@ -15,7 +15,7 @@
 | Path | Export file | `versionId` | Runtime workflow ID | `active` | Notes |
 |------|-------------|-------------|---------------------|----------|-------|
 | Test webhook (T13.5) | `t13_workflow1_test_webhook_skeleton.json` | `t13-5-owner-notify-v5` | `2qfhWKtgbDy6YeTh` | ops | Gate 2 passed — see ops doc |
-| **Unified customer ingress (E1.9 production)** | `e1_8_unified_customer_ingress_skeleton.json` | `e1.9-unified-customer-ingress-v1` | **`aYrRmAGKhP4TJbG9`** | **`true`** | **PRODUCTION** — Telegram + Website; see E1.9 audit |
+| **Unified customer ingress (E1.9 + E2 PATCH)** | `e1_8_unified_customer_ingress_skeleton.json` | `e2-delivery-outcome-patch-v1` | **`aYrRmAGKhP4TJbG9`** | **`true`** | **PRODUCTION** — includes delivery outcome PATCH nodes |
 | Telegram (archived E1.9) | `t14_workflow_telegram_customer_ingress_skeleton.json` | — | `2lMuaSWD1XFOXLEK` | **`false`** | Renamed `…-telegram-archived-e1-9`; `isArchived=1` |
 | Website Chat (archived E1.9) | `e1_6_workflow_website_chat_mvp_skeleton.json` | — | `hAJ3TFYn69in0vd5` | **`false`** | Renamed `…-website-chat-archived-e1-9`; webhook path archived |
 | Telegram (stale imports) | same | various | `FHSgBtwDm9PyDAl2`, `61X8sCbW3pqoBRwI`, … | `false` | Deactivate extras before any re-activation |
