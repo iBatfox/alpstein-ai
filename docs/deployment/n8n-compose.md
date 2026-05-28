@@ -77,8 +77,31 @@ docker-compose -p alpstein-ai -f docker-compose.yml -f docker-compose.dev.yml co
 cd /opt/alpstein-ai
 # .env at repo root + n8n/.env + backend/.env per templates
 docker-compose -p alpstein-ai up -d postgres backend
-docker-compose -p alpstein-ai up -d n8n
+docker-compose -p alpstein-ai up -d n8n   # may fail — see E0 workaround below
 ```
+
+### E0 workaround — `ContainerConfig` (compose 1.29 + Docker 29)
+
+If `docker-compose up -d n8n` fails with `KeyError: 'ContainerConfig'`:
+
+1. **Stop** legacy `alpstein_n8n` first (shared `alpstein_n8n_data`).
+2. `docker rm -f alpstein_n8n_compose`
+3. Start portable n8n with explicit `docker run` (same as compose service):
+
+```bash
+docker run -d \
+  --name alpstein_n8n_compose \
+  --network alpstein_internal \
+  --restart unless-stopped \
+  -p 127.0.0.1:15680:5678 \
+  --env-file ./n8n/.env \
+  -e BACKEND_BASE_URL=http://backend:8000 \
+  -e WEBHOOK_URL=http://127.0.0.1:15680/ \
+  -v alpstein_n8n_data:/home/node/.n8n \
+  docker.n8n.io/n8nio/n8n:1.95.3
+```
+
+Evidence: [`e0-telegram-regression-2026-05-28.md`](../audits/e0-telegram-regression-2026-05-28.md) §P0.
 
 Dev UI on host: add overlay and open `http://127.0.0.1:15680` (not `15679` — legacy).
 
