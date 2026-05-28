@@ -4,9 +4,11 @@
 
 # Next Steps
 
-## Recommended next task: **E2.3 message trace / `messages.flow_id`** or **Live Telegram DM confirmation**
+## Recommended next task: **E2.4 message traces** or **Live Telegram DM confirmation**
 
-**E2.2 (done):** `conversations.flow_id` + flow-scoped lookup — Alembic `0009`, [`T-e2.2-conversation-flow-scoping.md`](../../tasks/in-progress/T-e2.2-conversation-flow-scoping.md).
+**E2.3 (done):** inbound message uniqueness — Alembic `0010`, [`T-e2.3-message-uniqueness-hardening.md`](../../tasks/done/T-e2.3-message-uniqueness-hardening.md).
+
+**E2.2 (done):** `conversations.flow_id` + flow-scoped lookup — Alembic `0009`, [`T-e2.2-conversation-flow-scoping.md`](../../tasks/done/T-e2.2-conversation-flow-scoping.md).
 
 **E2.0 (done, design-only):** Unified conversation + observability — [`unified-conversation-observability.md`](../architecture/unified-conversation-observability.md) · [`T-e2.0-unified-conversation-observability-design.md`](../../tasks/done/T-e2.0-unified-conversation-observability-design.md) · verdict **PASS WITH NOTES**.
 
@@ -53,8 +55,8 @@ Implementation follow-up: E1.6.3 runtime compatibility fix and E1.6.6 activation
 |-------|--------|-------|
 | **E2.0** | **done (design)** | [`unified-conversation-observability.md`](../architecture/unified-conversation-observability.md), [`message-debugging-runbook.md`](../ops/message-debugging-runbook.md) |
 | E2.1 | **done** | [`e2-1-flows-migration-default-flows-2026-05-28.md`](../audits/e2-1-flows-migration-default-flows-2026-05-28.md) — `flows` table + default flows + webhook resolution |
-| E2.2 | **next** | `ConversationService` + `flow_id` + `external_conversation_id` lookup |
-| E2.3 | planned | Message idempotency index `(flow_id, channel, external_message_id)` |
+| E2.2 | **done** | [`T-e2.2-conversation-flow-scoping.md`](../../tasks/done/T-e2.2-conversation-flow-scoping.md) — `conversations.flow_id` + flow-scoped lookup (Alembic `0009`) |
+| E2.3 | **done** | [`T-e2.3-message-uniqueness-hardening.md`](../../tasks/done/T-e2.3-message-uniqueness-hardening.md) — conversation-scoped inbound dedup (Alembic `0010`) |
 | E2.4 | planned | `message_traces` persistence + lifecycle stages |
 | E2.5 | planned | API/webhooks.md response fields (`conversation_id`, `message_id`, `trace_id`) |
 | E2.6 | planned | n8n `flow_key` + delivery-stage logging (same workflow) |

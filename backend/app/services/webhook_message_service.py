@@ -173,6 +173,7 @@ class WebhookMessageService:
             external_message_id=request.message.external_message_id,
             raw_payload=request.message.raw_payload,
             flow_id=flow.id,
+            message_timestamp=request.message.timestamp,
         )
         observability = observability.with_session(
             conversation_id=conversation.id,

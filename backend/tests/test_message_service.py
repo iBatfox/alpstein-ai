@@ -33,6 +33,7 @@ def _context_entities():
     business_id = uuid.uuid4()
     customer_id = uuid.uuid4()
     conversation_id = uuid.uuid4()
+    flow_id = uuid.uuid4()
 
     business = SimpleNamespace(id=business_id, tenant_id=tenant_id)
     customer = SimpleNamespace(
@@ -44,6 +45,7 @@ def _context_entities():
         id=conversation_id,
         tenant_id=tenant_id,
         business_id=business_id,
+        flow_id=flow_id,
         customer_id=customer_id,
         channel="whatsapp",
     )
@@ -163,11 +165,15 @@ async def test_save_incoming_customer_message_inserts_one_message(
 ):
     tenant_id, business, conversation, customer = _context_entities()
     session = MagicMock()
+    nested = AsyncMock()
+    nested.__aenter__ = AsyncMock(return_value=None)
+    nested.__aexit__ = AsyncMock(return_value=None)
+    session.begin_nested.return_value = nested
     session.flush = AsyncMock()
 
     with patch.object(
         message_service,
-        "find_by_external_id",
+        "find_inbound_customer_message",
         new_callable=AsyncMock,
         return_value=None,
     ) as find_mock:
@@ -180,15 +186,12 @@ async def test_save_incoming_customer_message_inserts_one_message(
             message_text="hello",
             external_message_id="ext-save-001",
             raw_payload={"provider": "test"},
+            flow_id=conversation.flow_id,
         )
 
-    find_mock.assert_awaited_once_with(
-        session,
-        tenant_id,
-        business.id,
-        "ext-save-001",
-    )
+    find_mock.assert_awaited_once()
     session.add.assert_called_once()
+    session.begin_nested.assert_called_once()
     session.flush.assert_awaited_once()
     assert result.is_duplicate is False
 
@@ -202,6 +205,7 @@ async def test_save_incoming_customer_message_inserts_one_message(
     assert message.message_text == "hello"
     assert message.message_type == "text"
     assert message.external_message_id == "ext-save-001"
+    assert message.idempotency_key == "ext:ext-save-001"
     assert message.raw_payload == {"provider": "test"}
     assert result.message is message
 
@@ -226,7 +230,7 @@ async def test_save_incoming_customer_message_returns_duplicate_without_insert(
 
     with patch.object(
         message_service,
-        "find_by_external_id",
+        "find_inbound_customer_message",
         new_callable=AsyncMock,
         return_value=existing,
     ):
@@ -238,6 +242,7 @@ async def test_save_incoming_customer_message_returns_duplicate_without_insert(
             customer=customer,
             message_text="hello again",
             external_message_id="ext-dup-001",
+            flow_id=conversation.flow_id,
         )
 
     session.add.assert_not_called()
@@ -254,10 +259,16 @@ async def test_save_incoming_customer_message_skips_dedup_when_external_message_
     session = MagicMock()
     session.flush = AsyncMock()
 
+    nested = AsyncMock()
+    nested.__aenter__ = AsyncMock(return_value=None)
+    nested.__aexit__ = AsyncMock(return_value=None)
+    session.begin_nested.return_value = nested
+
     with patch.object(
         message_service,
-        "find_by_external_id",
+        "find_inbound_customer_message",
         new_callable=AsyncMock,
+        return_value=None,
     ) as find_mock:
         result = await message_service.save_incoming_customer_message(
             session,
@@ -267,11 +278,14 @@ async def test_save_incoming_customer_message_skips_dedup_when_external_message_
             customer=customer,
             message_text="no external id",
             external_message_id=None,
+            flow_id=conversation.flow_id,
         )
 
-    find_mock.assert_not_awaited()
+    find_mock.assert_awaited()
     session.add.assert_called_once()
-    assert session.add.call_args.args[0].external_message_id is None
+    created = session.add.call_args.args[0]
+    assert created.external_message_id is None
+    assert created.idempotency_key.startswith("hash:")
     assert result.is_duplicate is False
 
 
@@ -283,10 +297,16 @@ async def test_save_incoming_customer_message_skips_dedup_when_external_message_
     session = MagicMock()
     session.flush = AsyncMock()
 
+    nested = AsyncMock()
+    nested.__aenter__ = AsyncMock(return_value=None)
+    nested.__aexit__ = AsyncMock(return_value=None)
+    session.begin_nested.return_value = nested
+
     with patch.object(
         message_service,
-        "find_by_external_id",
+        "find_inbound_customer_message",
         new_callable=AsyncMock,
+        return_value=None,
     ) as find_mock:
         result = await message_service.save_incoming_customer_message(
             session,
@@ -296,9 +316,10 @@ async def test_save_incoming_customer_message_skips_dedup_when_external_message_
             customer=customer,
             message_text="empty external id",
             external_message_id="",
+            flow_id=conversation.flow_id,
         )
 
-    find_mock.assert_not_awaited()
+    find_mock.assert_awaited()
     session.add.assert_called_once()
     assert session.add.call_args.args[0].external_message_id is None
     assert result.is_duplicate is False

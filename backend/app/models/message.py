@@ -18,11 +18,33 @@ class Message(Base):
         Index("messages_created_at_idx", "created_at"),
         Index("messages_external_message_id_idx", "external_message_id"),
         Index(
-            "messages_business_external_message_id_unique",
+            "messages_incoming_conversation_external_unique",
             "business_id",
+            "conversation_id",
             "external_message_id",
             unique=True,
-            postgresql_where=text("external_message_id IS NOT NULL"),
+            postgresql_where=text(
+                "external_message_id IS NOT NULL "
+                "AND sender_type = 'customer' "
+                "AND direction = 'incoming'"
+            ),
+        ),
+        Index(
+            "messages_incoming_conversation_idempotency_unique",
+            "business_id",
+            "conversation_id",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=text(
+                "idempotency_key IS NOT NULL "
+                "AND sender_type = 'customer' "
+                "AND direction = 'incoming'"
+            ),
+        ),
+        Index(
+            "messages_idempotency_key_idx",
+            "idempotency_key",
+            postgresql_where=text("idempotency_key IS NOT NULL"),
         ),
     )
 
@@ -57,6 +79,7 @@ class Message(Base):
         server_default="text",
     )
     external_message_id: Mapped[str | None] = mapped_column(String(255))
+    idempotency_key: Mapped[str | None] = mapped_column(String(255))
     raw_payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     ai_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     metadata_: Mapped[dict[str, Any] | None] = mapped_column("metadata", JSONB)

@@ -147,17 +147,23 @@ Same human in flow A vs flow B → **different conversations**, may share `custo
 | `metadata` | JSONB | no | Attribution/client subset |
 | `created_at` | TIMESTAMP | yes | |
 
-**Idempotency (target — flow-scoped):**
+**Idempotency (E2.3 — implemented):**
 
 ```text
-UNIQUE messages_flow_channel_external_unique
-  ON messages(flow_id, channel, external_message_id)
+UNIQUE messages_incoming_conversation_external_unique
+  ON messages(business_id, conversation_id, external_message_id)
   WHERE external_message_id IS NOT NULL
+    AND sender_type = 'customer' AND direction = 'incoming'
+
+UNIQUE messages_incoming_conversation_idempotency_unique
+  ON messages(business_id, conversation_id, idempotency_key)
+  WHERE idempotency_key IS NOT NULL
+    AND sender_type = 'customer' AND direction = 'incoming'
 ```
 
-Deprecate business-only unique index after backfill + dual-write validation.
+`idempotency_key`: `ext:{external_message_id}` when present; else deterministic `hash:` of business + flow + conversation + channel + text (+ timestamp when set). Replaces business-only `messages_business_external_message_id_unique` (Alembic `0010`).
 
-**Duplicate handling:** unchanged semantics — second POST with same key returns existing message, `is_duplicate: true`, no second AI turn unless product defines otherwise.
+**Duplicate handling:** second POST with same dedup identity returns existing message, `is_duplicate: true`, no second AI turn.
 
 ---
 

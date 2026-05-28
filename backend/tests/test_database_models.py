@@ -242,6 +242,7 @@ def test_message_model_matches_schema():
     assert table.c.message_text.nullable is False
     assert table.c.message_type.nullable is False
     assert table.c.external_message_id.nullable is True
+    assert table.c.idempotency_key.nullable is True
     assert table.c.raw_payload.nullable is True
     assert table.c.ai_metadata.nullable is True
     assert table.c.metadata.nullable is True
@@ -252,21 +253,23 @@ def test_message_model_matches_schema():
         "messages_conversation_id_idx",
         "messages_created_at_idx",
         "messages_external_message_id_idx",
-        "messages_business_external_message_id_unique",
+        "messages_incoming_conversation_external_unique",
+        "messages_incoming_conversation_idempotency_unique",
+        "messages_idempotency_key_idx",
     }.issubset({index.name for index in table.indexes})
-    business_external_unique = next(
+    conversation_external_unique = next(
         index
         for index in table.indexes
-        if index.name == "messages_business_external_message_id_unique"
+        if index.name == "messages_incoming_conversation_external_unique"
     )
-    assert business_external_unique.unique is True
-    assert list(business_external_unique.columns.keys()) == [
+    assert conversation_external_unique.unique is True
+    assert list(conversation_external_unique.columns.keys()) == [
         "business_id",
+        "conversation_id",
         "external_message_id",
     ]
-    assert (
-        str(business_external_unique.dialect_options["postgresql"]["where"])
-        == "external_message_id IS NOT NULL"
+    assert "sender_type = 'customer'" in str(
+        conversation_external_unique.dialect_options["postgresql"]["where"]
     )
     assert any(
         isinstance(constraint, ForeignKeyConstraint)

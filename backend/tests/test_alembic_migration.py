@@ -325,3 +325,21 @@ def test_conversations_flow_id_migration_is_additive():
     assert "conversations_flow_channel_customer_idx" in migration_source
     downgrade_source = migration_source.split("def downgrade")[1]
     assert 'op.drop_column("conversations", "flow_id")' in downgrade_source
+
+
+def test_message_inbound_idempotency_migration():
+    migration_path = (
+        Path(__file__).resolve().parents[1]
+        / "alembic"
+        / "versions"
+        / "0010_message_inbound_idempotency.py"
+    )
+    migration_source = migration_path.read_text()
+    assert 'revision: str = "0010"' in migration_source
+    assert 'down_revision: str | None = "0009"' in migration_source
+    assert "idempotency_key" in migration_source
+    assert "messages_incoming_conversation_external_unique" in migration_source
+    assert "messages_incoming_conversation_idempotency_unique" in migration_source
+    assert "messages_business_external_message_id_unique" in migration_source
+    downgrade_source = migration_source.split("def downgrade")[1]
+    assert "op.drop_column" in downgrade_source and "idempotency_key" in downgrade_source
