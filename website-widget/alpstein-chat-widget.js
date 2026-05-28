@@ -93,13 +93,23 @@
 
   function createWidget() {
     var script = widgetScript;
-    if (!script) return;
+    if (!script) {
+      console.warn("[alpstein-widget] missing script; returning early");
+      return;
+    }
 
     var webhookUrl = script.getAttribute("data-webhook-url");
     var businessId = script.getAttribute("data-business-id");
     var title = script.getAttribute("data-title") || "Chat with us";
 
     if (!webhookUrl || !businessId) {
+      if (!webhookUrl) {
+        console.warn("[alpstein-widget] missing webhook URL");
+      }
+      if (!businessId) {
+        console.warn("[alpstein-widget] missing business_id");
+      }
+      console.warn("[alpstein-widget] initialization guard failed; returning early");
       console.error("Alpstein widget requires data-webhook-url and data-business-id.");
       return;
     }
@@ -109,6 +119,7 @@
     var inFlight = false;
 
     var root = document.createElement("div");
+    root.id = "alpstein-chat-widget";
     root.style.cssText =
       "position:fixed;bottom:20px;right:20px;width:340px;font-family:Arial,sans-serif;" +
       "z-index:99999;border:1px solid #d9d9d9;border-radius:10px;background:#fff;box-shadow:0 4px 16px rgba(0,0,0,0.15);";
