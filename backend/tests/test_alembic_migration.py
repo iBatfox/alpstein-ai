@@ -305,3 +305,23 @@ def test_flows_migration_is_flows_only():
 
     downgrade_source = migration_source.split("def downgrade")[1]
     assert 'op.drop_table("flows")' in downgrade_source
+
+
+def test_conversations_flow_id_migration_is_additive():
+    migration_path = (
+        Path(__file__).resolve().parents[1]
+        / "alembic"
+        / "versions"
+        / "0009_conversations_flow_id.py"
+    )
+    migration_source = migration_path.read_text()
+    assert 'revision: str = "0009"' in migration_source
+    assert 'down_revision: str | None = "0008"' in migration_source
+    assert 'op.add_column(\n        "conversations"' in migration_source or (
+        '"conversations"' in migration_source and "flow_id" in migration_source
+    )
+    assert "is_default = true" in migration_source
+    assert "conversations_flow_channel_external_idx" in migration_source
+    assert "conversations_flow_channel_customer_idx" in migration_source
+    downgrade_source = migration_source.split("def downgrade")[1]
+    assert 'op.drop_column("conversations", "flow_id")' in downgrade_source

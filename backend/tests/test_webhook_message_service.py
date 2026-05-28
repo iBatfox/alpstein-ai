@@ -111,6 +111,7 @@ def conversation(business: Business, customer: Customer) -> Conversation:
         id=uuid.uuid4(),
         tenant_id=business.tenant_id,
         business_id=business.id,
+        flow_id=uuid.uuid4(),
         customer_id=customer.id,
         channel="whatsapp",
         status="waiting_for_customer",
@@ -172,6 +173,11 @@ async def test_process_incoming_message_orchestrates_services(
     )
     customer_service.get_or_create_customer.assert_awaited_once()
     conversation_service.get_or_create_open_conversation.assert_awaited_once()
+    conv_kwargs = (
+        conversation_service.get_or_create_open_conversation.await_args.kwargs
+    )
+    assert conv_kwargs["flow_id"] == flow_service.resolve_for_webhook.return_value.id
+    assert conv_kwargs.get("external_conversation_id") is None
     message_service.save_incoming_customer_message.assert_awaited_once()
     assert result.is_duplicate is False
     assert result.lead_created is True

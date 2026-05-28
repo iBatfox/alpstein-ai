@@ -4,7 +4,9 @@
 
 # Next Steps
 
-## Recommended next task: **E2.2 `conversations.flow_id` + flow-scoped lookup** or **Live Telegram DM confirmation**
+## Recommended next task: **E2.3 message trace / `messages.flow_id`** or **Live Telegram DM confirmation**
+
+**E2.2 (done):** `conversations.flow_id` + flow-scoped lookup — Alembic `0009`, [`T-e2.2-conversation-flow-scoping.md`](../../tasks/in-progress/T-e2.2-conversation-flow-scoping.md).
 
 **E2.0 (done, design-only):** Unified conversation + observability — [`unified-conversation-observability.md`](../architecture/unified-conversation-observability.md) · [`T-e2.0-unified-conversation-observability-design.md`](../../tasks/done/T-e2.0-unified-conversation-observability-design.md) · verdict **PASS WITH NOTES**.
 

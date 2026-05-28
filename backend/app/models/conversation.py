@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -15,6 +15,20 @@ class Conversation(Base):
         Index("conversations_business_id_idx", "business_id"),
         Index("conversations_customer_id_idx", "customer_id"),
         Index("conversations_status_idx", "status"),
+        Index("conversations_flow_id_idx", "flow_id"),
+        Index(
+            "conversations_flow_channel_external_idx",
+            "flow_id",
+            "channel",
+            "external_conversation_id",
+            postgresql_where=text("external_conversation_id IS NOT NULL"),
+        ),
+        Index(
+            "conversations_flow_channel_customer_idx",
+            "flow_id",
+            "channel",
+            "customer_id",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -30,6 +44,11 @@ class Conversation(Base):
     business_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("businesses.id"),
+        nullable=False,
+    )
+    flow_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("flows.id"),
         nullable=False,
     )
     customer_id: Mapped[uuid.UUID] = mapped_column(
@@ -66,6 +85,7 @@ class Conversation(Base):
 
     tenant: Mapped["Tenant"] = relationship(back_populates="conversations")
     business: Mapped["Business"] = relationship(back_populates="conversations")
+    flow: Mapped["Flow"] = relationship(back_populates="conversations")
     customer: Mapped["Customer"] = relationship(back_populates="conversations")
     messages: Mapped[list["Message"]] = relationship(back_populates="conversation")
     prompt_runs: Mapped[list["PromptRun"]] = relationship(back_populates="conversation")

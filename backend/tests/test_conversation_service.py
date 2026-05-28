@@ -70,21 +70,22 @@ def conversation_service() -> ConversationService:
 
 
 @pytest.fixture
-def tenant_scope() -> tuple[uuid.UUID, uuid.UUID, uuid.UUID]:
-    return uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+def tenant_scope() -> tuple[uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID]:
+    return uuid.uuid4(), uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
 
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("status", list(REUSABLE_CONVERSATION_STATUSES))
 async def test_get_or_create_open_conversation_reuses_reusable_statuses(
     conversation_service: ConversationService,
-    tenant_scope: tuple[uuid.UUID, uuid.UUID, uuid.UUID],
+    tenant_scope: tuple[uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID],
     status: str,
 ):
-    tenant_id, business_id, customer_id = tenant_scope
+    tenant_id, business_id, customer_id, flow_id = tenant_scope
     existing = Conversation(
         tenant_id=tenant_id,
         business_id=business_id,
+        flow_id=flow_id,
         customer_id=customer_id,
         channel="whatsapp",
         status=status,
@@ -96,6 +97,7 @@ async def test_get_or_create_open_conversation_reuses_reusable_statuses(
         session,
         tenant_id=tenant_id,
         business_id=business_id,
+        flow_id=flow_id,
         customer_id=customer_id,
         channel="whatsapp",
     )
@@ -106,6 +108,7 @@ async def test_get_or_create_open_conversation_reuses_reusable_statuses(
     filters = _select_filters(statement)
     assert filters["tenant_id"] == tenant_id
     assert filters["business_id"] == business_id
+    assert filters["flow_id"] == flow_id
     assert filters["customer_id"] == customer_id
     assert filters["channel"] == "whatsapp"
     assert _status_filter_values(statement) == set(REUSABLE_CONVERSATION_STATUSES)
@@ -114,9 +117,9 @@ async def test_get_or_create_open_conversation_reuses_reusable_statuses(
 @pytest.mark.anyio
 async def test_get_or_create_open_conversation_created_when_missing(
     conversation_service: ConversationService,
-    tenant_scope: tuple[uuid.UUID, uuid.UUID, uuid.UUID],
+    tenant_scope: tuple[uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID],
 ):
-    tenant_id, business_id, customer_id = tenant_scope
+    tenant_id, business_id, customer_id, flow_id = tenant_scope
     session = MagicMock()
     session.execute = AsyncMock(return_value=_none_result())
     session.flush = AsyncMock()
@@ -125,6 +128,7 @@ async def test_get_or_create_open_conversation_created_when_missing(
         session,
         tenant_id=tenant_id,
         business_id=business_id,
+        flow_id=flow_id,
         customer_id=customer_id,
         channel="telegram",
     )
@@ -134,6 +138,7 @@ async def test_get_or_create_open_conversation_created_when_missing(
     created = session.add.call_args.args[0]
     assert created.tenant_id == tenant_id
     assert created.business_id == business_id
+    assert created.flow_id == flow_id
     assert created.customer_id == customer_id
     assert created.channel == "telegram"
     assert created.status == NEW_CONVERSATION_STATUS
@@ -144,10 +149,10 @@ async def test_get_or_create_open_conversation_created_when_missing(
 @pytest.mark.parametrize("status", ["closed", "archived"])
 async def test_get_or_create_open_conversation_does_not_reuse_non_reusable_status(
     conversation_service: ConversationService,
-    tenant_scope: tuple[uuid.UUID, uuid.UUID, uuid.UUID],
+    tenant_scope: tuple[uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID],
     status: str,
 ):
-    tenant_id, business_id, customer_id = tenant_scope
+    tenant_id, business_id, customer_id, flow_id = tenant_scope
     session = MagicMock()
     session.execute = AsyncMock(return_value=_none_result())
     session.flush = AsyncMock()
@@ -156,6 +161,7 @@ async def test_get_or_create_open_conversation_does_not_reuse_non_reusable_statu
         session,
         tenant_id=tenant_id,
         business_id=business_id,
+        flow_id=flow_id,
         customer_id=customer_id,
         channel="whatsapp",
     )
@@ -169,12 +175,13 @@ async def test_get_or_create_open_conversation_does_not_reuse_non_reusable_statu
 @pytest.mark.anyio
 async def test_get_or_create_open_conversation_selects_latest_reusable_conversation(
     conversation_service: ConversationService,
-    tenant_scope: tuple[uuid.UUID, uuid.UUID, uuid.UUID],
+    tenant_scope: tuple[uuid.UUID, uuid.UUID, uuid.UUID, uuid.UUID],
 ):
-    tenant_id, business_id, customer_id = tenant_scope
+    tenant_id, business_id, customer_id, flow_id = tenant_scope
     latest = Conversation(
         tenant_id=tenant_id,
         business_id=business_id,
+        flow_id=flow_id,
         customer_id=customer_id,
         channel="whatsapp",
         status="waiting_for_customer",
@@ -188,6 +195,7 @@ async def test_get_or_create_open_conversation_selects_latest_reusable_conversat
         session,
         tenant_id=tenant_id,
         business_id=business_id,
+        flow_id=flow_id,
         customer_id=customer_id,
         channel="whatsapp",
     )

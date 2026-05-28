@@ -173,12 +173,14 @@ def test_conversation_model_matches_schema():
     assert isinstance(table.c.id.type, UUID)
     assert isinstance(table.c.tenant_id.type, UUID)
     assert isinstance(table.c.business_id.type, UUID)
+    assert isinstance(table.c.flow_id.type, UUID)
     assert isinstance(table.c.customer_id.type, UUID)
     assert isinstance(table.c.is_ai_active.type, Boolean)
     assert isinstance(table.c.last_message_at.type, DateTime)
     assert "metadata" not in table.c
     assert table.c.tenant_id.nullable is False
     assert table.c.business_id.nullable is False
+    assert table.c.flow_id.nullable is False
     assert table.c.customer_id.nullable is False
     assert table.c.channel.nullable is False
     assert table.c.status.nullable is False
@@ -191,6 +193,9 @@ def test_conversation_model_matches_schema():
         "conversations_business_id_idx",
         "conversations_customer_id_idx",
         "conversations_status_idx",
+        "conversations_flow_id_idx",
+        "conversations_flow_channel_external_idx",
+        "conversations_flow_channel_customer_idx",
     }.issubset({index.name for index in table.indexes})
     assert any(
         isinstance(constraint, ForeignKeyConstraint)
@@ -207,6 +212,12 @@ def test_conversation_model_matches_schema():
         isinstance(constraint, ForeignKeyConstraint)
         and [element.target_fullname for element in constraint.elements]
         == ["customers.id"]
+        for constraint in table.constraints
+    )
+    assert any(
+        isinstance(constraint, ForeignKeyConstraint)
+        and [element.target_fullname for element in constraint.elements]
+        == ["flows.id"]
         for constraint in table.constraints
     )
 

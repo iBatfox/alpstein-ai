@@ -15,7 +15,7 @@ Define the **canonical data model** for multi-channel conversation continuity un
 
 A **flow** is a configured business scenario (persona, rules, knowledge scope). A **channel** is transport (Telegram, Website Chat, WhatsApp). A **conversation** is one customer dialogue **inside exactly one flow**. A **message** is one inbound/outbound/system event **inside exactly one conversation**.
 
-This spec extends MVP tables (`conversations`, `messages`, `customers`) with **`flows`** and stricter scoping. **`flows` table shipped in E2.1** (Alembic `0008`); `conversations.flow_id` and flow-scoped lookup remain E2.2+.
+This spec extends MVP tables (`conversations`, `messages`, `customers`) with **`flows`** and stricter scoping. **`flows` table shipped in E2.1** (Alembic `0008`). **`conversations.flow_id` + flow-scoped lookup shipped in E2.2** (Alembic `0009`).
 
 ---
 
@@ -59,7 +59,9 @@ This spec extends MVP tables (`conversations`, `messages`, `customers`) with **`
 | `demo_barbershop_001` | `barbershop_default` | `aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa10` |
 | other businesses | `default` | `uuid5(NAMESPACE_URL, f"alpstein-ai:flow:default:{business_id}")` |
 
-**Webhook resolution (E2.1):** optional `flow_key` on normalized webhook; omitted/blank → row with `is_default=true` for business; unknown key → `404 FLOW_NOT_FOUND` (no silent fallback). Success response includes `data.flow: { id, flow_key }`. Conversation/message rows are **not** flow-scoped yet (E2.2+).
+**Webhook resolution (E2.1):** optional `flow_key` on normalized webhook; omitted/blank → row with `is_default=true` for business; unknown key → `404 FLOW_NOT_FOUND` (no silent fallback). Success response includes `data.flow: { id, flow_key }`.
+
+**Conversation scoping (E2.2):** `conversations.flow_id` required; lookup by `(flow_id, channel, external_conversation_id)` when external id present, else `(flow_id, channel, customer_id)` + reusable status; message writes validate `conversation.flow_id == resolved flow`.
 
 n8n may pass **`flow_key`** when ready; until E2.6, ingress may omit it and backend uses default flow per business.
 

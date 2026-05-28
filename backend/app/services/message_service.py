@@ -57,12 +57,14 @@ class MessageService:
         customer: object | None = None,
         external_message_id: str | None = None,
         raw_payload: dict[str, Any] | None = None,
+        flow_id: uuid.UUID | None = None,
     ) -> IncomingMessageSaveResult:
         validate_tenant_context(
             tenant_id=tenant_id,
             business=business,
             conversation=conversation,
             customer=customer,
+            flow_id=flow_id,
         )
 
         if external_message_id is not None and external_message_id != "":
@@ -106,12 +108,14 @@ class MessageService:
         channel: str | None = None,
         ai_metadata: dict[str, Any] | None = None,
         customer: object | None = None,
+        flow_id: uuid.UUID | None = None,
     ) -> Message:
         validate_tenant_context(
             tenant_id=tenant_id,
             business=business,
             conversation=conversation,
             customer=customer,
+            flow_id=flow_id,
         )
 
         resolved_channel = channel if channel is not None else conversation.channel

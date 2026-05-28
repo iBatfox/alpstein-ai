@@ -72,3 +72,4 @@ class Flow(Base):
 
     tenant: Mapped["Tenant"] = relationship(back_populates="flows")
     business: Mapped["Business"] = relationship(back_populates="flows")
+    conversations: Mapped[list["Conversation"]] = relationship(back_populates="flow")

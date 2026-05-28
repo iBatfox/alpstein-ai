@@ -156,8 +156,10 @@ class WebhookMessageService:
             session,
             tenant_id=tenant_id,
             business_id=business.id,
+            flow_id=flow.id,
             customer_id=customer.id,
             channel=channel,
+            external_conversation_id=request.message.external_conversation_id,
         )
 
         save_result = await self.message_service.save_incoming_customer_message(
@@ -170,6 +172,7 @@ class WebhookMessageService:
             channel=channel,
             external_message_id=request.message.external_message_id,
             raw_payload=request.message.raw_payload,
+            flow_id=flow.id,
         )
         observability = observability.with_session(
             conversation_id=conversation.id,
@@ -199,6 +202,7 @@ class WebhookMessageService:
                 message_timestamp=request.message.timestamp,
                 raw_payload=request.message.raw_payload,
                 observability=observability,
+                flow_id=flow.id,
             )
             return WebhookMessageProcessResult(
                 conversation=conversation,
@@ -238,6 +242,7 @@ class WebhookMessageService:
             message_timestamp=request.message.timestamp,
             raw_payload=request.message.raw_payload,
             observability=observability,
+            flow_id=flow.id,
         )
 
         notification_decision = self.notification_policy_service.decide(
@@ -355,6 +360,7 @@ class WebhookMessageService:
         message_timestamp: datetime | None = None,
         raw_payload: dict[str, Any] | None = None,
         observability: ObservabilityContext | None = None,
+        flow_id: uuid.UUID | None = None,
     ) -> _ReplyResolution:
         orchestration_outcome = await self.ai_reply_coordinator.execute_for_incoming_message(
             session,
@@ -402,6 +408,7 @@ class WebhookMessageService:
                 message_text=reply_text,
                 channel=channel,
                 ai_metadata=_ai_reply_metadata(ai_reply, used_fallback=False),
+                flow_id=flow_id,
             )
             return _ReplyResolution(
                 reply_to_customer=reply_text,
@@ -430,6 +437,7 @@ class WebhookMessageService:
                 message_text=fallback_decision.fallback_text,
                 channel=channel,
                 ai_metadata=_ai_reply_metadata(ai_reply, used_fallback=True),
+                flow_id=flow_id,
             )
             return _ReplyResolution(
                 reply_to_customer=fallback_decision.fallback_text,
