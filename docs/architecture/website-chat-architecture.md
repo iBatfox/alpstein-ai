@@ -10,7 +10,8 @@ Website Chat is the **first planned channel expansion** after E0. It must:
 - keep **AI orchestration, lead logic, and persistence** in the Python backend only;
 - treat n8n as the integration/normalize/delivery layer (not a second AI system).
 
-**Status:** architecture / spec only (E1.3). **No widget, backend, n8n, or DB changes** in this document.
+**Status:** architecture baseline (E1.3) with MVP runtime assets defined in E1.6.  
+Runtime implementation assets: widget script + n8n workflow + ops runbook; backend orchestration unchanged.
 
 **Canonical contracts (locked):**
 
@@ -19,6 +20,7 @@ Website Chat is the **first planned channel expansion** after E0. It must:
 - [`channel-mapping-telegram-website.md`](channel-mapping-telegram-website.md) (E1.1)
 - [`multi-channel-identity-strategy.md`](multi-channel-identity-strategy.md) (E1.4)
 - [`channel-capability-matrix.md`](channel-capability-matrix.md) (E1.5)
+- [`../ops/n8n-workflow-website-chat-mvp.md`](../ops/n8n-workflow-website-chat-mvp.md) (E1.6 runtime runbook)
 - [`specs/api/webhooks.md`](../../specs/api/webhooks.md) §7
 - [`specs/flows/incoming-message-flow.md`](../../specs/flows/incoming-message-flow.md)
 

@@ -57,7 +57,7 @@ Telegram is the reference baseline. Website Chat is the first planned expansion.
 
 | Dimension | Telegram | Website Chat |
 |-----------|----------|--------------|
-| **MVP support level** | `implemented` (reference ingress baseline E0) | `planned` (E1.3 architecture; runtime not started) |
+| **MVP support level** | `implemented` (reference ingress baseline E0) | `implemented` (E1.6 runtime slice; operator activation/smoke validation required) |
 | **Identity strength** | Strong in-channel (`from.id`) | Medium/weak pseudonymous (`visitor_id`) |
 | **Conversation model** | Provider chat thread (`chat.id`) | Session thread (`session_id`) |
 | **Message ID quality** | Strong provider `message_id` | Variable; widget-generated `message_id` |
@@ -73,8 +73,8 @@ Telegram is the reference baseline. Website Chat is the first planned expansion.
 | **Rate limits** | Provider limits + workflow limits | Widget throttle + edge/n8n rate limiting needed |
 | **Anti-spam risk** | Bot abuse/noise, non-text updates | Higher risk: anonymous traffic, browser abuse |
 | **Moderation constraints** | Provider policy + platform terms | Website policy + local abuse controls; no external platform shield |
-| **Observability support** | Mature baseline from E0 + E1/E2 contracts | Planned with `web:` IDs and attribution metadata |
-| **Owner notification compatibility** | Implemented via `notify_owner` flow | Planned via same `notify_owner` contract |
+| **Observability support** | Mature baseline from E0 + E1/E2 contracts | Implemented via same correlation + metadata model in E1.6 workflow |
+| **Owner notification compatibility** | Implemented via `notify_owner` flow | Implemented via same `notify_owner` contract branch |
 | **CRM linkage readiness** | Prepared only; no merge | Prepared only; no CRM dependency |
 | **Cross-channel identity merge** | Not implemented | Not implemented |
 | **Primary operational risks** | Chat-id mismatch, provider send errors | Visitor churn, weak ids, spam/rate pressure, timeout UX |

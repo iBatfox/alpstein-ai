@@ -1,0 +1,369 @@
+{
+  "name": "alpstein-incoming-message-website-chat",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "alpstein/website-chat/incoming",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "e1600000-0000-4000-8000-000000000001",
+      "name": "Website Chat Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        320
+      ],
+      "webhookId": "alpstein-website-chat-ingress"
+    },
+    {
+      "parameters": {
+        "jsCode": "const crypto = require('crypto');\n\nconst item = $input.first().json;\nconst body = item.body ?? item;\nconst headers = item.headers ?? {};\n\nfunction pickHeader(name) {\n  const direct = headers[name];\n  if (typeof direct === 'string' && direct.trim() !== '') return direct.trim();\n  const lower = headers[name.toLowerCase()];\n  if (typeof lower === 'string' && lower.trim() !== '') return lower.trim();\n  return null;\n}\n\nfunction normalizeOptionalString(value) {\n  if (typeof value !== 'string') {\n    return null;\n  }\n  const trimmed = value.trim();\n  return trimmed === '' ? null : trimmed;\n}\n\nfunction sanitizeRawPayload(value) {\n  if (value == null || typeof value !== 'object') {\n    return {};\n  }\n  const secretPattern = /^(token|secret|password|authorization|api[_-]?key)$/i;\n  if (Array.isArray(value)) {\n    return value.map((entry) =>\n      typeof entry === 'object' && entry !== null ? sanitizeRawPayload(entry) : entry\n    );\n  }\n  const out = {};\n  for (const [key, val] of Object.entries(value)) {\n    if (secretPattern.test(key)) {\n      out[key] = '[REDACTED]';\n    } else if (typeof val === 'object' && val !== null) {\n      out[key] = sanitizeRawPayload(val);\n    } else {\n      out[key] = val;\n    }\n  }\n  return out;\n}\n\nconst uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;\n\nfunction resolveCorrelationId() {\n  const candidate =\n    normalizeOptionalString(body.correlation_id) ||\n    normalizeOptionalString(pickHeader('X-Correlation-Id'));\n  if (candidate && uuidPattern.test(candidate)) {\n    return candidate;\n  }\n  return crypto.randomUUID();\n}\n\nconst businessId =\n  normalizeOptionalString(body.business_id) ||\n  (typeof $env !== 'undefined' && $env.ALPSTEIN_WEBSITE_CHAT_BUSINESS_ID\n    ? $env.ALPSTEIN_WEBSITE_CHAT_BUSINESS_ID\n    : null);\n\nif (!businessId) {\n  throw new Error('Validation: business_id is required');\n}\n\nconst text = normalizeOptionalString(body.text);\nif (!text) {\n  throw new Error('Validation: text is required');\n}\n\nconst visitorId = normalizeOptionalString(body.visitor_id);\nif (!visitorId) {\n  throw new Error('Validation: visitor_id is required');\n}\n\nconst sessionId = normalizeOptionalString(body.session_id);\nif (!sessionId) {\n  throw new Error('Validation: session_id is required');\n}\n\nlet messageId = normalizeOptionalString(body.message_id);\nif (!messageId) {\n  const fallbackSeed = `${sessionId}|${text}|${normalizeOptionalString(body.timestamp) || new Date().toISOString()}`;\n  messageId = `generated-${crypto.createHash('sha256').update(fallbackSeed).digest('hex').slice(0, 24)}`;\n}\n\nconst correlationId = resolveCorrelationId();\n\nconst isoTimestamp = normalizeOptionalString(body.timestamp) || new Date().toISOString();\n\nconst source = {\n  platform: 'web_widget_v1',\n  account_id: normalizeOptionalString(body.website_id),\n  account_name: normalizeOptionalString(body.website_name),\n  locale: normalizeOptionalString(body.language),\n  country: normalizeOptionalString(body.country),\n  region: normalizeOptionalString(body.region),\n  timezone: normalizeOptionalString(body.timezone)\n};\n\nconst attribution = {\n  marketing_source: normalizeOptionalString(body.marketing_source),\n  campaign_id: normalizeOptionalString(body.campaign_id),\n  landing_page_url: normalizeOptionalString(body.page_url),\n  referrer_url: normalizeOptionalString(body.referrer),\n  utm_source: normalizeOptionalString(body.utm_source),\n  utm_medium: normalizeOptionalString(body.utm_medium),\n  utm_campaign: normalizeOptionalString(body.utm_campaign),\n  utm_content: normalizeOptionalString(body.utm_content),\n  utm_term: normalizeOptionalString(body.utm_term)\n};\n\nconst userAgentHeader = pickHeader('User-Agent');\nconst userAgentBody = normalizeOptionalString(body.user_agent);\nconst ip = pickHeader('x-forwarded-for') || pickHeader('x-real-ip');\n\nconst messageClient = {\n  user_agent: userAgentBody || userAgentHeader,\n  ip_address_hash: ip\n    ? crypto.createHash('sha256').update(String(ip)).digest('hex')\n    : null\n};\n\nconst rawPayload = sanitizeRawPayload({\n  website_payload: body,\n  website_headers: {\n    host: pickHeader('host'),\n    origin: pickHeader('origin'),\n    referer: pickHeader('referer')\n  }\n});\n\nreturn [\n  {\n    json: {\n      correlation_id: correlationId,\n      business_id: businessId,\n      channel: 'website_chat',\n      source,\n      attribution,\n      customer: {\n        phone: normalizeOptionalString(body.phone),\n        name: normalizeOptionalString(body.name),\n        email: normalizeOptionalString(body.email),\n        external_customer_id: visitorId\n      },\n      message: {\n        text,\n        external_message_id: `web:${sessionId}:${messageId}`,\n        external_conversation_id: `web:${sessionId}`,\n        timestamp: isoTimestamp,\n        client: messageClient,\n        raw_payload: rawPayload\n      },\n      website_chat_context: {\n        visitor_id: visitorId,\n        session_id: sessionId,\n        message_id: messageId\n      }\n    }\n  }\n];"
+      },
+      "id": "e1600000-0000-4000-8000-000000000002",
+      "name": "Normalize Website Chat Incoming",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        280,
+        320
+      ],
+      "notesInFlow": true,
+      "notes": "E1.6: Maps website widget payload to canonical POST /api/v1/webhook/message transport contract."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_BASE_URL }}/api/v1/webhook/message",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Alpstein-Webhook-Token",
+              "value": "={{ $env.N8N_BACKEND_API_TOKEN }}"
+            },
+            {
+              "name": "X-Correlation-Id",
+              "value": "={{ $json.correlation_id }}"
+            },
+            {
+              "name": "X-N8n-Execution-Id",
+              "value": "={{ $execution.id }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { correlation_id: $json.correlation_id, business_id: $json.business_id, channel: $json.channel, source: $json.source, attribution: $json.attribution, customer: $json.customer, message: $json.message } }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "e1600000-0000-4000-8000-000000000003",
+      "name": "POST Backend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        560,
+        320
+      ],
+      "onError": "continueErrorOutput",
+      "notesInFlow": true,
+      "notes": "E1.6: Reuses existing webhook endpoint, token auth, and observability headers."
+    },
+    {
+      "parameters": {
+        "jsCode": "const backend = $input.first().json;\nconst normalized = $('Normalize Website Chat Incoming').first().json;\nconst ctx = normalized.website_chat_context;\n\nif (backend.success !== true || !backend.data) {\n  return [\n    {\n      json: {\n        success: false,\n        correlation_id: normalized.correlation_id,\n        session_id: ctx.session_id,\n        visitor_id: ctx.visitor_id,\n        error: {\n          code: backend.error?.code || 'BACKEND_RESPONSE_FAILED',\n          message: backend.error?.message || 'Backend request was not successful'\n        }\n      }\n    }\n  ];\n}\n\nreturn [\n  {\n    json: {\n      success: true,\n      correlation_id: normalized.correlation_id,\n      session_id: ctx.session_id,\n      visitor_id: ctx.visitor_id,\n      message: {\n        id: `ai:${Date.now()}`,\n        text: (backend.data.reply_to_customer || '').trim() || 'Thank you for your message.',\n        is_duplicate: backend.data.message?.is_duplicate === true\n      }\n    }\n  }\n];"
+      },
+      "id": "e1600000-0000-4000-8000-000000000004",
+      "name": "Shape Website Customer Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        840,
+        220
+      ],
+      "notesInFlow": true,
+      "notes": "E1.6: Returns widget-safe response envelope (text only)."
+    },
+    {
+      "parameters": {
+        "jsCode": "const normalized = $('Normalize Website Chat Incoming').first().json;\nconst ctx = normalized.website_chat_context;\n\nreturn [\n  {\n    json: {\n      success: false,\n      correlation_id: normalized.correlation_id,\n      session_id: ctx.session_id,\n      visitor_id: ctx.visitor_id,\n      error: {\n        code: 'N8N_BACKEND_REQUEST_FAILED',\n        message: 'Service is temporarily unavailable. Please retry.'\n      }\n    }\n  }\n];"
+      },
+      "id": "e1600000-0000-4000-8000-000000000005",
+      "name": "Format Website Backend Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        840,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "e1600000-0000-4000-8000-000000000006",
+      "name": "Respond Website Reply",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1120,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": 502
+        }
+      },
+      "id": "e1600000-0000-4000-8000-000000000007",
+      "name": "Respond Website Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1120,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-notify-owner",
+              "leftValue": "={{ $('POST Backend').first().json.data.notify_owner }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "cond-notification-exists",
+              "leftValue": "={{ $('POST Backend').first().json.data.notification }}",
+              "rightValue": "",
+              "operator": {
+                "type": "object",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "cond-not-duplicate",
+              "leftValue": "={{ $('POST Backend').first().json.data.message.is_duplicate }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e1600000-0000-4000-8000-000000000008",
+      "name": "IF Notify Owner",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        840,
+        620
+      ],
+      "notesInFlow": true,
+      "notes": "E1.6: Reuses owner notification behavior from existing Telegram/test path."
+    },
+    {
+      "parameters": {
+        "jsCode": "const backend = $('POST Backend').first().json;\nconst data = backend.data || {};\nconst notification = data.notification || {};\nconst normalized = $('Normalize Website Chat Incoming').first().json;\n\nconst customerText = normalized?.message?.text?.trim() || null;\nconst customerName = normalized?.customer?.name || null;\nconst pageUrl = normalized?.attribution?.landing_page_url || null;\nconst utmSource = normalized?.attribution?.utm_source || null;\nconst leadStatus = data.lead?.status || null;\nconst leadPriority = data.lead?.priority || null;\n\nconst type = notification.notification_type || 'system_error';\nconst reason = notification.reason || 'unknown';\nconst priority = notification.priority || 'normal';\n\nconst lines = [\n  `[Alpstein][Website Chat] ${type}`,\n  `Priority: ${priority}`,\n  `Reason: ${reason}`\n];\n\nif (customerName) lines.push(`Customer: ${customerName}`);\nif (customerText) lines.push(`Message: ${customerText.slice(0, 280)}`);\nif (pageUrl) lines.push(`Page: ${pageUrl}`);\nif (utmSource) lines.push(`UTM source: ${utmSource}`);\nif (leadStatus) {\n  const lp = leadPriority ? ` (${leadPriority})` : '';\n  lines.push(`Lead: ${leadStatus}${lp}`);\n}\n\nreturn [\n  {\n    json: {\n      telegram_text: lines.join('\\n')\n    }\n  }\n];"
+      },
+      "id": "e1600000-0000-4000-8000-000000000009",
+      "name": "Shape Owner Notification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "={{ $json.telegram_text }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "e1600000-0000-4000-8000-000000000010",
+      "name": "Telegram Owner Notify",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1360,
+        620
+      ],
+      "continueOnFail": true,
+      "credentials": {
+        "telegramApi": {
+          "name": "AlpsteinAIbot"
+        }
+      },
+      "notesInFlow": true,
+      "notes": "Owner bot path remains unchanged from existing notification behavior."
+    },
+    {
+      "parameters": {
+        "content": "E1.6 Website Chat MVP\\n\\nWebhook -> Normalize -> POST Backend -> Shape -> Respond\\n\\nNo new backend endpoints. Text-only. Same orchestration path as Telegram.",
+        "height": 220,
+        "width": 420,
+        "color": 4
+      },
+      "id": "e1600000-0000-4000-8000-000000000011",
+      "name": "Sticky Note E1.6",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        40,
+        40
+      ]
+    }
+  ],
+  "connections": {
+    "Website Chat Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize Website Chat Incoming",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Website Chat Incoming": {
+      "main": [
+        [
+          {
+            "node": "POST Backend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST Backend": {
+      "main": [
+        [
+          {
+            "node": "Shape Website Customer Reply",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "IF Notify Owner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ],
+      "error": [
+        [
+          {
+            "node": "Format Website Backend Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shape Website Customer Reply": {
+      "main": [
+        [
+          {
+            "node": "Respond Website Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Website Backend Error": {
+      "main": [
+        [
+          {
+            "node": "Respond Website Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Notify Owner": {
+      "main": [
+        [
+          {
+            "node": "Shape Owner Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shape Owner Notification": {
+      "main": [
+        [
+          {
+            "node": "Telegram Owner Notify",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "e1.6-website-chat-mvp-v1",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": [
+    {
+      "name": "alpstein",
+      "createdAt": "2026-05-28T00:00:00.000Z",
+      "updatedAt": "2026-05-28T00:00:00.000Z",
+      "id": "alpstein-tag"
+    },
+    {
+      "name": "e1.6",
+      "createdAt": "2026-05-28T00:00:00.000Z",
+      "updatedAt": "2026-05-28T00:00:00.000Z",
+      "id": "e16-tag"
+    }
+  ]
+}

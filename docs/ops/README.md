@@ -35,6 +35,7 @@ Runbooks describe **how to operate** the runtime described in [`../architecture/
 | [`n8n-env-credential-checklist.md`](n8n-env-credential-checklist.md) | **canonical** (ops) | Env vars and credentials |
 | [`n8n-workflow1-test-webhook.md`](n8n-workflow1-test-webhook.md) | runtime-derived | Test webhook workflow |
 | [`n8n-workflow-telegram-customer-ingress.md`](n8n-workflow-telegram-customer-ingress.md) | runtime-derived | Telegram ingress workflow |
+| [`n8n-workflow-website-chat-mvp.md`](n8n-workflow-website-chat-mvp.md) | runtime-derived | Website Chat MVP ingress workflow |
 | [`telegram-customer-ingress.md`](telegram-customer-ingress.md) | runtime-derived | Normalize mapping (duplicate cluster) |
 | [`database-recovery.md`](database-recovery.md) | runtime-derived | DB recovery |
 
