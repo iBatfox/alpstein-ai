@@ -4,7 +4,9 @@
 
 # Next Steps
 
-## Recommended next task: **E2.8 ops gate** / **n8n delivery PATCH operator import** / **optional n8n `retrying` workflow branch**
+## Recommended next task: **E2.8 ops gate** / **n8n delivery PATCH operator import**
+
+**E3.3 (done):** Adapter monitoring — [`e3-3-adapter-monitoring.md`](../audits/e3-3-adapter-monitoring.md) · tasks `T-e3.3a`–`T-e3.3c` in `tasks/done/` · deploy: backend restart only (no migration)
 
 **E3.2 (done):** Retry/dead-letter — [`e3-2-retry-dead-letter.md`](../audits/e3-2-retry-dead-letter.md) · tasks `T-e3.2a`–`T-e3.2c` in `tasks/done/`
 

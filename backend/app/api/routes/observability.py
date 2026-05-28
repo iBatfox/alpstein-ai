@@ -40,6 +40,13 @@ from app.schemas.retry_attempt import (
     RetryAttemptListSuccessEnvelope,
 )
 from app.schemas.retry_attempt_mapper import retry_attempt_to_response
+from app.schemas.adapter_health import (
+    AdapterHealthListResponse,
+    AdapterHealthListSuccessEnvelope,
+    AdapterHealthSuccessEnvelope,
+)
+from app.schemas.adapter_health_mapper import adapter_health_to_response
+from app.services.adapter_monitoring_service import AdapterMonitoringService
 from app.services.dead_letter_service import DeadLetterService
 from app.services.replay_event_service import ReplayEventService
 from app.services.retry_lifecycle_service import RetryLifecycleService
@@ -50,6 +57,7 @@ delivery_visibility_service = DeliveryVisibilityService()
 replay_event_service = ReplayEventService()
 retry_lifecycle_service = RetryLifecycleService()
 dead_letter_service = DeadLetterService()
+adapter_monitoring_service = AdapterMonitoringService()
 
 
 def _parse_uuid(value: str, *, field_name: str) -> uuid.UUID:
@@ -498,4 +506,67 @@ async def list_dead_letter_events(
             limit=limit,
             offset=offset,
         ),
+    ).model_dump(mode="json")
+
+
+@router.get(
+    "/adapters",
+    dependencies=[Depends(require_webhook_token)],
+)
+async def list_adapter_health(
+    tenant_id: str = Query(..., min_length=1),
+    business_id: str = Query(..., min_length=1),
+    window_hours: int | None = Query(default=None, ge=1, le=168),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    try:
+        parsed_tenant_id = _parse_uuid(tenant_id, field_name="tenant_id")
+        parsed_business_id = _parse_uuid(business_id, field_name="business_id")
+    except ValueError as exc:
+        return _validation_error(str(exc))
+
+    hours, snapshots = await adapter_monitoring_service.list_adapters(
+        session,
+        tenant_id=parsed_tenant_id,
+        business_id=parsed_business_id,
+        window_hours=window_hours,
+    )
+
+    return AdapterHealthListSuccessEnvelope(
+        data=AdapterHealthListResponse(
+            window_hours=hours,
+            items=[adapter_health_to_response(item) for item in snapshots],
+        ),
+    ).model_dump(mode="json")
+
+
+@router.get(
+    "/adapters/{adapter}",
+    dependencies=[Depends(require_webhook_token)],
+)
+async def get_adapter_health(
+    adapter: str,
+    tenant_id: str = Query(..., min_length=1),
+    business_id: str = Query(..., min_length=1),
+    window_hours: int | None = Query(default=None, ge=1, le=168),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    try:
+        parsed_tenant_id = _parse_uuid(tenant_id, field_name="tenant_id")
+        parsed_business_id = _parse_uuid(business_id, field_name="business_id")
+    except ValueError as exc:
+        return _validation_error(str(exc))
+
+    snapshot = await adapter_monitoring_service.get_adapter(
+        session,
+        tenant_id=parsed_tenant_id,
+        business_id=parsed_business_id,
+        adapter=adapter,
+        window_hours=window_hours,
+    )
+    if snapshot is None:
+        return _not_found("Adapter not found")
+
+    return AdapterHealthSuccessEnvelope(
+        data=adapter_health_to_response(snapshot),
     ).model_dump(mode="json")

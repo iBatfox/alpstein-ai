@@ -284,6 +284,63 @@ Optional: `trace_id`, `delivery_id`, `conversation_id`, `inbound_message_id`, `e
 
 **Delivery PATCH (E3.2):** Repeated `failed` PATCH increments `retry_count` even when n8n never sends `retrying`. At `ALPSTEIN_DELIVERY_MAX_RETRIES` (default 3), delivery status becomes `dead_letter`. Terminal `error_type` values (e.g. `chat_not_found`) may dead-letter on first failure.
 
+## GET /api/v1/observability/adapters
+
+**E3.3b** — Adapter-level operational health for MVP channels (`telegram`, `website_chat`).
+
+Auth: same webhook/internal token as other observability routes.
+
+Required query: `tenant_id`, `business_id`.
+
+Optional: `window_hours` (1–168, default from `ALPSTEIN_AI_ADAPTER_MONITOR_WINDOW_HOURS`, default 24).
+
+Response `data`:
+
+```json
+{
+  "window_hours": 24,
+  "items": [
+    {
+      "adapter": "telegram",
+      "status": "healthy",
+      "status_reasons": [],
+      "recent_messages": 42,
+      "delivery_success_count": 40,
+      "delivery_failure_count": 1,
+      "delivery_pending_count": 1,
+      "retry_count": 2,
+      "dead_letter_count": 0,
+      "delivery_failure_rate": 0.024,
+      "last_activity_at": "2026-05-28T14:00:00Z"
+    }
+  ]
+}
+```
+
+`status`: `healthy` | `warning` | `degraded` | `inactive` (E3.3c, deterministic from backend metrics).
+
+No prompts, message text, secrets, tokens, or raw provider payloads.
+
+## GET /api/v1/observability/adapters/{adapter}
+
+**E3.3b** — Single adapter detail. Path `adapter` must be `telegram` or `website_chat`; unknown adapter → `404 NOT_FOUND`.
+
+Same query params as list. Response `data` includes `evaluated_at` and optional:
+
+```json
+{
+  "breakdown": {
+    "delivery_by_status": {
+      "pending": 1,
+      "delivered": 40,
+      "failed": 1
+    }
+  }
+}
+```
+
+Metrics are derived at read time from `message_traces`, `delivery_events`, `retry_attempts`, and `dead_letter_events` within the lookback window.
+
 ---
 
 # 8. Incoming Message Endpoint

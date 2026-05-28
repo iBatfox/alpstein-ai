@@ -94,6 +94,8 @@ def check_observability_routes(report: Report) -> None:
         ("/api/v1/observability/replays", "replay audit list (E3.1c)"),
         ("/api/v1/observability/retries", "retry lifecycle list (E3.2c)"),
         ("/api/v1/observability/dead-letter", "dead-letter list (E3.2c)"),
+        ("/api/v1/observability/adapters", "adapter health list (E3.3b)"),
+        ("/api/v1/observability/adapters/{adapter}", "adapter health detail (E3.3b)"),
     ]
     missing: list[str] = []
     for path, label in required:

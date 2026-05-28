@@ -38,6 +38,34 @@ class Settings(BaseSettings):
         default="chat_not_found,invalid_chat_id",
         validation_alias="DELIVERY_TERMINAL_ERROR_TYPES",
     )
+    adapter_monitor_window_hours: int = Field(
+        default=24,
+        validation_alias="ADAPTER_MONITOR_WINDOW_HOURS",
+    )
+    adapter_monitor_min_sample: int = Field(
+        default=5,
+        validation_alias="ADAPTER_MONITOR_MIN_SAMPLE",
+    )
+    adapter_monitor_degraded_failure_rate: float = Field(
+        default=0.50,
+        validation_alias="ADAPTER_MONITOR_DEGRADED_FAILURE_RATE",
+    )
+    adapter_monitor_warning_failure_rate: float = Field(
+        default=0.25,
+        validation_alias="ADAPTER_MONITOR_WARNING_FAILURE_RATE",
+    )
+    adapter_monitor_retry_warning: int = Field(
+        default=10,
+        validation_alias="ADAPTER_MONITOR_RETRY_WARNING",
+    )
+    adapter_monitor_pending_warning: int = Field(
+        default=5,
+        validation_alias="ADAPTER_MONITOR_PENDING_WARNING",
+    )
+    adapter_monitor_pending_stale_min: int = Field(
+        default=3,
+        validation_alias="ADAPTER_MONITOR_PENDING_STALE_MIN",
+    )
 
     model_config = SettingsConfigDict(
         env_prefix="ALPSTEIN_AI_",
