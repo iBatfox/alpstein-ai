@@ -162,11 +162,19 @@ Telegram E0 behavior is the reference baseline for required operational traceabi
 4. Which source metadata keys become first-class fields vs remain metadata.
 5. Minimum required fields for CRM/form channels vs messenger channels.
 
+## E1.1 Refinement Status
+
+E1.1 mapping refinement is complete (spec-only):
+
+- `docs/architecture/channel-mapping-telegram-website.md`
+- `tasks/done/T-e1.1-telegram-website-channel-mapping.md`
+
+No runtime implementation was introduced by E1.1.
+
 ## Next Recommended Task
 
-**E1.1 — Telegram + Website Chat adapter mapping spec refinement**
+**E1.2 — API/spec alignment for canonical normalized channel contract**
 
-- keep Telegram as reference
-- define Website Chat mapping to the same normalized contracts
-- lock required/optional field matrix per channel_type
-- no runtime implementation yet
+- align `specs/api/webhooks.md` field schema with E1 contracts
+- lock enum values and required/optional matrix in canonical specs
+- keep runtime unchanged
