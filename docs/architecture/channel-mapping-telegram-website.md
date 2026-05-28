@@ -220,4 +220,6 @@ Open questions:
 
 Full ingress/egress design (widget, n8n, sync MVP, reconnect, rate limits, E1.4–E1.6 phases): [`website-chat-architecture.md`](website-chat-architecture.md).
 
+Identity semantics for Telegram vs pseudonymous website visitors and non-merge policy: [`multi-channel-identity-strategy.md`](multi-channel-identity-strategy.md).
+
 Field mapping tables in §2 remain authoritative for normalize → `POST /api/v1/webhook/message`.

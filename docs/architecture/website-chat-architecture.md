@@ -17,6 +17,7 @@ Website Chat is the **first planned channel expansion** after E0. It must:
 - [`specs/architecture/normalized-channel-contract.md`](../../specs/architecture/normalized-channel-contract.md) (E1.2)
 - [`channel-ingress-contract.md`](channel-ingress-contract.md) (E1.0)
 - [`channel-mapping-telegram-website.md`](channel-mapping-telegram-website.md) (E1.1)
+- [`multi-channel-identity-strategy.md`](multi-channel-identity-strategy.md) (E1.4)
 - [`specs/api/webhooks.md`](../../specs/api/webhooks.md) §7
 - [`specs/flows/incoming-message-flow.md`](../../specs/flows/incoming-message-flow.md)
 

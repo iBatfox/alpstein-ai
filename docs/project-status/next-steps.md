@@ -4,14 +4,15 @@
 
 # Next Steps
 
-## Recommended next task: **E1.4 — Website Chat widget MVP** (implementation — after E1.3 review)
+## Recommended next task: **Website Chat widget MVP implementation** (after E1.4 identity-strategy review)
 
 Phase **E0** closed: [`e0-telegram-reference-channel-remediation-2026-05-28.md`](../audits/e0-telegram-reference-channel-remediation-2026-05-28.md) — **PASS WITH WARNINGS** · Telegram reference channel baseline established.
 
 **E1.0–E1.2 (spec-only):** ingress contract, Telegram/website mapping, canonical API alignment.  
-**E1.3 completed (spec-only):** [`website-chat-architecture.md`](../architecture/website-chat-architecture.md) · [`T-e1.3-website-chat-architecture.md`](../../tasks/done/T-e1.3-website-chat-architecture.md).
+**E1.3 completed (spec-only):** [`website-chat-architecture.md`](../architecture/website-chat-architecture.md) · [`T-e1.3-website-chat-architecture.md`](../../tasks/done/T-e1.3-website-chat-architecture.md).  
+**E1.4 completed (spec-only):** [`multi-channel-identity-strategy.md`](../architecture/multi-channel-identity-strategy.md) · [`T-e1.4-multi-channel-identity-strategy.md`](../../tasks/done/T-e1.4-multi-channel-identity-strategy.md).
 
-Implementation order: **E1.4** widget → **E1.5** n8n adapter → **E1.6** compose E2E (see architecture §16). Do **not** change Telegram runtime.
+Implementation order: widget MVP -> n8n adapter -> compose E2E (see `website-chat-architecture.md` §16). Do **not** change Telegram runtime.
 
 | Step | Status | Notes |
 |------|--------|-------|
@@ -84,12 +85,13 @@ Plan reference: [`tasks/todo/t14-telegram-customer-ingress.md`](../../tasks/todo
 | E1.1 Telegram/Website Chat mapping detail | **done (spec-only)** |
 | E1.2 API/spec field alignment | **done (spec-only)** |
 | E1.3 Website Chat architecture | **done (spec-only)** |
-| E1.4 Widget MVP | **next (after review)** |
-| E1.5 n8n website-chat adapter | planned |
-| E1.6 Website Chat E2E on compose | planned |
+| E1.4 Multi-channel identity strategy | **done (spec-only)** |
+| Website Chat widget MVP | **next (after review)** |
+| n8n website-chat adapter | planned |
+| Website Chat E2E on compose | planned |
 | Runtime channel integrations (WhatsApp/Instagram/etc.) | **deferred** |
 
-Reference: [`website-chat-architecture.md`](../architecture/website-chat-architecture.md), [`normalized-channel-contract.md`](../../specs/architecture/normalized-channel-contract.md), [`channel-ingress-contract.md`](../architecture/channel-ingress-contract.md), [`channel-mapping-telegram-website.md`](../architecture/channel-mapping-telegram-website.md), [`T-e1.0-channel-ingress-contract.md`](../../tasks/done/T-e1.0-channel-ingress-contract.md), [`T-e1.1-telegram-website-channel-mapping.md`](../../tasks/done/T-e1.1-telegram-website-channel-mapping.md), [`T-e1.2-api-spec-alignment-channel-contract.md`](../../tasks/done/T-e1.2-api-spec-alignment-channel-contract.md), [`T-e1.3-website-chat-architecture.md`](../../tasks/done/T-e1.3-website-chat-architecture.md).
+Reference: [`website-chat-architecture.md`](../architecture/website-chat-architecture.md), [`multi-channel-identity-strategy.md`](../architecture/multi-channel-identity-strategy.md), [`normalized-channel-contract.md`](../../specs/architecture/normalized-channel-contract.md), [`channel-ingress-contract.md`](../architecture/channel-ingress-contract.md), [`channel-mapping-telegram-website.md`](../architecture/channel-mapping-telegram-website.md), [`T-e1.0-channel-ingress-contract.md`](../../tasks/done/T-e1.0-channel-ingress-contract.md), [`T-e1.1-telegram-website-channel-mapping.md`](../../tasks/done/T-e1.1-telegram-website-channel-mapping.md), [`T-e1.2-api-spec-alignment-channel-contract.md`](../../tasks/done/T-e1.2-api-spec-alignment-channel-contract.md), [`T-e1.3-website-chat-architecture.md`](../../tasks/done/T-e1.3-website-chat-architecture.md), [`T-e1.4-multi-channel-identity-strategy.md`](../../tasks/done/T-e1.4-multi-channel-identity-strategy.md).
 
 ---
 

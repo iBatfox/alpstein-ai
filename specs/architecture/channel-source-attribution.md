@@ -6,7 +6,7 @@ This document defines how Alpstein AI records **where a customer message came fr
 
 **Status:** architecture / spec design (no implementation in this document)  
 **Date:** 2026-05-25  
-**Depends on:** [webhooks.md](../api/webhooks.md), [normalized-channel-contract.md](normalized-channel-contract.md) (E1.2), [database-schema.md](../database/database-schema.md), [prompt-builder-rules.md](prompt-builder-rules.md), [incoming-message-flow.md](../flows/incoming-message-flow.md)
+**Depends on:** [webhooks.md](../api/webhooks.md), [normalized-channel-contract.md](normalized-channel-contract.md) (E1.2), [../../docs/architecture/multi-channel-identity-strategy.md](../../docs/architecture/multi-channel-identity-strategy.md) (E1.4), [database-schema.md](../database/database-schema.md), [prompt-builder-rules.md](prompt-builder-rules.md), [incoming-message-flow.md](../flows/incoming-message-flow.md)
 
 **Out of scope here:** cross-channel identity resolution, DB migrations, n8n workflow redesign, Telegram workflow changes.
 

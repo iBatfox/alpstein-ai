@@ -178,3 +178,5 @@ No runtime implementation was introduced by E1.1.
 - [`tasks/done/T-e1.2-api-spec-alignment-channel-contract.md`](../../tasks/done/T-e1.2-api-spec-alignment-channel-contract.md)
 
 Runtime unchanged. **E1.3** Website Chat architecture: [`website-chat-architecture.md`](website-chat-architecture.md). Next implementation: E1.4 widget → E1.5 n8n → E1.6 E2E.
+
+Identity strategy baseline (E1.4): [`multi-channel-identity-strategy.md`](multi-channel-identity-strategy.md) (conservative cross-channel non-merge rules).
