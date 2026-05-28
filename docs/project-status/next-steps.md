@@ -4,7 +4,9 @@
 
 # Next Steps
 
-## Recommended next task: **E1.6.3 Website Chat runtime blocker fix + re-smoke**
+## Recommended next task: **Compose automation hardening** or **CIP-D live smoke**
+
+**RECOVERY-1** closed: [`recovery-runtime-source-of-truth-2026-05-28.md`](../audits/recovery-runtime-source-of-truth-2026-05-28.md) — portable SoT live; operator should avoid `docker-compose up --force-recreate` until `ContainerConfig` issue resolved; consider stopping unused `backend_postgres` after backup confirmation.
 
 Phase **E0** closed: [`e0-telegram-reference-channel-remediation-2026-05-28.md`](../audits/e0-telegram-reference-channel-remediation-2026-05-28.md) — **PASS WITH WARNINGS** · Telegram reference channel baseline established.
 
@@ -14,18 +16,20 @@ Phase **E0** closed: [`e0-telegram-reference-channel-remediation-2026-05-28.md`]
 **E1.5 completed (spec-only):** [`channel-capability-matrix.md`](../architecture/channel-capability-matrix.md) · [`T-e1.5-channel-capability-matrix.md`](../../tasks/done/T-e1.5-channel-capability-matrix.md).  
 **E1.6 implemented (runtime slice):** [`n8n-workflow-website-chat-mvp.md`](../ops/n8n-workflow-website-chat-mvp.md) · [`T-e1.6-website-chat-mvp-runtime.md`](../../tasks/done/T-e1.6-website-chat-mvp-runtime.md).
 
-Implementation follow-up: E1.6.2 live smoke is complete and **BLOCKED** (`VMError: Cannot find module 'crypto'` in Website Chat normalization Code node). Next slice must fix runtime compatibility and re-run smoke. Do **not** change Telegram runtime.
+Implementation follow-up: E1.6.3 runtime compatibility fix and E1.6.6 activation semantics verification are complete for Website Chat.
 
 | Step | Status | Notes |
 |------|--------|-------|
+| **RECOVERY-1** | **done (WARN)** | Postgres/backend/n8n SoT; webhook smokes 200 |
 | **T14.5 / T-e0** | **done (WARN)** | Exec **222**; prompt_run `e426d4bc-…` |
-| **E0 optional hardening** | planned | Real DM; `docker-compose up n8n`; Langfuse on compose backend |
+| **E0 optional hardening** | planned | Real DM; `docker-compose up n8n`; Langfuse on compose backend; fix compose recreate |
 | **CIP-D** | **planned** | Live intent metadata smoke |
 | **Phase E1.0** | **done (design)** | Normalized ingress contract documented; no runtime changes |
 | **Phase E1.1** | **done (design)** | Telegram + Website Chat mapping matrix documented |
 | **Phase E1.2** | **done (spec)** | Canonical API/spec field matrix locked; runtime unchanged |
-| **Phase E1.6.2** | **done (BLOCKED)** | Live smoke executed; workflow errors before backend POST |
-| **Phase E1.6.3** | **next** | Minimal runtime compatibility fix + re-smoke + evidence |
+| **Phase E1.6.2** | **done** | Live smoke + runtime evidence documented |
+| **Phase E1.6.3** | **done** | Runtime compatibility fix + re-smoke + evidence |
+| **Phase E1.6.6** | **done** | Explicit kill switch semantics (`ALPSTEIN_WEBSITE_CHAT_ENABLED`) verified on production URL |
 
 **Ingress policy (P0):** [`operational-ingress-policy.md`](../ops/operational-ingress-policy.md) — compose SoT; no stale `:8010` for validation.
 
@@ -92,7 +96,7 @@ Plan reference: [`tasks/todo/t14-telegram-customer-ingress.md`](../../tasks/todo
 | E1.4 Multi-channel identity strategy | **done (spec-only)** |
 | E1.5 Channel capability matrix | **done (spec-only)** |
 | E1.6 Website Chat MVP runtime slice | **implemented** |
-| E1.6 smoke verification and hardening | **E1.6.3 runtime blocker fixed; follow-up hardening continues** |
+| E1.6 smoke verification and hardening | **E1.6.3 blocker fixed + E1.6.6 kill switch semantics verified** |
 | Runtime channel integrations (WhatsApp/Instagram/etc.) | **deferred** |
 
 Reference: [`website-chat-architecture.md`](../architecture/website-chat-architecture.md), [`multi-channel-identity-strategy.md`](../architecture/multi-channel-identity-strategy.md), [`channel-capability-matrix.md`](../architecture/channel-capability-matrix.md), [`n8n-workflow-website-chat-mvp.md`](../ops/n8n-workflow-website-chat-mvp.md), [`normalized-channel-contract.md`](../../specs/architecture/normalized-channel-contract.md), [`channel-ingress-contract.md`](../architecture/channel-ingress-contract.md), [`channel-mapping-telegram-website.md`](../architecture/channel-mapping-telegram-website.md), [`T-e1.0-channel-ingress-contract.md`](../../tasks/done/T-e1.0-channel-ingress-contract.md), [`T-e1.1-telegram-website-channel-mapping.md`](../../tasks/done/T-e1.1-telegram-website-channel-mapping.md), [`T-e1.2-api-spec-alignment-channel-contract.md`](../../tasks/done/T-e1.2-api-spec-alignment-channel-contract.md), [`T-e1.3-website-chat-architecture.md`](../../tasks/done/T-e1.3-website-chat-architecture.md), [`T-e1.4-multi-channel-identity-strategy.md`](../../tasks/done/T-e1.4-multi-channel-identity-strategy.md), [`T-e1.5-channel-capability-matrix.md`](../../tasks/done/T-e1.5-channel-capability-matrix.md), [`T-e1.6-website-chat-mvp-runtime.md`](../../tasks/done/T-e1.6-website-chat-mvp-runtime.md).
