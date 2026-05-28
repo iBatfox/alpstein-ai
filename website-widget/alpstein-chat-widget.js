@@ -1,4 +1,10 @@
 (function () {
+  var widgetScript = document.currentScript;
+  if (!widgetScript) {
+    var scripts = document.getElementsByTagName("script");
+    widgetScript = scripts[scripts.length - 1];
+  }
+
   function createId(prefix) {
     if (window.crypto && typeof window.crypto.randomUUID === "function") {
       return prefix + window.crypto.randomUUID();
@@ -86,7 +92,7 @@
   }
 
   function createWidget() {
-    var script = document.currentScript;
+    var script = widgetScript;
     if (!script) return;
 
     var webhookUrl = script.getAttribute("data-webhook-url");
