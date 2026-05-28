@@ -10,7 +10,20 @@
 **Credentials:** [`telegram-channel-credentials.md`](../architecture/telegram-channel-credentials.md)  
 **Export parity:** [`n8n-runtime-export-parity.md`](n8n-runtime-export-parity.md) · Registry: [`n8n/workflows/runtime-registry.md`](../../n8n/workflows/runtime-registry.md)
 
-**Status:** T14.3 + **T14-OC-3** + **Alpstein AI greeting switch** in repo export — **repo `active: false`**. Runtime id after latest import: `2lMuaSWD1XFOXLEK` (deactivated post-test).
+**Status:** T14.3 + **T14-OC-3** + **Alpstein AI greeting switch** in repo export — **repo `active: false`**. Runtime id after latest import: `2lMuaSWD1XFOXLEK` (**deactivated** post E0 2026-05-28).
+
+### E0 continuation (2026-05-28) — portable stack
+
+| Check | Result |
+|-------|--------|
+| Audit | [`e0-telegram-regression-2026-05-28.md`](../audits/e0-telegram-regression-2026-05-28.md) — **PASS WITH WARNINGS** |
+| Portable n8n → backend | **PASS** — `alpstein_n8n_compose` `wget` `/health/ready` **200** |
+| Telegram-shaped POST from `alpstein_internal` | **PASS** — **200**, `success: true` (simulates POST Backend node) |
+| Portable n8n execution IDs | **None** — Telegram Trigger not registered on `WEBHOOK_URL=http://127.0.0.1:15680/` |
+| Prompt runs (portable backend) | `11b52702-addd-4cf3-9f02-e967082c21d8`, `96686c6c-2a59-4dda-a2cb-c80b6cce310e` |
+| Post-test activation | `2lMuaSWD1XFOXLEK` **deactivated**; legacy `alpstein_n8n` restored on **15679** |
+
+**Reference channel:** **Not signed off** — see [`T-e0-telegram-reference-channel-remediation.md`](../../tasks/todo/T-e0-telegram-reference-channel-remediation.md).
 
 ---
 

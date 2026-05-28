@@ -1,11 +1,28 @@
 # n8n runtime / export parity (Phase C — Step C1)
 
 **Doc status:** canonical (ops governance)  
-**As-of:** 2026-05-27  
-**Phase:** C1 — audit and policy only (no workflow redesign, no live cutover)  
+**As-of:** 2026-05-28 (E0 runtime truth)  
+**Phase:** C1 — audit and policy; E0 continuation adds runtime categories  
 **Prerequisites:** Phase B complete (B2.9 clean-clone gate passed)
 
-**Related:** [`n8n/workflows/README.md`](../../n8n/workflows/README.md), [`runtime-registry.md`](../../n8n/workflows/runtime-registry.md), [`deployment-contract.md`](../deployment/deployment-contract.md) §11 RDU/RBU, [`clean-clone-gate-2026-05-27.md`](../audits/clean-clone-gate-2026-05-27.md)
+**Related:** [`n8n/workflows/README.md`](../../n8n/workflows/README.md), [`runtime-registry.md`](../../n8n/workflows/runtime-registry.md), [`deployment-contract.md`](../deployment/deployment-contract.md) §11 RDU/RBU, [`clean-clone-gate-2026-05-27.md`](../audits/clean-clone-gate-2026-05-27.md), [`e0-telegram-regression-2026-05-28.md`](../audits/e0-telegram-regression-2026-05-28.md)
+
+---
+
+## 0. Runtime categories (E0 — 2026-05-28)
+
+| Category | Stack | Telegram ingress | Backend target |
+|----------|--------|------------------|----------------|
+| **Compose (verification SoT)** | `alpstein_postgres` + `alpstein_backend` + `alpstein_n8n_compose` on `alpstein_internal` | Target for E0/E1; Trigger smoke **open** | `http://backend:8000` |
+| **Legacy (Contabo live)** | `alpstein_n8n` @ `127.0.0.1:15679`, project `alpstein-n8n` | **Production path today** (`n8n.alpstein-ai.ch`) | `http://172.20.0.1:8010` (host uvicorn — **often down** on this host) |
+| **Historical** | Prior execution IDs in ops docs | Evidence only (e.g. exec **89–91**) | Same-era backend |
+
+**Rules:**
+
+- Git export = canonical **shape** (`active: false`, `versionId` stamped).
+- Runtime IDs = [`runtime-registry.md`](../../n8n/workflows/runtime-registry.md) — update on import/activate.
+- **Do not** mount `alpstein_n8n_data` from legacy + portable n8n at the same time.
+- `docker-compose up n8n` may fail (`ContainerConfig`); approved workaround: [`n8n-compose.md`](../deployment/n8n-compose.md) + E0 audit §P0.
 
 ---
 

@@ -4,19 +4,20 @@
 
 # Next Steps
 
-## Recommended next task: **Phase E — controlled expansion prep (T14.5 / C5 on compose)**
+## Recommended next task: **E0 remediation — Telegram reference channel sign-off**
 
-Phase **D4** operational verification is **complete**. Verdict: **stable with known operational limits** — see [`d4-operational-wrap-up-2026-05-27.md`](../audits/d4-operational-wrap-up-2026-05-27.md).
+Phase **D4** is **complete**. **E0** audit: [`e0-telegram-regression-2026-05-28.md`](../audits/e0-telegram-regression-2026-05-28.md) — **PASS WITH WARNINGS**.
 
-**Do not** start new channel work (e.g. WhatsApp) until **T14.5** Telegram regression passes on the **portable compose** path with canonical workflow export + G-EXP-2 scrub.
+**Do not** start **E1** or new channels (WhatsApp, etc.) until [`T-e0-telegram-reference-channel-remediation.md`](../../tasks/todo/T-e0-telegram-reference-channel-remediation.md) closes portable Telegram Trigger smoke + compose `n8n` stability.
 
 | Step | Status | Notes |
 |------|--------|-------|
-| **T14.5 / C5** | **planned** | Owner-notify + duplicate matrix on Telegram; `BACKEND_BASE_URL=http://backend:8000` |
+| **T14.5 E0** | **done (WARN)** | Network + backend contract PASS; portable n8n exec IDs **open** |
+| **T-e0 remediation** | **todo** | Portable Trigger smoke, `ContainerConfig`, Langfuse recreate, cutover notes |
 | **CIP-D** | **planned** | Live smoke on `alpstein_ai_demo_001` for intent metadata in DB |
 | **D4.3-R2** (optional) | **planned** | Disposable failure drill for `prompt_runs.error` |
 | **C3 / C4** | **planned** | Runtime vs export diff; pre-deploy parity script |
-| **Phase E channel expansion** | **blocked** | Until T14.5 + ingress policy confirmed |
+| **Phase E1 channel expansion** | **blocked** | Until Telegram reference channel = **YES** |
 
 **Ingress policy (P0):** [`operational-ingress-policy.md`](../ops/operational-ingress-policy.md) — compose SoT; no stale `:8010` for validation.
 

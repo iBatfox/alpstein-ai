@@ -22,13 +22,13 @@
 
 ---
 
-## Portable compose runtime (clean clone)
+## Portable compose runtime (clean clone / E0)
 
 | Path | Export file | Runtime workflow ID | `active` | Notes |
 |------|-------------|---------------------|----------|-------|
-| (none by default) | — | — | — | B2.9 gate: no import/activate in automated path |
+| Telegram customer ingress | `t14_workflow_telegram_customer_ingress_skeleton.json` | `2lMuaSWD1XFOXLEK` (shared volume) | **false** (E0 post-test) | E0 2026-05-28: network POST to backend **200**; no new n8n exec ID on portable Trigger |
 
-After operator import, add rows here for that environment.
+After operator import on a **fresh** volume, add rows here. On Contabo, portable n8n shares `alpstein_n8n_data` with legacy — IDs match legacy table above.
 
 ---
 
@@ -37,3 +37,4 @@ After operator import, add rows here for that environment.
 | Date | Change | Operator |
 |------|--------|----------|
 | 2026-05-27 | C1 registry created; Contabo IDs from ops docs | audit |
+| 2026-05-28 | E0 portable smoke; workflow deactivated post-test | audit |

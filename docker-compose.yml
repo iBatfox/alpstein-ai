@@ -52,6 +52,10 @@ services:
       ALPSTEIN_AI_ENVIRONMENT: ${ALPSTEIN_AI_ENVIRONMENT:-development}
       N8N_BACKEND_API_TOKEN: ${N8N_BACKEND_API_TOKEN:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_HOST: ${LANGFUSE_HOST:-https://cloud.langfuse.com}
+      LANGFUSE_TRACING_ENABLED: ${LANGFUSE_TRACING_ENABLED:-}
     networks:
       - alpstein_internal
     expose:
