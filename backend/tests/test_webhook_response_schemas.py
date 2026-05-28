@@ -55,6 +55,30 @@ def test_backward_compatible_minimal_serialization():
     assert data["flow"] == {"id": FLOW_ID, "flow_key": FLOW_KEY}
     assert "lead" not in data
     assert "notification" not in data
+    assert "trace" not in data
+
+
+def test_trace_summary_included_when_provided():
+    trace_id = str(uuid.uuid4())
+    correlation_id = str(uuid.uuid4())
+    payload = serialize_webhook_message_success(
+        reply_to_customer="Hi",
+        lead_created=False,
+        notify_owner=False,
+        conversation_id=str(uuid.uuid4()),
+        conversation_status="open",
+        message_id=str(uuid.uuid4()),
+        is_duplicate=False,
+        trace_id=trace_id,
+        correlation_id=correlation_id,
+        processing_status="completed",
+        **_flow_kwargs(),
+    )
+    assert payload["data"]["trace"] == {
+        "trace_id": trace_id,
+        "correlation_id": correlation_id,
+        "processing_status": "completed",
+    }
 
 
 def test_lead_updated_defaults_false():

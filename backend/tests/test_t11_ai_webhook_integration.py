@@ -46,7 +46,10 @@ from app.services.webhook_message_service import (
     WebhookMessageService,
 )
 from tests.test_ai_gateway_service import MockOpenAIChatClient
-from tests.webhook_test_helpers import message_trace_service_mock
+from tests.webhook_test_helpers import (
+    delivery_visibility_service_mock,
+    message_trace_service_mock,
+)
 
 
 def _webhook_request(**overrides: Any) -> NormalizedWebhookMessageRequest:
@@ -78,6 +81,13 @@ def _webhook_response_envelope(result) -> dict:
         is_duplicate=result.is_duplicate,
         flow_id=str(result.flow.id),
         flow_key=result.flow.flow_key,
+        trace_id=(
+            str(result.message_trace_id) if result.message_trace_id else None
+        ),
+        correlation_id=(
+            str(result.correlation_id) if result.correlation_id is not None else None
+        ),
+        processing_status=result.processing_status,
         lead=result.lead,
         notification=result.notification,
     )
@@ -169,6 +179,7 @@ class _IntegratedStack:
             ai_reply_coordinator=coordinator,
             ai_configuration_service=config_service,
             message_trace_service=message_trace_service_mock(),
+            delivery_visibility_service=delivery_visibility_service_mock(),
         )
 
     def _capture_add(self, obj: object) -> None:

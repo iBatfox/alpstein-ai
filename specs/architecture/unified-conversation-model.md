@@ -181,6 +181,7 @@ tenants
                     └── messages (N) ── belongs to exactly one conversation
 
 message_traces ── one row per inbound_message_id; links flow, conversation, inbound/outbound messages, observability ids (E2.4)
+delivery_events ── one row per outbound_message_id; channel delivery lifecycle pending→delivered/failed (E2.6)
 prompt_runs ── AI execution audit; references conversation_id, message_id
 ```
 
@@ -239,7 +240,8 @@ prompt_runs ── AI execution audit; references conversation_id, message_id
 | Conversation lookup | `(business_id, customer_id, channel)` | `(flow_id, channel, external_conversation_id)` primary |
 | `external_conversation_id` on row | Column exists; **not used in lookup** | Used for thread continuity |
 | Message idempotency | `(business_id, external_message_id)` | `(flow_id, channel, external_message_id)` |
-| Trace table | `prompt_runs` + Langfuse only | **`message_traces` shipped (E2.4)** + `prompt_runs` + Langfuse |
+| Trace table | `prompt_runs` + Langfuse only | **`message_traces` + read APIs (E2.4–E2.5)** + `prompt_runs` + Langfuse |
+| Delivery visibility | n8n-only (implicit) | **`delivery_events` + read/report APIs (E2.6)**; backend `pending`, n8n reports delivered/failed |
 | n8n `flow_key` | Not in webhook body | Optional field → resolve `flow_id` |
 
 ---

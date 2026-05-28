@@ -4,6 +4,7 @@ from app.models.conversation import Conversation
 from app.models.customer import Customer
 from app.models.lead import Lead
 from app.models.message import Message
+from app.models.delivery_event import DeliveryEvent
 from app.models.message_trace import MessageTrace
 from app.models.prompt_run import PromptRun
 from app.models.prompt_template import PromptTemplate
@@ -20,6 +21,7 @@ __all__ = [
     "Customer",
     "Lead",
     "Message",
+    "DeliveryEvent",
     "MessageTrace",
     "PromptRun",
     "PromptTemplate",

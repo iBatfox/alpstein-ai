@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import desc, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,9 +19,28 @@ from app.models.message_trace import (
 )
 
 ERROR_MESSAGE_MAX_LENGTH = 500
+TRACE_LIST_DEFAULT_LIMIT = 20
+TRACE_LIST_MAX_LIMIT = 100
 
 
 class MessageTraceService:
+    async def get_trace_by_id(
+        self,
+        session: AsyncSession,
+        *,
+        tenant_id: uuid.UUID,
+        business_id: uuid.UUID,
+        trace_id: uuid.UUID,
+    ) -> MessageTrace | None:
+        result = await session.execute(
+            select(MessageTrace).where(
+                MessageTrace.id == trace_id,
+                MessageTrace.tenant_id == tenant_id,
+                MessageTrace.business_id == business_id,
+            )
+        )
+        return result.scalar_one_or_none()
+
     async def find_by_inbound_message_id(
         self,
         session: AsyncSession,
@@ -38,6 +57,66 @@ class MessageTraceService:
             )
         )
         return result.scalar_one_or_none()
+
+    async def find_by_external_message_id(
+        self,
+        session: AsyncSession,
+        *,
+        tenant_id: uuid.UUID,
+        business_id: uuid.UUID,
+        external_message_id: str,
+        conversation_id: uuid.UUID | None = None,
+    ) -> MessageTrace | None:
+        normalized = external_message_id.strip()
+        if not normalized:
+            return None
+
+        conditions = [
+            MessageTrace.tenant_id == tenant_id,
+            MessageTrace.business_id == business_id,
+            MessageTrace.external_message_id == normalized,
+        ]
+        if conversation_id is not None:
+            conditions.append(MessageTrace.conversation_id == conversation_id)
+
+        result = await session.execute(
+            select(MessageTrace).where(*conditions).order_by(desc(MessageTrace.created_at)).limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def list_traces_for_conversation(
+        self,
+        session: AsyncSession,
+        *,
+        tenant_id: uuid.UUID,
+        business_id: uuid.UUID,
+        conversation_id: uuid.UUID,
+        status: str | None = None,
+        channel: str | None = None,
+        limit: int = TRACE_LIST_DEFAULT_LIMIT,
+        offset: int = 0,
+    ) -> list[MessageTrace]:
+        bounded_limit = min(max(limit, 1), TRACE_LIST_MAX_LIMIT)
+        bounded_offset = max(offset, 0)
+
+        conditions = [
+            MessageTrace.tenant_id == tenant_id,
+            MessageTrace.business_id == business_id,
+            MessageTrace.conversation_id == conversation_id,
+        ]
+        if status is not None:
+            conditions.append(MessageTrace.status == status)
+        if channel is not None:
+            conditions.append(MessageTrace.channel == channel)
+
+        result = await session.execute(
+            select(MessageTrace)
+            .where(*conditions)
+            .order_by(desc(MessageTrace.created_at))
+            .limit(bounded_limit)
+            .offset(bounded_offset)
+        )
+        return list(result.scalars().all())
 
     async def get_or_create_for_inbound(
         self,

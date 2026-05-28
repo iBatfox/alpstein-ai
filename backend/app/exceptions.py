@@ -25,6 +25,13 @@ class FlowNotFoundError(Exception):
         super().__init__(message)
 
 
+class MessageTraceNotFoundError(Exception):
+    """Raised when no message trace exists for the scoped lookup."""
+
+    def __init__(self, message: str = "Message trace not found") -> None:
+        super().__init__(message)
+
+
 class PromptTemplateNotFoundError(Exception):
     """Raised when no active platform prompt template exists for the given key."""
 

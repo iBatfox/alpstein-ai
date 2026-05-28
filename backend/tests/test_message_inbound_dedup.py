@@ -24,7 +24,10 @@ from tests.test_webhook_message_service import (
     _lead_service_mock,
     _success_ai_coordinator as _webhook_success_ai_coordinator,
 )
-from tests.webhook_test_helpers import message_trace_service_mock
+from tests.webhook_test_helpers import (
+    delivery_visibility_service_mock,
+    message_trace_service_mock,
+)
 
 
 def _conversation(business, customer, *, flow_id: uuid.UUID, channel: str = "telegram"):
@@ -195,6 +198,7 @@ async def test_telegram_webhook_retry_does_not_duplicate_ai_response():
         lead_service=_lead_service_mock(business, customer, conversation),
         ai_reply_coordinator=coordinator,
         message_trace_service=message_trace_service_mock(),
+        delivery_visibility_service=delivery_visibility_service_mock(),
     )
 
     request = _request(
@@ -279,6 +283,7 @@ async def test_website_chat_webhook_retry_uses_hash_idempotency_without_external
         lead_service=_lead_service_mock(business, customer, conversation),
         ai_reply_coordinator=_webhook_success_ai_coordinator(),
         message_trace_service=message_trace_service_mock(),
+        delivery_visibility_service=delivery_visibility_service_mock(),
     )
 
     request = _request(

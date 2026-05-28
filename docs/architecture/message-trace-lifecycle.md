@@ -70,8 +70,48 @@ LIMIT 20;
 
 ---
 
-## Out of scope (this slice)
+## Read APIs (E2.5)
 
-- `reply_sent` / n8n delivery stage persistence
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /api/v1/observability/traces/{trace_id}` | Single trace by id |
+| `GET /api/v1/observability/traces?inbound_message_id=` | Lookup by inbound message |
+| `GET /api/v1/observability/traces?external_message_id=` | Lookup by channel external id |
+| `GET /api/v1/observability/conversations/{id}/traces` | List traces for conversation |
+
+Auth: `X-Alpstein-Webhook-Token` (same as webhook). Required query: `tenant_id`, `business_id`.
+
+Webhook `data.trace`: `{ trace_id, correlation_id, processing_status }` when trace row exists.
+
+---
+
+## Delivery visibility (E2.6)
+
+**Table:** `delivery_events` (Alembic `0012`) — one row per `outbound_message_id` (unique).
+
+| Status | Meaning |
+|--------|---------|
+| `pending` | Outbound AI message persisted; channel send not yet confirmed |
+| `delivered` | n8n reported successful provider delivery |
+| `failed` | n8n reported send failure (safe `error_type` / `error_message`) |
+| `skipped` | No channel send expected |
+| `retrying` | Retry in progress (optional; `retry_count` incremented) |
+
+**Backend:** creates `pending` after outbound message save on non-duplicate webhook path. **n8n** performs Telegram / Website send and reports outcome via API (observability does not control delivery).
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /api/v1/observability/deliveries/{delivery_id}` | Single delivery row |
+| `GET /api/v1/observability/conversations/{id}/deliveries` | List deliveries for conversation |
+| `PATCH /api/v1/observability/deliveries/{delivery_id}` | Report `delivered` / `failed` / `skipped` / `retrying` |
+
+Auth: `X-Alpstein-Webhook-Token`. Required query: `tenant_id`, `business_id`.
+
+Webhook `data.delivery` (when outbound saved): `{ delivery_id, delivery_status, outbound_message_id }`.
+
+---
+
+## Out of scope (future)
+
 - Latency columns (`backend_total_latency_ms`, …)
-- Dedicated `correlation_id` column (stored in `metadata` + `external_trace_id`)
+- Dedicated `correlation_id` column on `message_traces` (stored in `metadata` + `external_trace_id`)

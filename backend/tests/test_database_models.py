@@ -6,6 +6,7 @@ from app.models import (
     Business,
     Conversation,
     Customer,
+    DeliveryEvent,
     Flow,
     Lead,
     Message,
@@ -47,10 +48,12 @@ def test_metadata_contains_persistence_slice_tables():
         "prompt_runs",
         "flows",
         "message_traces",
+        "delivery_events",
     }
     assert Tenant.__tablename__ == "tenants"
     assert Business.__tablename__ == "businesses"
     assert MessageTrace.__tablename__ == "message_traces"
+    assert DeliveryEvent.__tablename__ == "delivery_events"
     assert Customer.__tablename__ == "customers"
     assert Conversation.__tablename__ == "conversations"
     assert Message.__tablename__ == "messages"

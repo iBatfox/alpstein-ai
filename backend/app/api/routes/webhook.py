@@ -1,4 +1,5 @@
 import logging
+import uuid
 from contextvars import Token
 
 from fastapi import APIRouter, Depends, Header, Request
@@ -130,6 +131,36 @@ async def post_webhook_message(
         is_duplicate=result.is_duplicate,
         flow_id=str(result.flow.id),
         flow_key=result.flow.flow_key,
+        trace_id=(
+            str(result.message_trace_id)
+            if isinstance(getattr(result, "message_trace_id", None), uuid.UUID)
+            else None
+        ),
+        correlation_id=(
+            str(result.correlation_id)
+            if isinstance(getattr(result, "correlation_id", None), uuid.UUID)
+            else None
+        ),
+        processing_status=(
+            result.processing_status
+            if isinstance(getattr(result, "processing_status", None), str)
+            else None
+        ),
+        delivery_id=(
+            str(result.delivery_id)
+            if isinstance(getattr(result, "delivery_id", None), uuid.UUID)
+            else None
+        ),
+        delivery_status=(
+            result.delivery_status
+            if isinstance(getattr(result, "delivery_status", None), str)
+            else None
+        ),
+        outbound_message_id=(
+            str(result.outbound_message_id)
+            if isinstance(getattr(result, "outbound_message_id", None), uuid.UUID)
+            else None
+        ),
         lead=result.lead,
         notification=result.notification,
     )

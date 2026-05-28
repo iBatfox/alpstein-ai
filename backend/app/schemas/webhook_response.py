@@ -68,6 +68,26 @@ class WebhookFlowSummary(BaseModel):
     flow_key: str = Field(min_length=1)
 
 
+class WebhookTraceSummary(BaseModel):
+    """Safe observability fields for n8n / ops (E2.5)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    trace_id: str = Field(min_length=1)
+    correlation_id: str | None = None
+    processing_status: str = Field(min_length=1)
+
+
+class WebhookDeliverySummary(BaseModel):
+    """Outbound delivery visibility for n8n (E2.6)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    delivery_id: str = Field(min_length=1)
+    delivery_status: str = Field(min_length=1)
+    outbound_message_id: str = Field(min_length=1)
+
+
 class WebhookMessageResponseData(BaseModel):
     """`data` object for successful `POST /api/v1/webhook/message`."""
 
@@ -80,6 +100,8 @@ class WebhookMessageResponseData(BaseModel):
     conversation: WebhookConversationSummary
     message: WebhookMessageSummary
     flow: WebhookFlowSummary
+    trace: WebhookTraceSummary | None = None
+    delivery: WebhookDeliverySummary | None = None
     lead: WebhookLeadSummary | None = None
     notification: WebhookNotificationPayload | None = None
 
@@ -102,6 +124,12 @@ def build_webhook_message_success_envelope(
     is_duplicate: bool,
     flow_id: str,
     flow_key: str,
+    trace_id: str | None = None,
+    correlation_id: str | None = None,
+    processing_status: str | None = None,
+    delivery_id: str | None = None,
+    delivery_status: str | None = None,
+    outbound_message_id: str | None = None,
     lead_updated: bool = False,
     lead: WebhookLeadSummary | None = None,
     notification: WebhookNotificationPayload | None = None,
@@ -126,9 +154,49 @@ def build_webhook_message_success_envelope(
                 id=flow_id,
                 flow_key=flow_key,
             ),
+            trace=_build_trace_summary(
+                trace_id=trace_id,
+                correlation_id=correlation_id,
+                processing_status=processing_status,
+            ),
+            delivery=_build_delivery_summary(
+                delivery_id=delivery_id,
+                delivery_status=delivery_status,
+                outbound_message_id=outbound_message_id,
+            ),
             lead=lead,
             notification=notification,
         ),
+    )
+
+
+def _build_trace_summary(
+    *,
+    trace_id: str | None,
+    correlation_id: str | None,
+    processing_status: str | None,
+) -> WebhookTraceSummary | None:
+    if not trace_id or not processing_status:
+        return None
+    return WebhookTraceSummary(
+        trace_id=trace_id,
+        correlation_id=correlation_id,
+        processing_status=processing_status,
+    )
+
+
+def _build_delivery_summary(
+    *,
+    delivery_id: str | None,
+    delivery_status: str | None,
+    outbound_message_id: str | None,
+) -> WebhookDeliverySummary | None:
+    if not delivery_id or not delivery_status or not outbound_message_id:
+        return None
+    return WebhookDeliverySummary(
+        delivery_id=delivery_id,
+        delivery_status=delivery_status,
+        outbound_message_id=outbound_message_id,
     )
 
 
@@ -143,6 +211,12 @@ def serialize_webhook_message_success(
     is_duplicate: bool,
     flow_id: str,
     flow_key: str,
+    trace_id: str | None = None,
+    correlation_id: str | None = None,
+    processing_status: str | None = None,
+    delivery_id: str | None = None,
+    delivery_status: str | None = None,
+    outbound_message_id: str | None = None,
     lead_updated: bool = False,
     lead: WebhookLeadSummary | None = None,
     notification: WebhookNotificationPayload | None = None,
@@ -159,6 +233,12 @@ def serialize_webhook_message_success(
         is_duplicate=is_duplicate,
         flow_id=flow_id,
         flow_key=flow_key,
+        trace_id=trace_id,
+        correlation_id=correlation_id,
+        processing_status=processing_status,
+        delivery_id=delivery_id,
+        delivery_status=delivery_status,
+        outbound_message_id=outbound_message_id,
         lead=lead,
         notification=notification,
     ).model_dump(mode="json", exclude_none=True)

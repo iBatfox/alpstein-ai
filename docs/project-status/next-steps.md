@@ -4,7 +4,11 @@
 
 # Next Steps
 
-## Recommended next task: **E2.5 webhook trace fields** or **Live Telegram DM confirmation**
+## Recommended next task: **E2.7 ops gate** or **n8n delivery PATCH wiring** or **Live Telegram DM confirmation**
+
+**E2.6 (done):** delivery visibility — [`T-e2.6-delivery-visibility.md`](../../tasks/done/T-e2.6-delivery-visibility.md).
+
+**E2.5 (done):** observability APIs — [`T-e2.5-observability-api-extensions.md`](../../tasks/done/T-e2.5-observability-api-extensions.md).
 
 **E2.4 (done):** `message_traces` persistence — Alembic `0011`, [`T-e2.4-message-trace-persistence.md`](../../tasks/done/T-e2.4-message-trace-persistence.md).
 
@@ -60,9 +64,10 @@ Implementation follow-up: E1.6.3 runtime compatibility fix and E1.6.6 activation
 | E2.2 | **done** | [`T-e2.2-conversation-flow-scoping.md`](../../tasks/done/T-e2.2-conversation-flow-scoping.md) — `conversations.flow_id` + flow-scoped lookup (Alembic `0009`) |
 | E2.3 | **done** | [`T-e2.3-message-uniqueness-hardening.md`](../../tasks/done/T-e2.3-message-uniqueness-hardening.md) — conversation-scoped inbound dedup (Alembic `0010`) |
 | E2.4 | **done** | [`T-e2.4-message-trace-persistence.md`](../../tasks/done/T-e2.4-message-trace-persistence.md) — `message_traces` + webhook lifecycle (Alembic `0011`) |
-| E2.5 | **next** | API/webhooks.md response fields (`trace_id`, …) |
-| E2.6 | planned | n8n `flow_key` + delivery-stage logging (same workflow) |
-| E2.7 | planned | Ops gate + Langfuse on compose verification |
+| E2.5 | **done** | [`T-e2.5-observability-api-extensions.md`](../../tasks/done/T-e2.5-observability-api-extensions.md) — read APIs + webhook `data.trace` |
+| E2.6 | **done** | [`T-e2.6-delivery-visibility.md`](../../tasks/done/T-e2.6-delivery-visibility.md) — `delivery_events` + observability delivery APIs (Alembic `0012`) |
+| E2.7 | **next** | Ops gate + Langfuse on compose verification |
+| — | follow-up | n8n: `PATCH …/deliveries/{id}` after Telegram/Website send using `data.delivery.delivery_id` |
 
 Golden rule: **one flow = one bot behavior** — see [`unified-conversation-model.md`](../../specs/architecture/unified-conversation-model.md) § Database Separation & Flow Governance.
 

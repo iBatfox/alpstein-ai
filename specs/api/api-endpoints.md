@@ -180,7 +180,83 @@ Response:
 
 ---
 
-# 7. Incoming Message Endpoint
+# 7. Observability Endpoints (E2.5)
+
+Read-only message trace inspection for ops and internal tools. Same API token as webhook (`X-Alpstein-Webhook-Token`).
+
+All endpoints require query parameters:
+
+```text
+tenant_id (UUID, required)
+business_id (UUID, required)
+```
+
+## GET /api/v1/observability/traces/{trace_id}
+
+Returns one `message_traces` row when scoped to tenant + business.
+
+## GET /api/v1/observability/traces
+
+Lookup by exactly one of:
+
+```text
+inbound_message_id (UUID)
+external_message_id (string, optional conversation_id filter)
+```
+
+## GET /api/v1/observability/conversations/{conversation_id}/traces
+
+List traces for a conversation. Optional filters: `status`, `channel`, `limit` (max 100), `offset`.
+
+Response envelope: `{ "success": true, "data": { "items": [...], "limit", "offset" } }`.
+
+Trace payloads exclude prompts, raw provider payloads, and secrets.
+
+Webhook success `data` may include optional `trace` object:
+
+```json
+{
+  "trace_id": "uuid",
+  "correlation_id": "uuid",
+  "processing_status": "completed"
+}
+```
+
+## GET /api/v1/observability/deliveries/{delivery_id}
+
+Returns one `delivery_events` row when scoped to tenant + business.
+
+## GET /api/v1/observability/conversations/{conversation_id}/deliveries
+
+List outbound delivery rows for a conversation. Optional filters: `status`, `channel`, `limit` (max 100), `offset`.
+
+## PATCH /api/v1/observability/deliveries/{delivery_id}
+
+n8n reports channel delivery outcome after send attempt. Body:
+
+```json
+{
+  "status": "delivered",
+  "provider_message_id": "optional-provider-id",
+  "provider_status": "optional"
+}
+```
+
+For `failed`, include `error_type` and/or `error_message` (safe text only; no secrets or raw provider payloads).
+
+Webhook success `data` may include optional `delivery` object:
+
+```json
+{
+  "delivery_id": "uuid",
+  "delivery_status": "pending",
+  "outbound_message_id": "uuid"
+}
+```
+
+---
+
+# 8. Incoming Message Endpoint
 
 ## POST /api/v1/webhook/message
 

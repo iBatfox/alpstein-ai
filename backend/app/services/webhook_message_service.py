@@ -9,6 +9,8 @@ from app.models.conversation import Conversation
 from app.models.flow import Flow
 from app.models.lead import LEAD_PRIORITY_URGENT, LEAD_STATUS_IN_PROGRESS, LEAD_STATUS_NEW, Lead
 from app.models.message import Message
+from app.models.delivery_event import DeliveryEvent
+from app.models.message_trace import MessageTrace
 from app.schemas.ai_reply import AiReplyResult
 from app.schemas.lead_signal import LeadSignalDetectionResult
 from app.schemas.notification import NotificationDecision
@@ -29,6 +31,7 @@ from app.services.customer_service import CustomerService
 from app.services.lead_service import LeadService
 from app.services.lead_signal_detection_service import LeadSignalDetectionService
 from app.services.message_service import MessageService
+from app.services.delivery_visibility_service import DeliveryVisibilityService
 from app.services.message_trace_service import (
     MessageTraceService,
     build_trace_metadata,
@@ -58,6 +61,12 @@ class WebhookMessageProcessResult:
     lead_updated: bool = False
     lead: WebhookLeadSummary | None = None
     notification: WebhookNotificationPayload | None = None
+    message_trace_id: uuid.UUID | None = None
+    processing_status: str | None = None
+    correlation_id: uuid.UUID | None = None
+    delivery_id: uuid.UUID | None = None
+    delivery_status: str | None = None
+    outbound_message_id: uuid.UUID | None = None
 
 
 @dataclass(frozen=True)
@@ -91,6 +100,7 @@ class WebhookMessageService:
         ai_configuration_service: AiConfigurationService | None = None,
         ai_fallback_service: AiReplyFallbackService | None = None,
         message_trace_service: MessageTraceService | None = None,
+        delivery_visibility_service: DeliveryVisibilityService | None = None,
     ) -> None:
         self.business_service = business_service or BusinessService()
         self.customer_service = customer_service or CustomerService()
@@ -112,6 +122,9 @@ class WebhookMessageService:
         )
         self.ai_fallback_service = ai_fallback_service or AiReplyFallbackService()
         self.message_trace_service = message_trace_service or MessageTraceService()
+        self.delivery_visibility_service = (
+            delivery_visibility_service or DeliveryVisibilityService()
+        )
 
     async def process_incoming_message(
         self,
@@ -235,6 +248,10 @@ class WebhookMessageService:
                 observability=observability,
                 flow_id=flow.id,
             )
+            trace_id, trace_status, trace_correlation = _trace_fields_for_response(
+                message_trace,
+                observability=observability,
+            )
             return WebhookMessageProcessResult(
                 conversation=conversation,
                 message=save_result.message,
@@ -246,6 +263,9 @@ class WebhookMessageService:
                 notify_owner=False,
                 lead=None,
                 notification=None,
+                message_trace_id=trace_id,
+                processing_status=trace_status,
+                correlation_id=trace_correlation,
             )
 
         if message_trace is None:
@@ -253,6 +273,7 @@ class WebhookMessageService:
 
         await self.message_trace_service.mark_processing(session, message_trace)
 
+        delivery_event: DeliveryEvent | None = None
         try:
             lead_outcome = await self._process_lead_for_incoming_message(
                 session,
@@ -294,6 +315,17 @@ class WebhookMessageService:
                     prompt_run_id=reply_resolution.prompt_run_id,
                 ),
             )
+
+            delivery_event = await self._create_pending_delivery_if_outbound(
+                session,
+                tenant_id=tenant_id,
+                business_id=business.id,
+                flow_id=flow.id,
+                conversation_id=conversation.id,
+                trace_id=message_trace.id,
+                outbound_message_id=reply_resolution.outbound_message_id,
+                channel=channel,
+            )
         except Exception as exc:
             await self.message_trace_service.mark_failed(
                 session,
@@ -319,6 +351,13 @@ class WebhookMessageService:
             else None
         )
 
+        trace_id, trace_status, trace_correlation = _trace_fields_for_response(
+            message_trace,
+            observability=observability,
+        )
+        delivery_id, delivery_status, outbound_id = _delivery_fields_for_response(
+            delivery_event,
+        )
         return WebhookMessageProcessResult(
             conversation=conversation,
             message=save_result.message,
@@ -330,6 +369,12 @@ class WebhookMessageService:
             notify_owner=notification_decision.should_notify_owner,
             lead=lead_summary,
             notification=notification,
+            message_trace_id=trace_id,
+            processing_status=trace_status,
+            correlation_id=trace_correlation,
+            delivery_id=delivery_id,
+            delivery_status=delivery_status,
+            outbound_message_id=outbound_id,
         )
 
     async def _process_lead_for_incoming_message(
@@ -522,6 +567,31 @@ class WebhookMessageService:
             prompt_run_id=prompt_run_id,
         )
 
+    async def _create_pending_delivery_if_outbound(
+        self,
+        session: AsyncSession,
+        *,
+        tenant_id: uuid.UUID,
+        business_id: uuid.UUID,
+        flow_id: uuid.UUID,
+        conversation_id: uuid.UUID,
+        trace_id: uuid.UUID,
+        outbound_message_id: uuid.UUID | None,
+        channel: str,
+    ) -> DeliveryEvent | None:
+        if outbound_message_id is None:
+            return None
+        return await self.delivery_visibility_service.create_pending_for_outbound(
+            session,
+            tenant_id=tenant_id,
+            business_id=business_id,
+            flow_id=flow_id,
+            conversation_id=conversation_id,
+            trace_id=trace_id,
+            outbound_message_id=outbound_message_id,
+            channel=channel,
+        )
+
     async def _duplicate_reply_to_customer(
         self,
         session: AsyncSession,
@@ -584,6 +654,29 @@ def _lead_summary_from_model(lead: Lead) -> WebhookLeadSummary:
         id=str(lead.id),
         status=lead.status,
         priority=lead.priority or "normal",
+    )
+
+
+def _trace_fields_for_response(
+    message_trace: MessageTrace | None,
+    *,
+    observability: ObservabilityContext | None,
+) -> tuple[uuid.UUID | None, str | None, uuid.UUID | None]:
+    correlation_id = observability.correlation_id if observability is not None else None
+    if message_trace is None:
+        return None, None, correlation_id
+    return message_trace.id, message_trace.status, correlation_id
+
+
+def _delivery_fields_for_response(
+    delivery_event: DeliveryEvent | None,
+) -> tuple[uuid.UUID | None, str | None, uuid.UUID | None]:
+    if delivery_event is None:
+        return None, None, None
+    return (
+        delivery_event.id,
+        delivery_event.status,
+        delivery_event.outbound_message_id,
     )
 
 
