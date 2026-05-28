@@ -14,7 +14,7 @@ Specification-driven MVP with **backend AI orchestration complete**, **n8n test 
 
 **Phase E0 (Telegram stability gate):** **PASS WITH WARNINGS** — [`e0-telegram-regression-2026-05-28.md`](../audits/e0-telegram-regression-2026-05-28.md) + [`e0-telegram-reference-channel-remediation-2026-05-28.md`](../audits/e0-telegram-reference-channel-remediation-2026-05-28.md). **Telegram reference channel: YES WITH WARNINGS** — portable `alpstein_n8n_compose` exec **222**, full n8n → `http://backend:8000` → AI path; synthetic Telegram Send (`chat not found`); Langfuse trace not on running compose backend yet.
 
-**Primary open engineering:** Optional real DM + Langfuse compose recreate; compose `up n8n` fix; **E1 blocked until operator accepts YES WITH WARNINGS or clears WARN items**. **CIP-D**, ATTR-3 remain.
+**Primary open engineering:** Optional real DM + Langfuse compose recreate; compose `up n8n` fix; **CIP-D**, ATTR-3, and **E1.1 channel mapping refinement** remain. **E1.0 ingress contract design is complete (spec-only).**
 
 ---
 
@@ -31,6 +31,7 @@ Specification-driven MVP with **backend AI orchestration complete**, **n8n test 
 
 - **Conversation Intent Policy** — behavior doc at `docs/architecture/conversation-intent-policy-mvp.md`; CIP-A/B **implemented** for `alpstein_ai_demo_001` only; CIP-C/D open
 - **Attribution persistence (ATTR-3+)** — ATTR-2 schema **implemented**; persistence **planned**
+- **Channel expansion ingress contract (E1.0)** — **implemented as design/spec only** in `docs/architecture/channel-ingress-contract.md`; no runtime integration started
 
 ---
 
@@ -175,4 +176,4 @@ Wrap-up: [`d4-operational-wrap-up-2026-05-27.md`](../audits/d4-operational-wrap-
 
 **Implemented (backend + partial ops):** webhook + auth, AI reply, leads, notification flags, test webhook path, Telegram customer ingress with greeting/intent for Alpstein demo business.
 
-**Not closed:** CIP-C observability, T14.5–T14.6 Telegram gates, ATTR persistence, production hardening (T10-F3, T13.6).
+**Not closed:** CIP-D smoke, T14.5 Telegram regression, ATTR persistence, E1.1 channel mapping refinement, production hardening (T10-F3, T13.6).

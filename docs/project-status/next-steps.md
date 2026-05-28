@@ -4,18 +4,20 @@
 
 # Next Steps
 
-## Recommended next task: **Operator acceptance of E0 — then E1 planning only after explicit go**
+## Recommended next task: **E1.1 — Telegram/Website chat mapping refinement (spec-only)**
 
-Phase **E0** closed: [`e0-telegram-reference-channel-remediation-2026-05-28.md`](../audits/e0-telegram-reference-channel-remediation-2026-05-28.md) — **PASS WITH WARNINGS** · Telegram reference channel **YES WITH WARNINGS**.
+Phase **E0** closed: [`e0-telegram-reference-channel-remediation-2026-05-28.md`](../audits/e0-telegram-reference-channel-remediation-2026-05-28.md) — **PASS WITH WARNINGS** · Telegram reference channel baseline established.
 
-**Do not** start **E1** channel work until operator accepts warnings (real DM optional, Langfuse compose recreate, **15679** owner: `alpstein_n8n_compose` vs legacy `alpstein_n8n`).
+**E1.0 completed (design-only):** [`channel-ingress-contract.md`](../architecture/channel-ingress-contract.md).  
+**Do not** start channel runtime integrations yet; next step is E1.1 spec refinement only.
 
 | Step | Status | Notes |
 |------|--------|-------|
 | **T14.5 / T-e0** | **done (WARN)** | Exec **222**; prompt_run `e426d4bc-…` |
 | **E0 optional hardening** | planned | Real DM; `docker-compose up n8n`; Langfuse on compose backend |
 | **CIP-D** | **planned** | Live intent metadata smoke |
-| **Phase E1** | **blocked** | Until operator sign-off on **YES WITH WARNINGS** |
+| **Phase E1.0** | **done (design)** | Normalized ingress contract documented; no runtime changes |
+| **Phase E1.1** | **planned** | Telegram + Website Chat mapping matrix (spec only) |
 
 **Ingress policy (P0):** [`operational-ingress-policy.md`](../ops/operational-ingress-policy.md) — compose SoT; no stale `:8010` for validation.
 
@@ -68,6 +70,18 @@ Compose: [`postgres-compose.md`](../deployment/postgres-compose.md), [`n8n-compo
 | **T14.6** | **done** | G-EXP-2 gate |
 
 Plan reference: [`tasks/todo/t14-telegram-customer-ingress.md`](../../tasks/todo/t14-telegram-customer-ingress.md) (T14.1–T14.4 and T14-OC **done**).
+
+---
+
+## Phase E1 — channel expansion contract
+
+| Slice | Status |
+|-------|--------|
+| E1.0 channel ingress contract | **done (design-only)** |
+| E1.1 Telegram/Website Chat mapping detail | **next (spec-only)** |
+| Runtime channel integrations (WhatsApp/Instagram/etc.) | **deferred** |
+
+Reference: [`channel-ingress-contract.md`](../architecture/channel-ingress-contract.md), [`T-e1.0-channel-ingress-contract.md`](../../tasks/done/T-e1.0-channel-ingress-contract.md).
 
 ---
 
