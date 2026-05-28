@@ -87,23 +87,25 @@ Implemented via `httpx` in compose healthcheck `CMD-SHELL`. `start_period: 90s` 
 
 ## Operator commands (clean clone / dev)
 
-From repo root:
+From repo root. **Use Docker Compose v2** (`docker compose`, space) on Contabo — see [`recovery-compose-recreate-stabilization-2026-05-28.md`](../audits/recovery-compose-recreate-stabilization-2026-05-28.md).
 
 ```bash
 cp .env.example .env
 # Edit .env — set POSTGRES_PASSWORD; optional N8N_BACKEND_API_TOKEN, OPENAI_API_KEY
+export N8N_HOST_PORT=15679   # nginx production path (overlay default is 15680)
+export LANGFUSE_TRACING_ENABLED=false
 
-# Internal network only (no host ports)
-docker-compose -p alpstein-ai config
-docker-compose -p alpstein-ai up -d postgres backend
-docker-compose -p alpstein-ai ps
+set -a && . ./.env && set +a
 
-# Dev overlay (localhost curl + psql)
-docker-compose -p alpstein-ai -f docker-compose.yml -f docker-compose.dev.yml up -d postgres backend
+# Dev overlay (localhost curl + psql + n8n on 15679)
+docker compose -p alpstein-ai -f docker-compose.yml -f docker-compose.dev.yml config
+docker compose -p alpstein-ai -f docker-compose.yml -f docker-compose.dev.yml up -d postgres backend n8n
 
-curl -sS http://127.0.0.1:8000/api/v1/health
 curl -sS http://127.0.0.1:8000/api/v1/health/ready
+docker exec alpstein_n8n_compose wget -qO- http://backend:8000/api/v1/health/ready
 ```
+
+Legacy `docker-compose` v1.29: **do not** use `--force-recreate` (KeyError `ContainerConfig` with Docker 29). Prefer `docker compose` v2 (`apt install docker-compose-v2`).
 
 Verify health:
 
@@ -125,7 +127,10 @@ Migrations run automatically on backend start (`docker-entrypoint.sh` → `alemb
 | `Set POSTGRES_PASSWORD in .env` on `config` / `up` | Root `.env` missing `POSTGRES_*` (only backend keys present) | Copy **repo root** `.env.example`; set `POSTGRES_PASSWORD` |
 | `InvalidPasswordError` / backend waits forever for postgres | Password in `.env` ≠ password used when volume was first created | Restore password or `docker volume rm alpstein_postgres_data` (data loss) then `up` again |
 | `address already in use` on `127.0.0.1:8000` | Host uvicorn or another process on 8000 | Omit dev overlay and use `docker exec alpstein_backend` for curls, or stop host backend / change `BACKEND_HOST_PORT` |
-| Backend `unhealthy`, logs show postgres wait exhausted | Postgres container exited or renamed (`*_alpstein_postgres`) | `docker-compose -p alpstein-ai rm -sf postgres backend && docker-compose -p alpstein-ai up -d postgres backend` |
+| Backend `unhealthy`, logs show postgres wait exhausted | Postgres container exited or renamed (`*_alpstein_postgres`) | `docker compose -p alpstein-ai rm -sf postgres backend && docker compose … up -d postgres backend` |
+| `KeyError: 'ContainerConfig'` on `up` / `--force-recreate` | `docker-compose` v1 + Docker Engine 29 API mismatch | Use `docker compose` v2; or `docker rm` service containers then `up -d` (create path, no `--force-recreate`) |
+| Backend restart loop, `LANGFUSE_TRACING_ENABLED` bool error | Empty env var passed from compose | Set `LANGFUSE_TRACING_ENABLED=false` in `.env` or use compose default (fixed in `docker-compose.yml`) |
+| `Cannot create container … name already in use` | Manual `docker run` containers without compose labels | Stop/rm conflicting container; `docker compose up -d` |
 | Webhook `404 BUSINESS_NOT_FOUND` on fresh DB | No bootstrap businesses | `docker-compose -p alpstein-ai --profile bootstrap run --rm backend-bootstrap` |
 | `KeyError: 'ContainerConfig'` on recreate | docker-compose 1.29 + Docker 29 | `docker-compose rm -sf <service>` then `up` |
 

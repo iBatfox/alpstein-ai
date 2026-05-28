@@ -4,7 +4,7 @@
 
 # Alpstein AI — Current State
 
-**As-of:** 2026-05-28 (RECOVERY-1 runtime SoT restored)
+**As-of:** 2026-05-28 (RECOVERY-2 compose recreate stabilized)
 
 ## Project Phase
 
@@ -12,7 +12,9 @@ Specification-driven MVP with **backend AI orchestration complete**, **n8n test 
 
 **Phase D4 operational verification:** **complete** (D4.1–D4.4, U1, OPS-C1). Portable **Docker Compose** is the **operational source of truth** for backend verification; see [`d4-operational-wrap-up-2026-05-27.md`](../audits/d4-operational-wrap-up-2026-05-27.md).
 
-**RECOVERY-1 (runtime SoT):** **PASS WITH NOTES** — [`recovery-runtime-source-of-truth-2026-05-28.md`](../audits/recovery-runtime-source-of-truth-2026-05-28.md). Portable chain restored: `alpstein_postgres` → `alpstein_backend` (readiness **200**) → `alpstein_n8n_compose` @ **15679** (`BACKEND_BASE_URL=http://backend:8000`). Telegram + Website Chat webhook smokes **200**; no POST Backend 30s timeout. Legacy `alpstein_n8n` stopped; legacy `backend_postgres` still running but **not** in active chain.
+**RECOVERY-2 (compose recreate):** **PASS WITH NOTES** — [`recovery-compose-recreate-stabilization-2026-05-28.md`](../audits/recovery-compose-recreate-stabilization-2026-05-28.md). Root cause: **docker-compose v1.29 + Docker 29** → `ContainerConfig` on recreate. Fix: **`docker compose` v2** installed; full stack `up -d postgres backend n8n` verified; `--force-recreate` safe on v2. Canonical CLI documented in `postgres-compose.md` / `.env.example`. Legacy `docker-compose --force-recreate` **still broken** — do not use.
+
+**RECOVERY-1 (runtime SoT):** **PASS WITH NOTES** — [`recovery-runtime-source-of-truth-2026-05-28.md`](../audits/recovery-runtime-source-of-truth-2026-05-28.md). Portable chain: `alpstein_postgres` → `alpstein_backend` → `alpstein_n8n_compose` @ **15679**; all compose-labeled under project `alpstein-ai`.
 
 **Phase E0 (Telegram stability gate):** **PASS WITH WARNINGS** — [`e0-telegram-regression-2026-05-28.md`](../audits/e0-telegram-regression-2026-05-28.md) + [`e0-telegram-reference-channel-remediation-2026-05-28.md`](../audits/e0-telegram-reference-channel-remediation-2026-05-28.md). **Telegram reference channel: YES WITH WARNINGS** — portable `alpstein_n8n_compose` exec **222**, full n8n → `http://backend:8000` → AI path; synthetic Telegram Send (`chat not found`); Langfuse trace not on running compose backend yet.
 

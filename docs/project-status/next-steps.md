@@ -4,9 +4,9 @@
 
 # Next Steps
 
-## Recommended next task: **Compose automation hardening** or **CIP-D live smoke**
+## Recommended next task: **CIP-D live smoke** or **stop legacy `backend_postgres`**
 
-**RECOVERY-1** closed: [`recovery-runtime-source-of-truth-2026-05-28.md`](../audits/recovery-runtime-source-of-truth-2026-05-28.md) — portable SoT live; operator should avoid `docker-compose up --force-recreate` until `ContainerConfig` issue resolved; consider stopping unused `backend_postgres` after backup confirmation.
+**RECOVERY-2** closed: [`recovery-compose-recreate-stabilization-2026-05-28.md`](../audits/recovery-compose-recreate-stabilization-2026-05-28.md) — use **`docker compose`** (v2) for stack ops; never `docker-compose --force-recreate` on v1.
 
 Phase **E0** closed: [`e0-telegram-reference-channel-remediation-2026-05-28.md`](../audits/e0-telegram-reference-channel-remediation-2026-05-28.md) — **PASS WITH WARNINGS** · Telegram reference channel baseline established.
 
@@ -20,6 +20,7 @@ Implementation follow-up: E1.6.3 runtime compatibility fix and E1.6.6 activation
 
 | Step | Status | Notes |
 |------|--------|-------|
+| **RECOVERY-2** | **done (WARN)** | `docker compose` v2; recreate path safe |
 | **RECOVERY-1** | **done (WARN)** | Postgres/backend/n8n SoT; webhook smokes 200 |
 | **T14.5 / T-e0** | **done (WARN)** | Exec **222**; prompt_run `e426d4bc-…` |
 | **E0 optional hardening** | planned | Real DM; `docker-compose up n8n`; Langfuse on compose backend; fix compose recreate |
