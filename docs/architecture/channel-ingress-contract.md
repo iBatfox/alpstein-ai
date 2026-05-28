@@ -8,6 +8,8 @@ Telegram remains the **reference channel** baseline.
 
 This document is **design/spec only** for Phase E1.0.
 
+**Canonical API alignment (E1.2):** field matrices, enums, idempotency, validation — [`specs/architecture/normalized-channel-contract.md`](../../specs/architecture/normalized-channel-contract.md). This file remains the E1.0 overview; prefer the spec path for implementation and review.
+
 ## Scope Classification
 
 ### Near-term
@@ -37,8 +39,8 @@ This document is **design/spec only** for Phase E1.0.
 Required:
 
 - `business_id` (string)
-- `channel` (string enum, canonical key: `telegram`, `website_chat`, `whatsapp`, `instagram`, `crm_webhook`, `form`, `test`)
-- `channel_type` (string enum: `messenger`, `website_chat`, `web_form`, `crm_webhook`, `other`)
+- `channel` (string enum — **locked in E1.2 spec** §4.1)
+- `channel_type` (string enum — **locked in E1.2 spec** §4.2)
 - `text` (string, may be empty only when attachment-first payload is explicitly supported later)
 - `received_at` (ISO-8601 datetime)
 - `idempotency_key` (string)
@@ -156,11 +158,7 @@ Telegram E0 behavior is the reference baseline for required operational traceabi
 
 ## Open Questions
 
-1. Exact enum values to lock for `channel` and `channel_type` in API specs.
-2. Whether `text` can be nullable for attachment-first channels in MVP+1.
-3. Standard normalized attachment schema (minimal cross-channel subset).
-4. Which source metadata keys become first-class fields vs remain metadata.
-5. Minimum required fields for CRM/form channels vs messenger channels.
+Resolved in E1.2 — see [`specs/architecture/normalized-channel-contract.md`](../../specs/architecture/normalized-channel-contract.md) §11.
 
 ## E1.1 Refinement Status
 
@@ -171,10 +169,12 @@ E1.1 mapping refinement is complete (spec-only):
 
 No runtime implementation was introduced by E1.1.
 
-## Next Recommended Task
+## E1.2 API/spec alignment status
 
-**E1.2 — API/spec alignment for canonical normalized channel contract**
+**Done (spec-only):**
 
-- align `specs/api/webhooks.md` field schema with E1 contracts
-- lock enum values and required/optional matrix in canonical specs
-- keep runtime unchanged
+- [`specs/architecture/normalized-channel-contract.md`](../../specs/architecture/normalized-channel-contract.md)
+- [`specs/api/webhooks.md`](../../specs/api/webhooks.md) §7 (transport mapping, validation, idempotency)
+- [`tasks/done/T-e1.2-api-spec-alignment-channel-contract.md`](../../tasks/done/T-e1.2-api-spec-alignment-channel-contract.md)
+
+Runtime unchanged. Next engineering slice: website chat adapter/runtime or backend field caps (see task handoff).

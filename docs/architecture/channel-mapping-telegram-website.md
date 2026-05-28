@@ -11,6 +11,8 @@ This is **spec-only**. No runtime implementation in this document.
 
 Canonical base contract: `docs/architecture/channel-ingress-contract.md`.
 
+**E1.2 API alignment:** locked enums, MVP transport mapping (`POST /api/v1/webhook/message`), idempotency, timestamps, validation — [`specs/architecture/normalized-channel-contract.md`](../../specs/architecture/normalized-channel-contract.md). Tables below remain the channel-specific view; they must match §10 of that spec.
+
 ---
 
 ## 1) Telegram Mapping (reference)
@@ -170,30 +172,19 @@ Assumed adapter input shape (future widget/webhook):
 
 ---
 
-## 5) Validation Rules (E1.1 spec baseline)
+## 5) Validation Rules
 
-Common minimum rules:
+**Authoritative (E1.2):** [`specs/architecture/normalized-channel-contract.md`](../../specs/architecture/normalized-channel-contract.md) §8–9.
 
-- required fields must be present: `business_id`, `channel`, `channel_type`, `external_user_id`, `external_conversation_id`, `text`, `received_at`, `idempotency_key`
-- `text` must be non-empty for current scope
-- parseable timestamp required; normalize to UTC
-- deterministic `idempotency_key` required
+Summary (unchanged intent from E1.1):
 
-Channel notes:
-
+- Logical required: `business_id`, `channel`, `channel_type`, `external_user_id`, `external_conversation_id`, `text`, `received_at`, `idempotency_key`
+- MVP POST: map to [`webhooks.md`](../../specs/api/webhooks.md) §7; `idempotency_key` **=** `message.external_message_id`
+- `text`: non-empty, max **16384** UTF-8 code units
+- `received_at` → `message.timestamp` (ISO-8601 UTC)
 - Telegram: reject unsupported update types (non-text, bot sender, missing ids)
-- Website chat: reject missing `visitor_id` / `session_id`; if `message_id` absent, adapter must synthesize stable id
-
-Payload limits (contract guidance):
-
-- text max policy: enforce backend-safe cap (adapter may pre-truncate or reject per policy)
-- metadata cap: keep bounded, structured, and non-secret
-- unsupported attachments: reject or map as unsupported with explicit adapter error (no silent business-logic fallback)
-
-Duplicate handling assumptions:
-
-- backend remains authoritative for idempotent processing
-- adapter should provide strongest stable key possible
+- Website chat: reject missing `visitor_id` / `session_id`; synthesize `message_id` if absent before `web:…` key
+- Unsupported attachments: reject at adapter; no attachment-only MVP ingress
 
 ---
 
@@ -220,15 +211,11 @@ Risks:
 
 Open questions:
 
-1. exact max text length to lock for ingress validation across adapters
-2. minimal normalized attachment schema for future channels
-3. standard error envelope/codes for adapter-level unsupported payloads
-4. whether website `visitor_id` should allow adapter-generated fallback or be strictly required upstream
+1. ~~exact max text length~~ — **resolved E1.2:** 16384 UTF-8 code units on `message.text`
+2. minimal normalized attachment schema — deferred (E1.2 §9)
+3. adapter-level error taxonomy in n8n — workflow convention, not backend API
+4. website `visitor_id` fallback — strict upstream preferred; deployment-specific adapter fallback only if documented
 
-## 8) Recommended Next Task
+## 8) Next recommended task
 
-**E1.2 — API/spec alignment for canonical normalized channel contract**
-
-- sync `specs/api/webhooks.md` with E1.0/E1.1 normalized field set (without implementation)
-- lock enum vocabulary and required/optional matrix in specs
-- keep runtime unchanged
+Website chat adapter/runtime implementation or backend `message.text` max-length enforcement — after human review of E1.2 (`tasks/done/T-e1.2-api-spec-alignment-channel-contract.md`).

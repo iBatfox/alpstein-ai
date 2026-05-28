@@ -329,7 +329,25 @@ This is the main backend contract.
 
 All providers must normalize into this format.
 
+**Canonical channel contract (E1.2):** logical field matrices, `channel` / `channel_type` enums, idempotency rules, timestamps, validation, and unsupported-payload handling — [normalized-channel-contract.md](../architecture/normalized-channel-contract.md). This section documents the **MVP transport JSON** for `POST /api/v1/webhook/message`; adapters build the logical contract first, then map per §6 of that spec.
+
 **Multi-channel source attribution:** optional structured `source`, `attribution`, `message.client`, and `message.external_conversation_id` — see [channel-source-attribution.md](../architecture/channel-source-attribution.md). **ATTR-2:** Pydantic validation active (optional fields; Telegram payloads without attribution remain valid). Persistence and Prompt Builder: ATTR-3+.
+
+---
+
+## E1.2 summary (transport vs logical)
+
+| Topic | Rule |
+|-------|------|
+| **MVP `channel` values** | `whatsapp`, `telegram`, `instagram`, `website_chat`, `test` |
+| **`channel_type`** | Not a top-level webhook field in MVP; adapter sets `messenger` / `website_chat` / `other` on logical record — see canonical spec §4.2 |
+| **Idempotency** | Adapter `idempotency_key` **must equal** `message.external_message_id` on POST; formats `tg:…`, `web:…` — canonical spec §7 |
+| **`received_at`** | Maps to `message.timestamp` (ISO-8601 UTC, recommended) |
+| **Customer id** | `customer.external_customer_id` and/or `customer.phone` (Telegram: phone may be null) |
+| **`message.text`** | Required, non-empty, max **16384** UTF-8 code units (canonical spec §8.2) |
+| **Deferred channels** | `crm_webhook`, `form` documented in canonical spec; **not** accepted by MVP backend validation |
+
+Channel-specific tables: [channel-mapping-telegram-website.md](../../docs/architecture/channel-mapping-telegram-website.md).
 
 ---
 
@@ -377,9 +395,9 @@ demo_barbershop_001
 
 ### channel
 
-Message source channel.
+Message source channel (canonical routing key).
 
-Allowed values:
+**MVP allowed values** (backend validation):
 
 ```text
 whatsapp
@@ -389,24 +407,30 @@ website_chat
 test
 ```
 
+**Catalog (future — not accepted on wire until implementation task):** `crm_webhook`, `form` — see [normalized-channel-contract.md](../architecture/normalized-channel-contract.md) §4.1.
+
+Each value pairs with a logical `channel_type` (`messenger`, `website_chat`, `web_form`, `crm_webhook`, `other`) at the adapter; not sent as a separate top-level field in MVP.
+
 ---
 
 ### customer.phone
 
-Primary customer identifier in MVP.
+Customer phone when known (E.164 preferred).
+
+**MVP validation:** at least one of `customer.phone` or `customer.external_customer_id` must be present. Telegram ingress may send `phone: null` with `external_customer_id` set.
 
 ---
 
 ### customer.external_customer_id
 
-Provider-specific customer identifier.
+Channel-scoped sender identifier (logical `external_user_id`).
 
-Example:
+Examples:
 
 ```text
-WhatsApp ID
-Telegram ID
-Instagram user ID
+Telegram user id (from.id)
+Website visitor_id
+WhatsApp ID (future)
 ```
 
 ---
@@ -415,25 +439,52 @@ Instagram user ID
 
 Customer message text.
 
-Required for MVP.
+| Rule | Value |
+|------|-------|
+| Required | **yes** |
+| Min length | 1 (non-empty after trim) |
+| Max length | **16384** UTF-8 code units |
+
+Must not contain operator business notes, system prompts, or channel metadata (those belong in `operator_business_context` or `source` / `attribution`).
+
+Attachment-only ingress without text is **unsupported** in MVP.
 
 ---
 
 ### message.external_message_id
 
-Provider-specific message ID.
+Provider-scoped message id and **MVP idempotency key**.
 
-Used for:
+| Rule | Value |
+|------|-------|
+| Adapter | **Required** — adapter must not POST without a stable key |
+| Backend | Used for deduplication when present |
+| Canonical | Must equal logical `idempotency_key` |
 
-- deduplication;
-- tracing;
-- debugging.
+**Locked formats:**
+
+```text
+tg:{chat_id}:{message_id}      # Telegram
+web:{session_id}:{message_id}  # Website chat
+```
+
+Full rules: [normalized-channel-contract.md](../architecture/normalized-channel-contract.md) §7.
+
+---
+
+### message.external_conversation_id
+
+Optional on wire; **required at adapter** for website chat and recommended for Telegram.
+
+Thread/session/chat id with channel prefix, e.g. `tg:{chat_id}`, `web:{session_id}`. See [channel-source-attribution.md](../architecture/channel-source-attribution.md).
 
 ---
 
 ### message.timestamp
 
-Original provider timestamp.
+Provider event time (`received_at` in logical contract).
+
+**Format:** ISO-8601 UTC (`…Z` or explicit offset). Adapters convert Unix epochs to UTC. Recommended on every POST; backend may fall back to server time if omitted (implementation detail).
 
 ---
 
@@ -518,9 +569,12 @@ Summary:
 | `customer.phone` | `null` (MVP) |
 | `message.text` | `message.text` (text-only MVP) |
 | `message.external_message_id` | `tg:{chat.id}:{message.message_id}` |
+| `message.external_conversation_id` | `tg:{chat.id}` |
 | `message.timestamp` | `message.date` (Unix → ISO UTC) |
 
-`message.chat.id` is used in n8n for outbound `sendMessage` and may appear in `raw_payload` only — not a top-level webhook field in MVP.
+`message.chat.id` is used in n8n for outbound `sendMessage` and may appear in `raw_payload` only — not a separate top-level webhook field in MVP.
+
+Full E1.2 alignment: [normalized-channel-contract.md](../architecture/normalized-channel-contract.md) §10.1.
 
 No bot token in normalized payload.
 

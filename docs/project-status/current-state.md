@@ -14,7 +14,7 @@ Specification-driven MVP with **backend AI orchestration complete**, **n8n test 
 
 **Phase E0 (Telegram stability gate):** **PASS WITH WARNINGS** — [`e0-telegram-regression-2026-05-28.md`](../audits/e0-telegram-regression-2026-05-28.md) + [`e0-telegram-reference-channel-remediation-2026-05-28.md`](../audits/e0-telegram-reference-channel-remediation-2026-05-28.md). **Telegram reference channel: YES WITH WARNINGS** — portable `alpstein_n8n_compose` exec **222**, full n8n → `http://backend:8000` → AI path; synthetic Telegram Send (`chat not found`); Langfuse trace not on running compose backend yet.
 
-**Primary open engineering:** Optional real DM + Langfuse compose recreate; compose `up n8n` fix; **CIP-D**, ATTR-3, and **E1.2 API/spec alignment** remain. **E1.0 + E1.1 channel-contract design slices are complete (spec-only).**
+**Primary open engineering:** Optional real DM + Langfuse compose recreate; compose `up n8n` fix; **CIP-D**, ATTR-3, and **website chat / channel runtime** (post–E1.2 spec). **E1.0 + E1.1 + E1.2 channel-contract spec slices are complete (spec-only).**
 
 ---
 
@@ -33,6 +33,7 @@ Specification-driven MVP with **backend AI orchestration complete**, **n8n test 
 - **Attribution persistence (ATTR-3+)** — ATTR-2 schema **implemented**; persistence **planned**
 - **Channel expansion ingress contract (E1.0)** — **implemented as design/spec only** in `docs/architecture/channel-ingress-contract.md`; no runtime integration started
 - **Telegram + Website Chat mapping (E1.1)** — **implemented as design/spec only** in `docs/architecture/channel-mapping-telegram-website.md`; runtime unchanged
+- **Normalized channel API alignment (E1.2)** — **implemented as spec only** in `specs/architecture/normalized-channel-contract.md`; `specs/api/webhooks.md` §7 aligned; runtime unchanged
 
 ---
 

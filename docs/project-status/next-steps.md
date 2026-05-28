@@ -4,13 +4,15 @@
 
 # Next Steps
 
-## Recommended next task: **E1.2 — API/spec alignment for normalized channel contract (spec-only)**
+## Recommended next task: **Website Chat adapter/runtime** (implementation — after E1.2 review)
 
 Phase **E0** closed: [`e0-telegram-reference-channel-remediation-2026-05-28.md`](../audits/e0-telegram-reference-channel-remediation-2026-05-28.md) — **PASS WITH WARNINGS** · Telegram reference channel baseline established.
 
 **E1.0 completed (design-only):** [`channel-ingress-contract.md`](../architecture/channel-ingress-contract.md).  
 **E1.1 completed (design-only):** [`channel-mapping-telegram-website.md`](../architecture/channel-mapping-telegram-website.md).  
-**Do not** start channel runtime integrations yet; next step is E1.2 spec alignment only.
+**E1.2 completed (spec-only):** [`specs/architecture/normalized-channel-contract.md`](../../specs/architecture/normalized-channel-contract.md) · [`T-e1.2-api-spec-alignment-channel-contract.md`](../../tasks/done/T-e1.2-api-spec-alignment-channel-contract.md).
+
+Do **not** start channel runtime until E1.2 is reviewed; then pick website chat adapter or backend text-cap enforcement per handoff.
 
 | Step | Status | Notes |
 |------|--------|-------|
@@ -19,7 +21,7 @@ Phase **E0** closed: [`e0-telegram-reference-channel-remediation-2026-05-28.md`]
 | **CIP-D** | **planned** | Live intent metadata smoke |
 | **Phase E1.0** | **done (design)** | Normalized ingress contract documented; no runtime changes |
 | **Phase E1.1** | **done (design)** | Telegram + Website Chat mapping matrix documented |
-| **Phase E1.2** | **planned** | Lock canonical API/spec field matrix (no runtime) |
+| **Phase E1.2** | **done (spec)** | Canonical API/spec field matrix locked; runtime unchanged |
 
 **Ingress policy (P0):** [`operational-ingress-policy.md`](../ops/operational-ingress-policy.md) — compose SoT; no stale `:8010` for validation.
 
@@ -81,10 +83,11 @@ Plan reference: [`tasks/todo/t14-telegram-customer-ingress.md`](../../tasks/todo
 |-------|--------|
 | E1.0 channel ingress contract | **done (design-only)** |
 | E1.1 Telegram/Website Chat mapping detail | **done (spec-only)** |
-| E1.2 API/spec field alignment | **next (spec-only)** |
+| E1.2 API/spec field alignment | **done (spec-only)** |
+| Website chat adapter/runtime | **next (after review)** |
 | Runtime channel integrations (WhatsApp/Instagram/etc.) | **deferred** |
 
-Reference: [`channel-ingress-contract.md`](../architecture/channel-ingress-contract.md), [`channel-mapping-telegram-website.md`](../architecture/channel-mapping-telegram-website.md), [`T-e1.0-channel-ingress-contract.md`](../../tasks/done/T-e1.0-channel-ingress-contract.md), [`T-e1.1-telegram-website-channel-mapping.md`](../../tasks/done/T-e1.1-telegram-website-channel-mapping.md).
+Reference: [`normalized-channel-contract.md`](../../specs/architecture/normalized-channel-contract.md), [`channel-ingress-contract.md`](../architecture/channel-ingress-contract.md), [`channel-mapping-telegram-website.md`](../architecture/channel-mapping-telegram-website.md), [`T-e1.0-channel-ingress-contract.md`](../../tasks/done/T-e1.0-channel-ingress-contract.md), [`T-e1.1-telegram-website-channel-mapping.md`](../../tasks/done/T-e1.1-telegram-website-channel-mapping.md), [`T-e1.2-api-spec-alignment-channel-contract.md`](../../tasks/done/T-e1.2-api-spec-alignment-channel-contract.md).
 
 ---
 

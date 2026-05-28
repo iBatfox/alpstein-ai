@@ -190,6 +190,8 @@ Main endpoint used by n8n to send normalized incoming customer messages.
 
 This is the most important MVP endpoint.
 
+**Canonical contract (E1.2):** logical normalized fields and transport mapping — [normalized-channel-contract.md](../architecture/normalized-channel-contract.md). Wire format: [webhooks.md](webhooks.md) §7.
+
 Authentication:
 
 ```text

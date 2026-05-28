@@ -232,7 +232,7 @@ Responsibilities:
 
 ## Step 4 — n8n Normalizes Payload
 
-n8n converts the payload into normalized structure via a **channel adapter** (provider-specific normalize → shared backend contract). Adapters set canonical `channel`, scoped external IDs, and optional `source` / `attribution` metadata — never mixed into `message.text`. See [channel-source-attribution.md](../architecture/channel-source-attribution.md).
+n8n converts the payload into normalized structure via a **channel adapter** (provider-specific normalize → shared backend contract). Adapters set canonical `channel`, scoped external IDs, and optional `source` / `attribution` metadata — never mixed into `message.text`. See [channel-source-attribution.md](../architecture/channel-source-attribution.md) and the locked field matrices in [normalized-channel-contract.md](../architecture/normalized-channel-contract.md) (E1.2).
 
 Example:
 
@@ -289,14 +289,16 @@ API token
 Backend validates:
 
 * required fields;
-* channel;
-* customer identity;
-* timestamp;
-* message text;
+* channel (MVP enum — [normalized-channel-contract.md](../architecture/normalized-channel-contract.md) §4.1);
+* customer identity (`phone` and/or `external_customer_id`);
+* `message.timestamp` when present (ISO-8601 UTC);
+* `message.text` (non-empty, max 16384 UTF-8 code units per E1.2);
+* `message.external_message_id` for idempotency when adapter supplies it (must match adapter `idempotency_key`);
 * business identifier;
-* optional `operator_business_context` length ≤ 8192 characters when present (T14-OC-2).
+* optional `operator_business_context` length ≤ 8192 characters when present (T14-OC-2);
+* optional `source` / `attribution` secret-like string rejection (ATTR-2).
 
-Validation errors must return structured responses.
+Full validation table: [normalized-channel-contract.md](../architecture/normalized-channel-contract.md) §9. Validation errors must return structured responses.
 
 ---
 
