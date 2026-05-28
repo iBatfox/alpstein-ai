@@ -111,6 +111,21 @@ Webhook `data.delivery` (when outbound saved): `{ delivery_id, delivery_status, 
 
 ---
 
+## E2.7 verification (continuity)
+
+Automated checks: `backend/tests/test_e2_observability_continuity.py`, harness `scripts/verify/e2_observability_verification.py`.
+
+Audit record: [`docs/audits/e2-observability-verification.md`](../audits/e2-observability-verification.md).
+
+Verified in code:
+
+- inbound → trace → outbound → `delivery_events.pending` share `outbound_message_id` and `trace_id`
+- duplicate inbound: no new outbound/delivery; trace id returned for ops lookup
+- observability GET APIs scoped by `tenant_id` + `business_id`
+- Langfuse `langfuse_trace_id` optional on trace completion
+
+---
+
 ## Out of scope (future)
 
 - Latency columns (`backend_total_latency_ms`, …)

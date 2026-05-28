@@ -4,7 +4,9 @@
 
 # Next Steps
 
-## Recommended next task: **E2.7 ops gate** or **n8n delivery PATCH wiring** or **Live Telegram DM confirmation**
+## Recommended next task: **E2.8 ops gate** or **n8n delivery PATCH wiring** or **Live Telegram DM confirmation**
+
+**E2.7 (done):** E2 observability verification — [`T-e2.7-end-to-end-observability-verification.md`](../../tasks/done/T-e2.7-end-to-end-observability-verification.md), audit [`e2-observability-verification.md`](../audits/e2-observability-verification.md).
 
 **E2.6 (done):** delivery visibility — [`T-e2.6-delivery-visibility.md`](../../tasks/done/T-e2.6-delivery-visibility.md).
 
@@ -66,7 +68,8 @@ Implementation follow-up: E1.6.3 runtime compatibility fix and E1.6.6 activation
 | E2.4 | **done** | [`T-e2.4-message-trace-persistence.md`](../../tasks/done/T-e2.4-message-trace-persistence.md) — `message_traces` + webhook lifecycle (Alembic `0011`) |
 | E2.5 | **done** | [`T-e2.5-observability-api-extensions.md`](../../tasks/done/T-e2.5-observability-api-extensions.md) — read APIs + webhook `data.trace` |
 | E2.6 | **done** | [`T-e2.6-delivery-visibility.md`](../../tasks/done/T-e2.6-delivery-visibility.md) — `delivery_events` + observability delivery APIs (Alembic `0012`) |
-| E2.7 | **next** | Ops gate + Langfuse on compose verification |
+| E2.7 | **done** | [`T-e2.7-end-to-end-observability-verification.md`](../../tasks/done/T-e2.7-end-to-end-observability-verification.md) — continuity tests + verification harness |
+| E2.8 | **next** | Ops gate + Langfuse on compose verification |
 | — | follow-up | n8n: `PATCH …/deliveries/{id}` after Telegram/Website send using `data.delivery.delivery_id` |
 
 Golden rule: **one flow = one bot behavior** — see [`unified-conversation-model.md`](../../specs/architecture/unified-conversation-model.md) § Database Separation & Flow Governance.
