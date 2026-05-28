@@ -4,7 +4,7 @@
 
 # Alpstein AI — Current State
 
-**As-of:** 2026-05-28 (RECOVERY-2 compose recreate stabilized)
+**As-of:** 2026-05-28 (OPS-H1 runtime surface documented)
 
 ## Project Phase
 
@@ -12,13 +12,15 @@ Specification-driven MVP with **backend AI orchestration complete**, **n8n test 
 
 **Phase D4 operational verification:** **complete** (D4.1–D4.4, U1, OPS-C1). Portable **Docker Compose** is the **operational source of truth** for backend verification; see [`d4-operational-wrap-up-2026-05-27.md`](../audits/d4-operational-wrap-up-2026-05-27.md).
 
+**OPS-H1 (runtime surface):** **PASS WITH NOTES** — [`runtime-map.md`](../ops/runtime-map.md) · [`runtime-surface-hardening.md`](../ops/runtime-surface-hardening.md). Canonical ports: **15679** (n8n), **8000** (backend loopback), **15433** (postgres loopback). Legacy **8010** / **15432** not listening; `backend_postgres` container absent. **Action item:** `python3 -m http.server` on **`0.0.0.0:8088` / `8090`** — use `--bind 127.0.0.1` or stop when idle.
+
 **RECOVERY-2 (compose recreate):** **PASS WITH NOTES** — [`recovery-compose-recreate-stabilization-2026-05-28.md`](../audits/recovery-compose-recreate-stabilization-2026-05-28.md). Root cause: **docker-compose v1.29 + Docker 29** → `ContainerConfig` on recreate. Fix: **`docker compose` v2** installed; full stack `up -d postgres backend n8n` verified; `--force-recreate` safe on v2. Canonical CLI documented in `postgres-compose.md` / `.env.example`. Legacy `docker-compose --force-recreate` **still broken** — do not use.
 
 **RECOVERY-1 (runtime SoT):** **PASS WITH NOTES** — [`recovery-runtime-source-of-truth-2026-05-28.md`](../audits/recovery-runtime-source-of-truth-2026-05-28.md). Portable chain: `alpstein_postgres` → `alpstein_backend` → `alpstein_n8n_compose` @ **15679**; all compose-labeled under project `alpstein-ai`.
 
 **Phase E0 (Telegram stability gate):** **PASS WITH WARNINGS** — [`e0-telegram-regression-2026-05-28.md`](../audits/e0-telegram-regression-2026-05-28.md) + [`e0-telegram-reference-channel-remediation-2026-05-28.md`](../audits/e0-telegram-reference-channel-remediation-2026-05-28.md). **Telegram reference channel: YES WITH WARNINGS** — portable `alpstein_n8n_compose` exec **222**, full n8n → `http://backend:8000` → AI path; synthetic Telegram Send (`chat not found`); Langfuse trace not on running compose backend yet.
 
-**Primary open engineering:** Optional real DM + Langfuse compose recreate; compose `up n8n` fix; **CIP-D**, ATTR-3, and Website Chat follow-up hardening. **E1.7 (design):** unified customer ingress workflow specified — implementation deferred to a follow-on task; see [`unified-customer-ingress-workflow.md`](../architecture/unified-customer-ingress-workflow.md).
+**Primary open engineering:** E2.1+ implementation (flows + conversation lookup + message traces); Live Telegram DM confirmation post E1.9; Langfuse on compose backend; **CIP-D**, ATTR-3. **E1.9 (done):** Production ingress on **`alpstein-customer-ingress`** (`aYrRmAGKhP4TJbG9`) — [`e1-9-unified-ingress-cutover-2026-05-28.md`](../audits/e1-9-unified-ingress-cutover-2026-05-28.md). Legacy workflows archived (`2lMuaSWD1XFOXLEK`, `hAJ3TFYn69in0vd5`). **E2.0 (done, design-only):** [`unified-conversation-observability.md`](../architecture/unified-conversation-observability.md) — **PASS WITH NOTES**.
 
 ---
 
@@ -42,6 +44,7 @@ Specification-driven MVP with **backend AI orchestration complete**, **n8n test 
 - **Multi-channel identity strategy (E1.4)** — **implemented as spec only** in `docs/architecture/multi-channel-identity-strategy.md`; conservative non-merge rules locked; runtime unchanged
 - **Channel capability matrix (E1.5)** — **implemented as spec only** in `docs/architecture/channel-capability-matrix.md`; Telegram vs Website operational differences and placeholder-channel boundaries documented; runtime unchanged
 - **Website Chat MVP runtime (E1.6)** — minimal runtime slice implemented: widget assets + n8n workflow + ops runbook using existing backend orchestration path; no backend redesign
+- **Unified conversation + observability (E2.0)** — **design-only** in [`unified-conversation-observability.md`](../architecture/unified-conversation-observability.md), [`unified-conversation-model.md`](../../specs/architecture/unified-conversation-model.md), [`message-trace-lifecycle.md`](../../specs/observability/message-trace-lifecycle.md), [`message-debugging-runbook.md`](../ops/message-debugging-runbook.md); golden rule **one flow = one bot behavior**; no runtime/migrations in E2.0
 - **E1.6.2 + E1.6.3 live compose smoke/retest** — runtime blocker fixed (`Cannot find module 'crypto'` removed from Normalize node); see [`e1-6-2-website-chat-live-smoke-2026-05-28.md`](../audits/e1-6-2-website-chat-live-smoke-2026-05-28.md), [`T-e1.6.2-website-chat-live-smoke-verification.md`](../../tasks/done/T-e1.6.2-website-chat-live-smoke-verification.md), and [`T-e1.6.3-website-chat-runtime-stabilization.md`](../../tasks/done/T-e1.6.3-website-chat-runtime-stabilization.md)
 
 ---
@@ -98,6 +101,9 @@ Specification-driven MVP with **backend AI orchestration complete**, **n8n test 
 
 - repositories (services use `AsyncSession` directly)
 - attribution columns / persistence
+- **`flows` table** and **`message_traces` table** (E2.1+ — designed in E2.0)
+- **`conversations.flow_id`** and lookup by `(flow_id, channel, external_conversation_id)` (E2.2 — today: customer+channel only)
+- flow-scoped message idempotency `(flow_id, channel, external_message_id)` (E2.3 — today: `business_id` only)
 
 ---
 

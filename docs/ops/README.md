@@ -1,11 +1,13 @@
 # Operations Documentation
 
 **Doc status:** canonical (navigation layer)  
-**As-of:** 2026-05-27 (D4.5)
+**As-of:** 2026-05-28 (OPS-H1)
 
 Runbooks describe **how to operate** the runtime described in [`../architecture/canonical-runtime-architecture.md`](../architecture/canonical-runtime-architecture.md).
 
-**START HERE →** [`../architecture/canonical-runtime-architecture.md`](../architecture/canonical-runtime-architecture.md)
+**START HERE →** [`runtime-map.md`](runtime-map.md) (ports, containers, allowed/forbidden commands)
+
+**Architecture map →** [`../architecture/canonical-runtime-architecture.md`](../architecture/canonical-runtime-architecture.md)
 
 **Operational SoT (post-D4):** Portable Docker Compose backend (`http://backend:8000`) — not stale host `:8010`. Policy: [`operational-ingress-policy.md`](operational-ingress-policy.md). Wrap-up: [`../audits/d4-operational-wrap-up-2026-05-27.md`](../audits/d4-operational-wrap-up-2026-05-27.md).
 
@@ -28,6 +30,9 @@ Runbooks describe **how to operate** the runtime described in [`../architecture/
 
 | Document | Doc status | Topic |
 |----------|------------|-------|
+| [`runtime-map.md`](runtime-map.md) | **canonical** (ops) | Canonical topology, ports, compose v2 rule (OPS-H1) |
+| [`runtime-surface-hardening.md`](runtime-surface-hardening.md) | runtime-derived | OPS-H1 inventory and hardening notes |
+| [`n8n-unified-customer-ingress-runbook.md`](n8n-unified-customer-ingress-runbook.md) | **canonical** (ops) | Production unified ingress (E1.9) |
 | [`operational-ingress-policy.md`](operational-ingress-policy.md) | **canonical** (ops) | Single backend ingress (OPS-C1 / D4) |
 | [`n8n-runtime-export-parity.md`](n8n-runtime-export-parity.md) | **canonical** (ops) | Workflow export governance (Phase C) |
 | [`n8n-runtime-start.md`](n8n-runtime-start.md) | runtime-derived | Legacy host n8n Docker runtime |

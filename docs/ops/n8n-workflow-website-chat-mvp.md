@@ -4,8 +4,13 @@
 
 # Website Chat MVP workflow (E1.6)
 
+> **E1.9 (2026-05-28):** Production Website Chat ingress moved to **`alpstein-customer-ingress`** (`aYrRmAGKhP4TJbG9`).  
+> **Production webhook:** `/webhook/alpstein/unified-customer-ingress/website-chat/incoming`  
+> This workflow is **archived** at runtime as `alpstein-incoming-message-website-chat-archived-e1-9` (`hAJ3TFYn69in0vd5`).  
+> See [`n8n-unified-customer-ingress-runbook.md`](n8n-unified-customer-ingress-runbook.md).
+
 **Workflow file:** [`n8n/workflows/e1_6_workflow_website_chat_mvp_skeleton.json`](../../n8n/workflows/e1_6_workflow_website_chat_mvp_skeleton.json)  
-**Workflow name:** `alpstein-incoming-message-website-chat`  
+**Workflow name:** `alpstein-incoming-message-website-chat` (historical export name)  
 **Widget files:** [`website-widget/`](../../website-widget/)  
 **Contract source:** [`specs/architecture/normalized-channel-contract.md`](../../specs/architecture/normalized-channel-contract.md)
 
@@ -118,7 +123,7 @@ Local demo:
 
 ```bash
 cd /opt/alpstein-ai/website-widget
-python3 -m http.server 18080
+python3 -m http.server 18080 --bind 127.0.0.1
 ```
 
 Open `http://127.0.0.1:18080/example.html`.

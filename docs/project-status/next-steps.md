@@ -4,7 +4,11 @@
 
 # Next Steps
 
-## Recommended next task: **CIP-D live smoke** or **stop legacy `backend_postgres`**
+## Recommended next task: **E2.1 `flows` migration + backfill** or **Live Telegram DM confirmation**
+
+**E2.0 (done, design-only):** Unified conversation + observability — [`unified-conversation-observability.md`](../architecture/unified-conversation-observability.md) · [`T-e2.0-unified-conversation-observability-design.md`](../../tasks/done/T-e2.0-unified-conversation-observability-design.md) · verdict **PASS WITH NOTES**.
+
+**OPS-H1** closed: [`runtime-surface-hardening.md`](../ops/runtime-surface-hardening.md) — canonical map in [`runtime-map.md`](../ops/runtime-map.md).
 
 **RECOVERY-2** closed: [`recovery-compose-recreate-stabilization-2026-05-28.md`](../audits/recovery-compose-recreate-stabilization-2026-05-28.md) — use **`docker compose`** (v2) for stack ops; never `docker-compose --force-recreate` on v1.
 
@@ -20,6 +24,7 @@ Implementation follow-up: E1.6.3 runtime compatibility fix and E1.6.6 activation
 
 | Step | Status | Notes |
 |------|--------|-------|
+| **OPS-H1** | **done (WARN)** | Runtime map; `0.0.0.0` dev servers flagged |
 | **RECOVERY-2** | **done (WARN)** | `docker compose` v2; recreate path safe |
 | **RECOVERY-1** | **done (WARN)** | Postgres/backend/n8n SoT; webhook smokes 200 |
 | **T14.5 / T-e0** | **done (WARN)** | Exec **222**; prompt_run `e426d4bc-…` |
@@ -31,9 +36,29 @@ Implementation follow-up: E1.6.3 runtime compatibility fix and E1.6.6 activation
 | **Phase E1.6.2** | **done** | Live smoke + runtime evidence documented |
 | **Phase E1.6.3** | **done** | Runtime compatibility fix + re-smoke + evidence |
 | **Phase E1.6.6** | **done** | Explicit kill switch semantics (`ALPSTEIN_WEBSITE_CHAT_ENABLED`) verified on production URL |
-| **Phase E1.7** | **done** | Unified customer ingress workflow design (no runtime) — [`unified-customer-ingress-workflow.md`](../architecture/unified-customer-ingress-workflow.md) |
+| **Phase E1.7** | **done** | Unified customer ingress workflow design — [`unified-customer-ingress-workflow.md`](../architecture/unified-customer-ingress-workflow.md) |
+| **Phase E1.8** | **done** | Unified ingress workflow JSON + inactive import — [`e1-8-unified-ingress-inactive-implementation-2026-05-28.md`](../audits/e1-8-unified-ingress-inactive-implementation-2026-05-28.md) |
+| **Phase E1.9** | **done** | Production cutover to `alpstein-customer-ingress` — [`e1-9-unified-ingress-cutover-2026-05-28.md`](../audits/e1-9-unified-ingress-cutover-2026-05-28.md) |
+| **Phase E2.0** | **done (design)** | Conversation + observability model — no runtime |
 
 **Ingress policy (P0):** [`operational-ingress-policy.md`](../ops/operational-ingress-policy.md) — compose SoT; no stale `:8010` for validation.
+
+---
+
+## Phase E2 — conversation continuity + observability
+
+| Slice | Status | Notes |
+|-------|--------|-------|
+| **E2.0** | **done (design)** | [`unified-conversation-observability.md`](../architecture/unified-conversation-observability.md), [`message-debugging-runbook.md`](../ops/message-debugging-runbook.md) |
+| E2.1 | **next** | `flows` table + one default flow per business |
+| E2.2 | planned | `ConversationService` + `flow_id` + `external_conversation_id` lookup |
+| E2.3 | planned | Message idempotency index `(flow_id, channel, external_message_id)` |
+| E2.4 | planned | `message_traces` persistence + lifecycle stages |
+| E2.5 | planned | API/webhooks.md response fields (`conversation_id`, `message_id`, `trace_id`) |
+| E2.6 | planned | n8n `flow_key` + delivery-stage logging (same workflow) |
+| E2.7 | planned | Ops gate + Langfuse on compose verification |
+
+Golden rule: **one flow = one bot behavior** — see [`unified-conversation-model.md`](../../specs/architecture/unified-conversation-model.md) § Database Separation & Flow Governance.
 
 ---
 
@@ -100,7 +125,7 @@ Plan reference: [`tasks/todo/t14-telegram-customer-ingress.md`](../../tasks/todo
 | E1.6 Website Chat MVP runtime slice | **implemented** |
 | E1.6 smoke verification and hardening | **E1.6.3 blocker fixed + E1.6.6 kill switch semantics verified** |
 | **E1.7** unified customer ingress design | **done (spec-only)** — [`unified-customer-ingress-workflow.md`](../architecture/unified-customer-ingress-workflow.md) |
-| **E1.8** implement unified ingress workflow | **planned** — build `alpstein-customer-ingress` inactive; smoke; cutover per [`n8n-unified-customer-ingress-runbook.md`](../ops/n8n-unified-customer-ingress-runbook.md) |
+| E1.9 post-cutover | **operator** — live Telegram DM smoke; deploy widget URL to unified path on production sites |
 | Runtime channel integrations (WhatsApp/Instagram/etc.) | **deferred** |
 
 Reference: [`website-chat-architecture.md`](../architecture/website-chat-architecture.md), [`multi-channel-identity-strategy.md`](../architecture/multi-channel-identity-strategy.md), [`channel-capability-matrix.md`](../architecture/channel-capability-matrix.md), [`n8n-workflow-website-chat-mvp.md`](../ops/n8n-workflow-website-chat-mvp.md), [`normalized-channel-contract.md`](../../specs/architecture/normalized-channel-contract.md), [`channel-ingress-contract.md`](../architecture/channel-ingress-contract.md), [`channel-mapping-telegram-website.md`](../architecture/channel-mapping-telegram-website.md), [`T-e1.0-channel-ingress-contract.md`](../../tasks/done/T-e1.0-channel-ingress-contract.md), [`T-e1.1-telegram-website-channel-mapping.md`](../../tasks/done/T-e1.1-telegram-website-channel-mapping.md), [`T-e1.2-api-spec-alignment-channel-contract.md`](../../tasks/done/T-e1.2-api-spec-alignment-channel-contract.md), [`T-e1.3-website-chat-architecture.md`](../../tasks/done/T-e1.3-website-chat-architecture.md), [`T-e1.4-multi-channel-identity-strategy.md`](../../tasks/done/T-e1.4-multi-channel-identity-strategy.md), [`T-e1.5-channel-capability-matrix.md`](../../tasks/done/T-e1.5-channel-capability-matrix.md), [`T-e1.6-website-chat-mvp-runtime.md`](../../tasks/done/T-e1.6-website-chat-mvp-runtime.md).
