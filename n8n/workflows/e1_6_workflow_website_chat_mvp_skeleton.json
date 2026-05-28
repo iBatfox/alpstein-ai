@@ -20,6 +20,41 @@
     },
     {
       "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-website-chat-enabled",
+              "leftValue": "={{ $env.ALPSTEIN_WEBSITE_CHAT_ENABLED }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e1600000-0000-4000-8000-000000000012",
+      "name": "IF Website Chat Enabled",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        280,
+        200
+      ],
+      "notesInFlow": true,
+      "notes": "E1.6.6: explicit runtime kill switch. Only exact string 'true' enables Website Chat flow."
+    },
+    {
+      "parameters": {
         "jsCode": "const item = $input.first().json;\nconst body = item.body ?? item;\nconst headers = item.headers ?? {};\n\nfunction pickHeader(name) {\n  const direct = headers[name];\n  if (typeof direct === 'string' && direct.trim() !== '') return direct.trim();\n  const lower = headers[name.toLowerCase()];\n  if (typeof lower === 'string' && lower.trim() !== '') return lower.trim();\n  return null;\n}\n\nfunction normalizeOptionalString(value) {\n  if (typeof value !== 'string') {\n    return null;\n  }\n  const trimmed = value.trim();\n  return trimmed === '' ? null : trimmed;\n}\n\nfunction sanitizeRawPayload(value) {\n  if (value == null || typeof value !== 'object') {\n    return {};\n  }\n  const secretPattern = /^(token|secret|password|authorization|api[_-]?key)$/i;\n  if (Array.isArray(value)) {\n    return value.map((entry) =>\n      typeof entry === 'object' && entry !== null ? sanitizeRawPayload(entry) : entry\n    );\n  }\n  const out = {};\n  for (const [key, val] of Object.entries(value)) {\n    if (secretPattern.test(key)) {\n      out[key] = '[REDACTED]';\n    } else if (typeof val === 'object' && val !== null) {\n      out[key] = sanitizeRawPayload(val);\n    } else {\n      out[key] = val;\n    }\n  }\n  return out;\n}\n\nfunction randomHex(length) {\n  let out = '';\n  while (out.length < length) {\n    out += Math.floor(Math.random() * 16).toString(16);\n  }\n  return out.slice(0, length);\n}\n\nfunction randomUuidV4() {\n  if (\n    typeof crypto !== 'undefined' &&\n    crypto &&\n    typeof crypto.randomUUID === 'function'\n  ) {\n    return crypto.randomUUID();\n  }\n  const bytes = randomHex(32).split('');\n  bytes[12] = '4';\n  const variant = ['8', '9', 'a', 'b'][Math.floor(Math.random() * 4)];\n  bytes[16] = variant;\n  return `${bytes.slice(0, 8).join('')}-${bytes.slice(8, 12).join('')}-${bytes.slice(12, 16).join('')}-${bytes.slice(16, 20).join('')}-${bytes.slice(20, 32).join('')}`;\n}\n\nfunction fnv1aHex(input) {\n  const text = String(input ?? '');\n  let hash = 0x811c9dc5;\n  for (let i = 0; i < text.length; i += 1) {\n    hash ^= text.charCodeAt(i);\n    hash +=\n      (hash << 1) +\n      (hash << 4) +\n      (hash << 7) +\n      (hash << 8) +\n      (hash << 24);\n  }\n  return (hash >>> 0).toString(16).padStart(8, '0');\n}\n\nfunction stableHex24(seed) {\n  return `${fnv1aHex(seed)}${fnv1aHex(`${seed}|1`)}${fnv1aHex(`${seed}|2`)}`.slice(0, 24);\n}\n\nfunction stableHex64(seed) {\n  const parts = [];\n  for (let i = 0; i < 8; i += 1) {\n    parts.push(fnv1aHex(`${seed}|${i}`));\n  }\n  return parts.join('');\n}\n\nconst uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;\n\nfunction resolveCorrelationId() {\n  const candidate =\n    normalizeOptionalString(body.correlation_id) ||\n    normalizeOptionalString(pickHeader('X-Correlation-Id'));\n  if (candidate && uuidPattern.test(candidate)) {\n    return candidate;\n  }\n  return randomUuidV4();\n}\n\nconst businessId =\n  normalizeOptionalString(body.business_id) ||\n  (typeof $env !== 'undefined' && $env.ALPSTEIN_WEBSITE_CHAT_BUSINESS_ID\n    ? $env.ALPSTEIN_WEBSITE_CHAT_BUSINESS_ID\n    : null);\n\nif (!businessId) {\n  throw new Error('Validation: business_id is required');\n}\n\nconst text = normalizeOptionalString(body.text);\nif (!text) {\n  throw new Error('Validation: text is required');\n}\n\nconst visitorId = normalizeOptionalString(body.visitor_id);\nif (!visitorId) {\n  throw new Error('Validation: visitor_id is required');\n}\n\nconst sessionId = normalizeOptionalString(body.session_id);\nif (!sessionId) {\n  throw new Error('Validation: session_id is required');\n}\n\nlet messageId = normalizeOptionalString(body.message_id);\nif (!messageId) {\n  const fallbackSeed = `${sessionId}|${text}|${normalizeOptionalString(body.timestamp) || new Date().toISOString()}`;\n  messageId = `generated-${stableHex24(fallbackSeed)}`;\n}\n\nconst correlationId = resolveCorrelationId();\n\nconst isoTimestamp = normalizeOptionalString(body.timestamp) || new Date().toISOString();\n\nconst source = {\n  platform: 'web_widget_v1',\n  account_id: normalizeOptionalString(body.website_id),\n  account_name: normalizeOptionalString(body.website_name),\n  locale: normalizeOptionalString(body.language),\n  country: normalizeOptionalString(body.country),\n  region: normalizeOptionalString(body.region),\n  timezone: normalizeOptionalString(body.timezone)\n};\n\nconst attribution = {\n  marketing_source: normalizeOptionalString(body.marketing_source),\n  campaign_id: normalizeOptionalString(body.campaign_id),\n  landing_page_url: normalizeOptionalString(body.page_url),\n  referrer_url: normalizeOptionalString(body.referrer),\n  utm_source: normalizeOptionalString(body.utm_source),\n  utm_medium: normalizeOptionalString(body.utm_medium),\n  utm_campaign: normalizeOptionalString(body.utm_campaign),\n  utm_content: normalizeOptionalString(body.utm_content),\n  utm_term: normalizeOptionalString(body.utm_term)\n};\n\nconst userAgentHeader = pickHeader('User-Agent');\nconst userAgentBody = normalizeOptionalString(body.user_agent);\nconst ip = pickHeader('x-forwarded-for') || pickHeader('x-real-ip');\n\nconst messageClient = {\n  user_agent: userAgentBody || userAgentHeader,\n  ip_address_hash: ip ? stableHex64(String(ip)) : null\n};\n\nconst rawPayload = sanitizeRawPayload({\n  website_payload: body,\n  website_headers: {\n    host: pickHeader('host'),\n    origin: pickHeader('origin'),\n    referer: pickHeader('referer')\n  }\n});\n\nreturn [\n  {\n    json: {\n      correlation_id: correlationId,\n      business_id: businessId,\n      channel: 'website_chat',\n      source,\n      attribution,\n      customer: {\n        phone: normalizeOptionalString(body.phone),\n        name: normalizeOptionalString(body.name),\n        email: normalizeOptionalString(body.email),\n        external_customer_id: visitorId\n      },\n      message: {\n        text,\n        external_message_id: `web:${sessionId}:${messageId}`,\n        external_conversation_id: `web:${sessionId}`,\n        timestamp: isoTimestamp,\n        client: messageClient,\n        raw_payload: rawPayload\n      },\n      website_chat_context: {\n        visitor_id: visitorId,\n        session_id: sessionId,\n        message_id: messageId\n      }\n    }\n  }\n];"
       },
       "id": "e1600000-0000-4000-8000-000000000002",
@@ -32,6 +67,25 @@
       ],
       "notesInFlow": true,
       "notes": "E1.6: Maps website widget payload to canonical POST /api/v1/webhook/message transport contract."
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: false, error: { code: 'WEBSITE_CHAT_DISABLED', message: 'Website chat is temporarily disabled.' } } }}",
+        "options": {
+          "responseCode": 503
+        }
+      },
+      "id": "e1600000-0000-4000-8000-000000000013",
+      "name": "Respond Website Chat Disabled",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        560,
+        120
+      ],
+      "notesInFlow": true,
+      "notes": "E1.6.6: Explicit kill switch response when ALPSTEIN_WEBSITE_CHAT_ENABLED is not 'true'."
     },
     {
       "parameters": {
@@ -256,7 +310,25 @@
       "main": [
         [
           {
+            "node": "IF Website Chat Enabled",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Website Chat Enabled": {
+      "main": [
+        [
+          {
             "node": "Normalize Website Chat Incoming",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Website Chat Disabled",
             "type": "main",
             "index": 0
           }

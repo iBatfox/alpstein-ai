@@ -78,6 +78,29 @@ docker exec alpstein_n8n_compose wget -qO- http://backend:8000/api/v1/health/rea
 
 ---
 
+## Runtime ownership (E1.6.6)
+
+Canonical Website Chat runtime workflow:
+
+- ID: `hAJ3TFYn69in0vd5`
+- Name: `alpstein-incoming-message-website-chat`
+- Webhook path owner: `alpstein/website-chat/incoming`
+
+Duplicate archived workflow:
+
+- ID: `OnaY83T8YLRUB8SJ`
+- Name: `alpstein-incoming-message-website-chat-archived-e1-6-2`
+- State: inactive (must remain inactive)
+
+Activation semantics verified (production URL):
+
+- kill switch `ALPSTEIN_WEBSITE_CHAT_ENABLED=true` -> HTTP 200 + execution with `POST Backend`
+- kill switch `ALPSTEIN_WEBSITE_CHAT_ENABLED=false` -> HTTP 503 (`WEBSITE_CHAT_DISABLED`) and no backend call
+
+Audit: [`e1-6-6-website-chat-activation-semantics-2026-05-28.md`](../audits/e1-6-6-website-chat-activation-semantics-2026-05-28.md)
+
+---
+
 ## Widget setup
 
 Use script from [`website-widget/alpstein-chat-widget.js`](../../website-widget/alpstein-chat-widget.js):
@@ -183,3 +206,4 @@ Expected: HTTP 502 with safe error body from `Respond Website Error`.
 - Runtime activation/deactivation is an operator step.
 - Website Chat remains text-only in MVP.
 - E1.6.3 runtime stabilization removed unsupported `require('crypto')` from Normalize node for n8n Code VM compatibility.
+- E1.6.6 kill switch: `ALPSTEIN_WEBSITE_CHAT_ENABLED` is the explicit runtime control; do not rely on workflow `active=false` as the only disable mechanism.
