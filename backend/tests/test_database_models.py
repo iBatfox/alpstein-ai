@@ -55,6 +55,9 @@ def test_metadata_contains_persistence_slice_tables():
         "dead_letter_events",
         "rate_limit_buckets",
         "rate_limit_violations",
+        "spam_indicator_buckets",
+        "spam_containments",
+        "spam_decisions",
     }
     assert Tenant.__tablename__ == "tenants"
     assert Business.__tablename__ == "businesses"

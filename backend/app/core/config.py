@@ -110,6 +110,102 @@ class Settings(BaseSettings):
         default=30,
         validation_alias="RATE_LIMIT_CONVERSATION_LIMIT",
     )
+    spam_protection_enabled: bool = Field(
+        default=False,
+        validation_alias="SPAM_PROTECTION_ENABLED",
+    )
+    spam_production_safe_mode: bool = Field(
+        default=True,
+        validation_alias="SPAM_PRODUCTION_SAFE_MODE",
+    )
+    spam_containment_throttle_ttl_seconds: int = Field(
+        default=300,
+        validation_alias="SPAM_CONTAINMENT_THROTTLE_TTL_SECONDS",
+    )
+    spam_containment_block_ttl_seconds: int = Field(
+        default=900,
+        validation_alias="SPAM_CONTAINMENT_BLOCK_TTL_SECONDS",
+    )
+    spam_rule_payload_repeat_enabled: bool = Field(
+        default=True,
+        validation_alias="SPAM_RULE_PAYLOAD_REPEAT_ENABLED",
+    )
+    spam_rule_payload_repeat_threshold: int = Field(
+        default=5,
+        validation_alias="SPAM_RULE_PAYLOAD_REPEAT_THRESHOLD",
+    )
+    spam_rule_payload_repeat_window_seconds: int = Field(
+        default=300,
+        validation_alias="SPAM_RULE_PAYLOAD_REPEAT_WINDOW_SECONDS",
+    )
+    spam_rule_payload_repeat_action: str = Field(
+        default="throttle",
+        validation_alias="SPAM_RULE_PAYLOAD_REPEAT_ACTION",
+    )
+    spam_rule_conversation_burst_enabled: bool = Field(
+        default=True,
+        validation_alias="SPAM_RULE_CONVERSATION_BURST_ENABLED",
+    )
+    spam_rule_conversation_burst_threshold: int = Field(
+        default=15,
+        validation_alias="SPAM_RULE_CONVERSATION_BURST_THRESHOLD",
+    )
+    spam_rule_conversation_burst_window_seconds: int = Field(
+        default=60,
+        validation_alias="SPAM_RULE_CONVERSATION_BURST_WINDOW_SECONDS",
+    )
+    spam_rule_conversation_burst_action: str = Field(
+        default="mark_suspicious",
+        validation_alias="SPAM_RULE_CONVERSATION_BURST_ACTION",
+    )
+    spam_rule_adapter_fanout_enabled: bool = Field(
+        default=True,
+        validation_alias="SPAM_RULE_ADAPTER_FANOUT_ENABLED",
+    )
+    spam_rule_adapter_fanout_threshold: int = Field(
+        default=50,
+        validation_alias="SPAM_RULE_ADAPTER_FANOUT_THRESHOLD",
+    )
+    spam_rule_adapter_fanout_window_seconds: int = Field(
+        default=300,
+        validation_alias="SPAM_RULE_ADAPTER_FANOUT_WINDOW_SECONDS",
+    )
+    spam_rule_adapter_fanout_action: str = Field(
+        default="mark_suspicious",
+        validation_alias="SPAM_RULE_ADAPTER_FANOUT_ACTION",
+    )
+    spam_rule_retry_abuse_enabled: bool = Field(
+        default=True,
+        validation_alias="SPAM_RULE_RETRY_ABUSE_ENABLED",
+    )
+    spam_rule_retry_abuse_threshold: int = Field(
+        default=10,
+        validation_alias="SPAM_RULE_RETRY_ABUSE_THRESHOLD",
+    )
+    spam_rule_retry_abuse_window_seconds: int = Field(
+        default=600,
+        validation_alias="SPAM_RULE_RETRY_ABUSE_WINDOW_SECONDS",
+    )
+    spam_rule_retry_abuse_action: str = Field(
+        default="throttle",
+        validation_alias="SPAM_RULE_RETRY_ABUSE_ACTION",
+    )
+    spam_rule_replay_storm_enabled: bool = Field(
+        default=True,
+        validation_alias="SPAM_RULE_REPLAY_STORM_ENABLED",
+    )
+    spam_rule_replay_storm_threshold: int = Field(
+        default=20,
+        validation_alias="SPAM_RULE_REPLAY_STORM_THRESHOLD",
+    )
+    spam_rule_replay_storm_window_seconds: int = Field(
+        default=300,
+        validation_alias="SPAM_RULE_REPLAY_STORM_WINDOW_SECONDS",
+    )
+    spam_rule_replay_storm_action: str = Field(
+        default="temporary_block",
+        validation_alias="SPAM_RULE_REPLAY_STORM_ACTION",
+    )
 
     model_config = SettingsConfigDict(
         env_prefix="ALPSTEIN_AI_",

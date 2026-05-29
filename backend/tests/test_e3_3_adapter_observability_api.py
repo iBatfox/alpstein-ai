@@ -66,6 +66,8 @@ def _snapshot(
         retry_count=1,
         dead_letter_count=0,
         rate_limit_violation_count=0,
+        spam_decision_count=0,
+        spam_containment_count=0,
         delivery_failure_rate=0.1,
         last_activity_at=now,
         evaluated_at=now,

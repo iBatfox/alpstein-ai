@@ -11,6 +11,9 @@ from app.models.retry_attempt import RetryAttempt
 from app.models.dead_letter_event import DeadLetterEvent
 from app.models.rate_limit_bucket import RateLimitBucket
 from app.models.rate_limit_violation import RateLimitViolation
+from app.models.spam_containment import SpamContainment
+from app.models.spam_decision import SpamDecision
+from app.models.spam_indicator_bucket import SpamIndicatorBucket
 from app.models.message_trace import MessageTrace
 from app.models.prompt_run import PromptRun
 from app.models.prompt_template import PromptTemplate
@@ -34,6 +37,9 @@ __all__ = [
     "DeadLetterEvent",
     "RateLimitBucket",
     "RateLimitViolation",
+    "SpamIndicatorBucket",
+    "SpamContainment",
+    "SpamDecision",
     "MessageTrace",
     "PromptRun",
     "PromptTemplate",

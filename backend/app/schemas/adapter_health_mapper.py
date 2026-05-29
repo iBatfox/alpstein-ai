@@ -57,6 +57,8 @@ def adapter_health_to_response(snapshot: AdapterHealthSnapshot) -> AdapterHealth
         retry_count=snapshot.retry_count,
         dead_letter_count=snapshot.dead_letter_count,
         rate_limit_violation_count=snapshot.rate_limit_violation_count,
+        spam_decision_count=snapshot.spam_decision_count,
+        spam_containment_count=snapshot.spam_containment_count,
         delivery_failure_rate=snapshot.delivery_failure_rate,
         last_activity_at=snapshot.last_activity_at,
         evaluated_at=snapshot.evaluated_at,

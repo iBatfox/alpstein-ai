@@ -54,8 +54,16 @@ from app.schemas.rate_limit import (
     RateLimitViolationListSuccessEnvelope,
 )
 from app.schemas.rate_limit_mapper import rate_limit_violation_to_response
+from app.schemas.spam import (
+    SpamContainmentListResponse,
+    SpamContainmentListSuccessEnvelope,
+    SpamDecisionListResponse,
+    SpamDecisionListSuccessEnvelope,
+)
+from app.schemas.spam_mapper import spam_containment_to_response, spam_decision_to_response
 from app.services.adapter_monitoring_service import AdapterMonitoringService
 from app.services.rate_limit_service import RateLimitService
+from app.services.spam_protection_service import SpamProtectionService
 from app.services.dead_letter_service import DeadLetterService
 from app.services.replay_event_service import ReplayEventService
 from app.services.retry_lifecycle_service import RetryLifecycleService
@@ -68,6 +76,7 @@ retry_lifecycle_service = RetryLifecycleService()
 dead_letter_service = DeadLetterService()
 adapter_monitoring_service = AdapterMonitoringService()
 rate_limit_service = RateLimitService()
+spam_protection_service = SpamProtectionService()
 
 
 def _parse_uuid(value: str, *, field_name: str) -> uuid.UUID:
@@ -558,6 +567,93 @@ async def list_rate_limit_violations(
     return RateLimitViolationListSuccessEnvelope(
         data=RateLimitViolationListResponse(
             items=[rate_limit_violation_to_response(row) for row in violations],
+            limit=limit,
+            offset=offset,
+        ),
+    ).model_dump(mode="json")
+
+
+@router.get(
+    "/spam-decisions",
+    dependencies=[Depends(require_webhook_token)],
+)
+async def list_spam_decisions(
+    tenant_id: str = Query(..., min_length=1),
+    business_id: str = Query(..., min_length=1),
+    channel: str | None = Query(default=None),
+    rule_id: str | None = Query(default=None),
+    conversation_id: str | None = Query(default=None),
+    decision: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    try:
+        parsed_tenant_id = _parse_uuid(tenant_id, field_name="tenant_id")
+        parsed_business_id = _parse_uuid(business_id, field_name="business_id")
+        parsed_conversation_id = (
+            _parse_uuid(conversation_id, field_name="conversation_id")
+            if conversation_id
+            else None
+        )
+    except ValueError as exc:
+        return _validation_error(str(exc))
+
+    rows = await spam_protection_service.list_decisions(
+        session,
+        tenant_id=parsed_tenant_id,
+        business_id=parsed_business_id,
+        channel=channel,
+        rule_id=rule_id,
+        conversation_id=parsed_conversation_id,
+        decision=decision,
+        limit=limit,
+        offset=offset,
+    )
+
+    return SpamDecisionListSuccessEnvelope(
+        data=SpamDecisionListResponse(
+            items=[spam_decision_to_response(row) for row in rows],
+            limit=limit,
+            offset=offset,
+        ),
+    ).model_dump(mode="json")
+
+
+@router.get(
+    "/spam-containments",
+    dependencies=[Depends(require_webhook_token)],
+)
+async def list_spam_containments(
+    tenant_id: str = Query(..., min_length=1),
+    business_id: str = Query(..., min_length=1),
+    channel: str | None = Query(default=None),
+    scope_type: str | None = Query(default=None),
+    active_only: bool = Query(default=True),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    try:
+        parsed_tenant_id = _parse_uuid(tenant_id, field_name="tenant_id")
+        parsed_business_id = _parse_uuid(business_id, field_name="business_id")
+    except ValueError as exc:
+        return _validation_error(str(exc))
+
+    rows = await spam_protection_service.list_containments(
+        session,
+        tenant_id=parsed_tenant_id,
+        business_id=parsed_business_id,
+        channel=channel,
+        scope_type=scope_type,
+        active_only=active_only,
+        limit=limit,
+        offset=offset,
+    )
+
+    return SpamContainmentListSuccessEnvelope(
+        data=SpamContainmentListResponse(
+            items=[spam_containment_to_response(row) for row in rows],
             limit=limit,
             offset=offset,
         ),

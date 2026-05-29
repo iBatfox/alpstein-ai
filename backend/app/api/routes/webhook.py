@@ -19,6 +19,7 @@ from app.exceptions import (
     TenantContextError,
 )
 from app.services.rate_limit_service import RateLimitExceededError
+from app.services.spam_protection_service import SpamContainedError, SpamThrottledError
 from app.schemas.observability import (
     InvalidCorrelationIdError,
     X_CORRELATION_ID_HEADER,
@@ -143,6 +144,32 @@ async def post_webhook_message(
                 "error": {
                     "code": "RATE_LIMIT_EXCEEDED",
                     "message": "Ingress rate limit exceeded",
+                    "metadata": exc.details.to_error_metadata(),
+                },
+            },
+        )
+    except SpamThrottledError as exc:
+        await session.rollback()
+        return JSONResponse(
+            status_code=429,
+            content={
+                "success": False,
+                "error": {
+                    "code": "SPAM_THROTTLED",
+                    "message": "Ingress temporarily throttled due to spam protection",
+                    "metadata": exc.details.to_error_metadata(),
+                },
+            },
+        )
+    except SpamContainedError as exc:
+        await session.rollback()
+        return JSONResponse(
+            status_code=403,
+            content={
+                "success": False,
+                "error": {
+                    "code": "SPAM_CONTAINED",
+                    "message": "Ingress temporarily not accepted due to spam protection",
                     "metadata": exc.details.to_error_metadata(),
                 },
             },

@@ -365,7 +365,7 @@ Same query params as list. Response `data` includes ingress/delivery split field
 }
 ```
 
-Metrics are derived at read time from `message_traces`, `delivery_events`, `retry_attempts`, `dead_letter_events`, and `rate_limit_violations` (violation count by channel) within the lookback window.
+Metrics are derived at read time from `message_traces`, `delivery_events`, `retry_attempts`, `dead_letter_events`, `rate_limit_violations` (violation count by channel), `spam_decisions`, and `spam_containments` (decision/containment counts by channel) within the lookback window.
 
 ## GET /api/v1/observability/rate-limits
 
@@ -396,6 +396,91 @@ Metrics are derived at read time from `message_traces`, `delivery_events`, `retr
         "metadata": {
           "retry_after_seconds": 42,
           "limit": 30
+        },
+        "created_at": "2026-05-28T12:00:45Z"
+      }
+    ],
+    "limit": 20,
+    "offset": 0
+  }
+}
+```
+
+No prompts, message text, secrets, tokens, or raw provider payloads.
+
+## GET /api/v1/observability/spam-decisions
+
+**E3.6c** — List append-only spam decision audit rows. Auth: same webhook/internal token as other observability routes.
+
+**Query (required):** `tenant_id`, `business_id`
+
+**Query (optional):** `channel`, `rule_id`, `decision`, `conversation_id`, `limit` (default 20, max 100), `offset` (default 0)
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "items": [
+      {
+        "id": "uuid",
+        "rule_id": "payload_repeat",
+        "scope_type": "conversation",
+        "scope_key": "uuid:sha256prefix",
+        "channel": "telegram",
+        "conversation_id": "uuid",
+        "decision": "mark_suspicious",
+        "outcome": "applied",
+        "observed_count": 5,
+        "threshold": 5,
+        "window_seconds": 300,
+        "containment_id": null,
+        "correlation_id": "uuid",
+        "metadata": {
+          "payload_hash_prefix": "abc123"
+        },
+        "created_at": "2026-05-28T12:00:45Z"
+      }
+    ],
+    "limit": 20,
+    "offset": 0
+  }
+}
+```
+
+No prompts, message text, secrets, tokens, or raw provider payloads.
+
+## GET /api/v1/observability/spam-containments
+
+**E3.6c** — List active or historical spam containment rows. Auth: same webhook/internal token as other observability routes.
+
+**Query (required):** `tenant_id`, `business_id`
+
+**Query (optional):** `channel`, `rule_id`, `action`, `conversation_id`, `active_only` (default `true`), `limit` (default 20, max 100), `offset` (default 0)
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "items": [
+      {
+        "id": "uuid",
+        "rule_id": "payload_repeat",
+        "scope_type": "conversation",
+        "scope_key": "uuid:sha256prefix",
+        "channel": "telegram",
+        "conversation_id": "uuid",
+        "action": "throttle",
+        "expires_at": "2026-05-28T12:05:45Z",
+        "released_at": null,
+        "correlation_id": "uuid",
+        "metadata": {
+          "observed_count": 5,
+          "threshold": 5,
+          "window_seconds": 300
         },
         "created_at": "2026-05-28T12:00:45Z"
       }
@@ -489,6 +574,8 @@ Responsibilities:
 - return structured response to n8n.
 
 **E3.5 optional rate limiting:** When `ALPSTEIN_AI_RATE_LIMIT_ENABLED=true` (default **false**), non-duplicate ingress may return **429** with `error.code=RATE_LIMIT_EXCEEDED` and safe `error.metadata` (`scope_type`, `retry_after_seconds`, `limit`, etc.). Idempotent duplicates do not increment counters. Enforcement runs after duplicate detection and before E3.4 ingress containment and AI orchestration. n8n should apply exponential backoff on 429 (see `docs/ops/ingress-rate-limit-429.md`).
+
+**E3.6 optional anti-spam protection:** When `ALPSTEIN_AI_SPAM_PROTECTION_ENABLED=true` (default **false**), non-duplicate ingress is evaluated for deterministic abuse rules after E3.5 rate limiting and before E3.4 ingress containment and AI orchestration. Initial production posture uses `ALPSTEIN_AI_SPAM_PRODUCTION_SAFE_MODE=true` (default) — only `mark_suspicious` decisions are applied; blocking actions (`throttle`, `temporary_block`, `ignore`) require staging validation with production safe mode off. May return **429** `SPAM_THROTTLED` or **403** `SPAM_CONTAINED` with safe `error.metadata` (`rule_id`, `decision`, etc.). No message text, prompts, secrets, or tokens in spam tables or error metadata. Payload repeat detection uses SHA-256 fingerprint of normalized message text (see `docs/ops/ingress-spam-protection.md`).
 
 ---
 
@@ -875,6 +962,8 @@ FORBIDDEN
 INTERNAL_ERROR
 ADAPTER_INGRESS_CONTAINED
 RATE_LIMIT_EXCEEDED
+SPAM_THROTTLED
+SPAM_CONTAINED
 ```
 
 Example:

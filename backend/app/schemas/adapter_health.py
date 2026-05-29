@@ -67,7 +67,9 @@ class AdapterHealthResponse(BaseModel):
     delivery_pending_count: int
     retry_count: int
     dead_letter_count: int
-    rate_limit_violation_count: int = 0
+    rate_limit_violation_count: int
+    spam_decision_count: int
+    spam_containment_count: int
     delivery_failure_rate: float | None = None
     last_activity_at: datetime | None = None
     evaluated_at: datetime | None = None

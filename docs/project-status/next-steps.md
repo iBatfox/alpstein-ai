@@ -4,13 +4,13 @@
 
 # Next Steps
 
-## Recommended next task: **E3.5d** → PostgreSQL concurrency validation (then staging enable)
+## Recommended next task: **E3.5d Postgres concurrency validation** → E3.6 staging validation → enable flags
 
-**E3.5 (accepted, merge OK):** Rate limiting — [`e3-5-rate-limiting.md`](../audits/e3-5-rate-limiting.md) · **`ALPSTEIN_AI_RATE_LIMIT_ENABLED` must stay `false` until E3.5d passes**
+**E3.6 (implemented, review):** Anti-spam protection — [`e3-6-anti-spam-protection.md`](../audits/e3-6-anti-spam-protection.md) · tasks `T-e3.6*` in `tasks/done/` — **keep `ALPSTEIN_AI_SPAM_PROTECTION_ENABLED=false` until E3.5d + staging green**
 
-**E3.5d (todo, non-blocking follow-up):** Real Postgres two-session race test — [`T-e3.5d-postgres-concurrency-validation.md`](../../tasks/todo/T-e3.5d-postgres-concurrency-validation.md)
+**E3.5d (todo, parallel):** Postgres rate-limit concurrency — [`T-e3.5d-postgres-concurrency-validation.md`](../../tasks/todo/T-e3.5d-postgres-concurrency-validation.md) · keep `ALPSTEIN_AI_RATE_LIMIT_ENABLED=false` until green
 
-**E3.5 deploy (now):** `alembic upgrade head` (0018) + backend deploy; flag **off** · ops [`ingress-rate-limit-429.md`](../ops/ingress-rate-limit-429.md)
+**E3.5 (accepted):** Rate limiting — [`e3-5-rate-limiting.md`](../audits/e3-5-rate-limiting.md) · deploy migrations `0018` with flag **off**
 
 **E3.4 (done):** Ingress failure isolation — [`e3-4-ingress-failure-isolation.md`](../audits/e3-4-ingress-failure-isolation.md) · tasks `T-e3.4a`–`T-e3.4c` in `tasks/done/`
 

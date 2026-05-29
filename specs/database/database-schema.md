@@ -1136,6 +1136,76 @@ Append-only audit when ingress is rejected for rate limiting. No message text, s
 
 **Indexes:** `(business_id, created_at)`, `(business_id, channel, created_at)`, `(scope_type, created_at)`
 
+## spam_indicator_buckets (E3.6a)
+
+Deterministic spam signal counters per rule, scope, and fixed time window. Backend-only writes. No message text — payload repeat uses SHA-256 hash in `scope_key`.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| id | UUID PK | |
+| tenant_id | UUID FK | required |
+| business_id | UUID FK | required |
+| rule_id | VARCHAR(64) | `payload_repeat` \| `conversation_burst` \| `adapter_fanout` \| `retry_abuse` \| `replay_storm` |
+| scope_type | VARCHAR(32) | `conversation` \| `adapter` |
+| scope_key | VARCHAR(255) | deterministic key (e.g. `{conversation_id}:{payload_hash}`) |
+| channel | VARCHAR(50) NULL | adapter context |
+| window_start | TIMESTAMP | UTC bucket start |
+| window_seconds | INT | window size |
+| signal_count | INT | monotonic within window |
+| created_at | TIMESTAMP | |
+| updated_at | TIMESTAMP | |
+
+**Unique:** `(tenant_id, business_id, rule_id, scope_type, scope_key, window_start)`
+
+## spam_containments (E3.6b)
+
+Reversible active containment state (TTL-based). No permanent bans; no tenant-wide auto-blocks.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| id | UUID PK | |
+| tenant_id | UUID FK | required |
+| business_id | UUID FK | required |
+| rule_id | VARCHAR(64) | triggering rule |
+| scope_type | VARCHAR(32) | containment scope |
+| scope_key | VARCHAR(255) | deterministic key |
+| channel | VARCHAR(50) NULL | |
+| conversation_id | UUID NULL | when conversation-scoped |
+| action | VARCHAR(32) | `throttle` \| `temporary_block` |
+| expires_at | TIMESTAMP | TTL expiry (required) |
+| released_at | TIMESTAMP NULL | manual/ops release (optional) |
+| correlation_id | TEXT NULL | observability correlation |
+| metadata | JSONB NULL | safe fields only — no message text, prompts, secrets |
+| created_at | TIMESTAMP | |
+
+**Unique (active):** `(tenant_id, business_id, scope_type, scope_key, rule_id)` WHERE `released_at IS NULL`
+
+## spam_decisions (E3.6c)
+
+Append-only spam decision audit stream. No separate `spam_events` table.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| id | UUID PK | |
+| tenant_id | UUID FK | required |
+| business_id | UUID FK | required |
+| rule_id | VARCHAR(64) | |
+| scope_type | VARCHAR(32) | |
+| scope_key | VARCHAR(255) | |
+| channel | VARCHAR(50) NULL | |
+| conversation_id | UUID NULL | |
+| decision | VARCHAR(32) | `allow` \| `mark_suspicious` \| `throttle` \| `temporary_block` \| `ignore` |
+| outcome | VARCHAR(32) | `passed` \| `applied` \| `already_contained` \| `skipped_duplicate` |
+| observed_count | INT NULL | count at decision |
+| threshold | INT NULL | configured threshold |
+| window_seconds | INT NULL | rule window |
+| containment_id | UUID NULL FK → `spam_containments.id` | when containment applied |
+| correlation_id | TEXT NULL | |
+| metadata | JSONB NULL | safe fields only (e.g. `payload_hash_prefix`) |
+| created_at | TIMESTAMP | |
+
+**Indexes:** `(business_id, created_at)`, `(business_id, channel, created_at)`, `(rule_id, created_at)`
+
 ---
 
 # 23. Success Criteria

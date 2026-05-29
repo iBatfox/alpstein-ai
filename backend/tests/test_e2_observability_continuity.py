@@ -83,7 +83,7 @@ def test_alembic_head_is_0016():
     cfg = Config(str(BACKEND_DIR / "alembic.ini"))
     script = ScriptDirectory.from_config(cfg)
     heads = script.get_heads()
-    assert heads == ["0018"]
+    assert heads == ["0021"]
 
 
 def test_trace_and_delivery_mappers_share_outbound_message_id():

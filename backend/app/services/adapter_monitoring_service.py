@@ -27,6 +27,7 @@ from app.services.adapter_health_policy import (
     is_monitored_adapter,
 )
 from app.services.rate_limit_service import RateLimitService
+from app.services.spam_protection_service import SpamProtectionService
 from app.services.ingress_isolation_policy import (
     AdapterIsolationView,
     IngressHealthMetrics,
@@ -71,6 +72,8 @@ class AdapterHealthSnapshot:
     retry_count: int
     dead_letter_count: int
     rate_limit_violation_count: int
+    spam_decision_count: int
+    spam_containment_count: int
     delivery_failure_rate: float | None
     last_activity_at: datetime | None
     evaluated_at: datetime
@@ -92,6 +95,8 @@ class _ChannelAccumulator:
     retry_count: int = 0
     dead_letter_count: int = 0
     rate_limit_violation_count: int = 0
+    spam_decision_count: int = 0
+    spam_containment_count: int = 0
     last_activity_at: datetime | None = None
     delivery_by_status: dict[str, int] = field(default_factory=dict)
 
@@ -107,9 +112,13 @@ class AdapterMonitoringService:
         self,
         app_settings: Settings | None = None,
         rate_limit_service: RateLimitService | None = None,
+        spam_protection_service: SpamProtectionService | None = None,
     ) -> None:
         self._settings = app_settings or settings
         self._rate_limit_service = rate_limit_service or RateLimitService(app_settings)
+        self._spam_protection_service = (
+            spam_protection_service or SpamProtectionService(app_settings)
+        )
 
     def _window_hours(self, window_hours: int | None) -> int:
         if window_hours is None:
@@ -250,6 +259,13 @@ class AdapterMonitoringService:
             window_start=window_start,
             accumulators=accumulators,
         )
+        await self._load_spam_metrics(
+            session,
+            tenant_id=tenant_id,
+            business_id=business_id,
+            window_start=window_start,
+            accumulators=accumulators,
+        )
 
         delivery_thresholds = adapter_health_thresholds(self._settings)
         ingress_thresholds = ingress_health_thresholds(self._settings)
@@ -316,6 +332,8 @@ class AdapterMonitoringService:
                 retry_count=acc.retry_count,
                 dead_letter_count=acc.dead_letter_count,
                 rate_limit_violation_count=acc.rate_limit_violation_count,
+                spam_decision_count=acc.spam_decision_count,
+                spam_containment_count=acc.spam_containment_count,
                 delivery_failure_rate=failure_rate,
                 last_activity_at=acc.last_activity_at,
                 evaluated_at=evaluated_at,
@@ -372,6 +390,36 @@ class AdapterMonitoringService:
                 since=window_start,
             )
             accumulators[channel].rate_limit_violation_count = count
+
+    async def _load_spam_metrics(
+        self,
+        session: AsyncSession,
+        *,
+        tenant_id: uuid.UUID,
+        business_id: uuid.UUID,
+        window_start: datetime,
+        accumulators: dict[str, _ChannelAccumulator],
+    ) -> None:
+        now = datetime.utcnow()
+        for channel in accumulators:
+            accumulators[channel].spam_decision_count = (
+                await self._spam_protection_service.count_decisions_for_channel(
+                    session,
+                    tenant_id=tenant_id,
+                    business_id=business_id,
+                    channel=channel,
+                    since=window_start,
+                )
+            )
+            accumulators[channel].spam_containment_count = (
+                await self._spam_protection_service.count_active_containments_for_channel(
+                    session,
+                    tenant_id=tenant_id,
+                    business_id=business_id,
+                    channel=channel,
+                    now=now,
+                )
+            )
 
     async def _load_trace_metrics(
         self,
