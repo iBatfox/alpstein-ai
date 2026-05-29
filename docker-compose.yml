@@ -56,6 +56,10 @@ services:
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_HOST: ${LANGFUSE_HOST:-https://cloud.langfuse.com}
       LANGFUSE_TRACING_ENABLED: ${LANGFUSE_TRACING_ENABLED:-false}
+      META_VERIFY_TOKEN: ${META_VERIFY_TOKEN:-}
+      WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-}
+      WHATSAPP_BUSINESS_ACCOUNT_ID: ${WHATSAPP_BUSINESS_ACCOUNT_ID:-}
+      WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-}
     networks:
       - alpstein_internal
     expose:
@@ -104,6 +108,11 @@ services:
     environment:
       # Portable path — overrides legacy host-gateway value in n8n/.env when present.
       BACKEND_BASE_URL: http://backend:8000
+      # n8n 2.x blocks $env in Code/expressions by default; unified ingress workflows require it.
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      # F.2 ERPNext Lead tail (non-blocking); set in n8n/.env — default off in repo.
+      ALPSTEIN_ERPNEXT_LEAD_SYNC_ENABLED: ${ALPSTEIN_ERPNEXT_LEAD_SYNC_ENABLED:-false}
+      ERPNEXT_BASE_URL: ${ERPNEXT_BASE_URL:-https://crm.alpstein-ai.ch}
     volumes:
       - alpstein_n8n_data:/home/node/.n8n
     networks:

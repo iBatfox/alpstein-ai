@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
 from app.api.routes.health import router as health_router
+from app.api.routes.meta_webhook import router as meta_webhook_router
 from app.api.routes.observability import router as observability_router
 from app.api.routes.webhook import router as webhook_router
 from app.api.webhook_auth import WebhookAuthError
@@ -29,3 +30,4 @@ async def webhook_auth_error_handler(_request, exc: WebhookAuthError) -> JSONRes
 app.include_router(health_router, prefix="/api/v1")
 app.include_router(webhook_router, prefix="/api/v1")
 app.include_router(observability_router, prefix="/api/v1")
+app.include_router(meta_webhook_router, prefix="/webhooks")

@@ -206,6 +206,19 @@ class Settings(BaseSettings):
         default="temporary_block",
         validation_alias="SPAM_RULE_REPLAY_STORM_ACTION",
     )
+    meta_verify_token: str = Field(default="", validation_alias="META_VERIFY_TOKEN")
+    whatsapp_phone_number_id: str = Field(
+        default="",
+        validation_alias="WHATSAPP_PHONE_NUMBER_ID",
+    )
+    whatsapp_business_account_id: str = Field(
+        default="",
+        validation_alias="WHATSAPP_BUSINESS_ACCOUNT_ID",
+    )
+    whatsapp_access_token: str = Field(
+        default="",
+        validation_alias="WHATSAPP_ACCESS_TOKEN",
+    )
 
     model_config = SettingsConfigDict(
         env_prefix="ALPSTEIN_AI_",
