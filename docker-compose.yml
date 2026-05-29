@@ -96,7 +96,7 @@ services:
     # One-shot dev seed — NOT started by default. Requires: --profile bootstrap
 
   n8n:
-    image: docker.n8n.io/n8nio/n8n:1.95.3
+    image: docker.n8n.io/n8nio/n8n:2.22.5
     container_name: alpstein_n8n_compose
     restart: unless-stopped
     env_file:

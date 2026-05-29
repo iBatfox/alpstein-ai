@@ -20,5 +20,5 @@ services:
 
   n8n:
     ports:
-      # 15680 avoids collision with legacy alpstein_n8n on 127.0.0.1:15679
-      - "127.0.0.1:${N8N_HOST_PORT:-15680}:5678"
+      # Personal portable runtime currently uses 15679; override N8N_HOST_PORT if legacy n8n is active.
+      - "127.0.0.1:${N8N_HOST_PORT:-15679}:5678"
