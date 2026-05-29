@@ -2,7 +2,8 @@
 
 **Status:** **E1.9 production cutover complete** (PASS WITH NOTES)  
 **Audience:** n8n operator / integration engineer  
-**Audits:** [`e1-9-unified-ingress-cutover-2026-05-28.md`](../audits/e1-9-unified-ingress-cutover-2026-05-28.md) · [`e1-8-unified-ingress-inactive-implementation-2026-05-28.md`](../audits/e1-8-unified-ingress-inactive-implementation-2026-05-28.md)
+**Audits:** [`e1-9-unified-ingress-cutover-2026-05-28.md`](../audits/e1-9-unified-ingress-cutover-2026-05-28.md) · [`e1-8-unified-ingress-inactive-implementation-2026-05-28.md`](../audits/e1-8-unified-ingress-inactive-implementation-2026-05-28.md) · [`telegram-incident-2026-05-29.md`](../audits/telegram-incident-2026-05-29.md)  
+**F.2.1 ERPNext Lead tail:** [`n8n-erpnext-lead-sync.md`](n8n-erpnext-lead-sync.md) · audit [`f2-1-erpnext-lead-n8n-sync.md`](../audits/f2-1-erpnext-lead-n8n-sync.md)
 
 ---
 
@@ -91,6 +92,37 @@ Optional future:
 |----------|---------|
 | `ALPSTEIN_CUSTOMER_INGRESS_BUSINESS_ID` | Single override for both ingress branches (implementation task) |
 
+### n8n 2.x environment variable access
+
+**Requirement:**
+
+```text
+N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+```
+
+**Reason:** Unified ingress workflows use **Code** nodes that read `$env.*` (e.g. `ALPSTEIN_TELEGRAM_BUSINESS_ID` in **Normalize Telegram Incoming**). n8n **2.x** blocks `$env` in nodes when this flag is unset or `true`.
+
+**Where to set:**
+
+| Location | Notes |
+|----------|--------|
+| Root [`docker-compose.yml`](../../docker-compose.yml) | `n8n` service `environment:` (canonical for portable stack) |
+| [`n8n/.env`](../../n8n/.env) | Must match compose after container recreate |
+
+**Verification command:**
+
+```bash
+docker exec alpstein_n8n_compose env | grep N8N_BLOCK_ENV_ACCESS_IN_NODE
+```
+
+**Expected:**
+
+```text
+N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+```
+
+If missing or `true`, recreate the n8n container after fixing compose/env. See incident [`telegram-incident-2026-05-29.md`](../audits/telegram-incident-2026-05-29.md).
+
 ---
 
 ## 4. Build unified workflow (inactive)
@@ -178,3 +210,28 @@ No database rollback required.
 | E1.7 design | [`tasks/done/T-e1.7-unified-customer-ingress-workflow-design.md`](../../tasks/done/T-e1.7-unified-customer-ingress-workflow-design.md) |
 | Implementation (future) | TBD — `T-e1.8-implement-unified-customer-ingress-workflow` or similar |
 | E0 reference | [`tasks/done/T-e0-telegram-reference-channel-remediation.md`](../../tasks/done/T-e0-telegram-reference-channel-remediation.md) |
+
+---
+
+## 10. Incident recovery — Telegram webhook (n8n 2.x)
+
+Use after n8n upgrade, container recreate, or “bot not responding” with healthy backend.
+
+### Telegram webhook recovery
+
+| Step | Action |
+|------|--------|
+| 1 | **Verify webhook registration** — Telegram Bot API `getWebhookInfo` for the **customer** bot (via n8n credential test or operator tooling). **Pass:** `url` is non-empty and points at production n8n HTTPS webhook path for unified ingress. **Fail:** empty `url` → continue steps 2–5. |
+| 2 | **Unpublish** workflow `alpstein-customer-ingress` (deactivate in n8n UI) |
+| 3 | **Restart** n8n: `docker restart alpstein_n8n_compose` (or `docker compose -p alpstein-ai restart n8n`) |
+| 4 | **Publish** workflow (activate) — re-registers Telegram webhook |
+| 5 | **Restart** n8n again (operator practice from INC-2026-05-29) |
+| 6 | **Verify webhook registration** — repeat `getWebhookInfo` |
+| 7 | **Send live Telegram DM** to customer bot (`@alpsteinai_0001bot` or current prod bot) |
+| 8 | **Verify execution in n8n** — success path through **Normalize Telegram Incoming** → **POST Backend**; record execution ID in ops notes (not message text) |
+
+**Also verify** §3 `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` before closing incident.
+
+**Synthetic check (optional):** POST to unified Telegram webhook test path per [`runtime-map.md`](runtime-map.md) — expect **HTTP 200** and backend readiness unchanged.
+
+**Full incident write-up:** [`telegram-incident-2026-05-29.md`](../audits/telegram-incident-2026-05-29.md).

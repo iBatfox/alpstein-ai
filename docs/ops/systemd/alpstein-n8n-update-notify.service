@@ -1,0 +1,21 @@
+[Unit]
+Description=Alpstein AI n8n upstream release notification (notify-only)
+Documentation=file:///opt/alpstein-ai/docs/ops/n8n-update-notification-runbook.md
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/alpstein-ai
+EnvironmentFile=-/etc/alpstein/n8n-update-notify.env
+ExecStart=/usr/bin/python3 /opt/alpstein-ai/scripts/ops/n8n_update_notify.py
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=alpstein-n8n-update-notify
+
+# Notify-only: script must not pull images, restart containers, or change workflows.
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -15,7 +15,7 @@
 | Path | Export file | `versionId` | Runtime workflow ID | `active` | Notes |
 |------|-------------|-------------|---------------------|----------|-------|
 | Test webhook (T13.5) | `t13_workflow1_test_webhook_skeleton.json` | `t13-5-owner-notify-v5` | `2qfhWKtgbDy6YeTh` | ops | Gate 2 passed — see ops doc |
-| **Unified customer ingress (E1.9 + E2 PATCH)** | `e1_8_unified_customer_ingress_skeleton.json` | `e2-delivery-outcome-patch-v1` | **`aYrRmAGKhP4TJbG9`** | **`true`** | **PRODUCTION** — includes delivery outcome PATCH nodes |
+| **Unified customer ingress (E1.9 + E2 + F.2.2)** | `e1_8_unified_customer_ingress_skeleton.json` | `f2.2c-erpnext-http-request-nodes-v3` | **`aYrRmAGKhP4TJbG9`** | **`true`** | **PRODUCTION** — F.2.2c: HTTP Request nodes + ERPNext datetime fix |
 | Telegram (archived E1.9) | `t14_workflow_telegram_customer_ingress_skeleton.json` | — | `2lMuaSWD1XFOXLEK` | **`false`** | Renamed `…-telegram-archived-e1-9`; `isArchived=1` |
 | Website Chat (archived E1.9) | `e1_6_workflow_website_chat_mvp_skeleton.json` | — | `hAJ3TFYn69in0vd5` | **`false`** | Renamed `…-website-chat-archived-e1-9`; webhook path archived |
 | Telegram (stale imports) | same | various | `FHSgBtwDm9PyDAl2`, `61X8sCbW3pqoBRwI`, … | `false` | Deactivate extras before any re-activation |
@@ -45,3 +45,7 @@ After operator import on a **fresh** volume, add rows here. On Contabo, portable
 | 2026-05-28 | E1.6.6: Website Chat canonical ID fixed; duplicate archived; env kill switch semantics verified | audit |
 | 2026-05-28 | E1.8: `alpstein-customer-ingress` imported inactive (`aYrRmAGKhP4TJbG9`); prod webhooks unchanged | audit |
 | 2026-05-28 | E1.9: Production cutover — unified **active**; legacy archived/renamed | audit |
+| 2026-05-29 | F.2.1: Export `f2.1-erpnext-lead-sync-v1` — ERPNext Lead tail (promote pending) | audit |
+| 2026-05-29 | F.2.2a: `f2.2a-erpnext-query-fix-v1` — fix `URLSearchParams` ReferenceError; imported + published | audit |
+| 2026-05-29 | F.2.2b: `f2.2b-erpnext-http-parse-fix-v1` — Code HTTP + parse helpers; imported + published | audit |
+| 2026-05-29 | F.2.2c: `f2.2c-erpnext-http-request-nodes-v3` — HTTP Request + generic Header Auth + `erpnextDateTime`; exec **357** create / **361** update | audit |

@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily timer for Alpstein n8n upstream release notification
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=30min
+Persistent=true
+Unit=alpstein-n8n-update-notify.service
+
+[Install]
+WantedBy=timers.target

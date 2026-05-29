@@ -36,7 +36,7 @@ n8n/workflows/
 | `alpstein-incoming-message-test` | `t13_workflow1_test_webhook_skeleton.json` | `t13-5-owner-notify-v5` | `false` | [`n8n-workflow1-test-webhook.md`](../../docs/ops/n8n-workflow1-test-webhook.md) |
 | `alpstein-incoming-message-telegram` | `t14_workflow_telegram_customer_ingress_skeleton.json` | `t14-alpstein-ai-greeting-v1` | `false` | [`n8n-workflow-telegram-customer-ingress.md`](../../docs/ops/n8n-workflow-telegram-customer-ingress.md) |
 | `alpstein-incoming-message-website-chat` | `e1_6_workflow_website_chat_mvp_skeleton.json` | `e1.6-website-chat-mvp-v1` | `false` | [`n8n-workflow-website-chat-mvp.md`](../../docs/ops/n8n-workflow-website-chat-mvp.md) |
-| `alpstein-customer-ingress` | `e1_8_unified_customer_ingress_skeleton.json` | `e1.8-unified-customer-ingress-v1` | `false` | [`n8n-unified-customer-ingress-runbook.md`](../../docs/ops/n8n-unified-customer-ingress-runbook.md) |
+| `alpstein-customer-ingress` | `e1_8_unified_customer_ingress_skeleton.json` | `f2.1-erpnext-lead-sync-v1` | `false` | [`n8n-unified-customer-ingress-runbook.md`](../../docs/ops/n8n-unified-customer-ingress-runbook.md) · [`n8n-erpnext-lead-sync.md`](../../docs/ops/n8n-erpnext-lead-sync.md) |
 
 **Rules:**
 
