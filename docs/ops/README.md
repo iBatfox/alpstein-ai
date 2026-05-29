@@ -30,6 +30,8 @@ Runbooks describe **how to operate** the runtime described in [`../architecture/
 
 | Document | Doc status | Topic |
 |----------|------------|-------|
+| [`e4-release-controller-runbook.md`](e4-release-controller-runbook.md) | spec (pre-impl) | E4 release automation operator skeleton |
+| [`n8n-update-notification-runbook.md`](n8n-update-notification-runbook.md) | design | n8n upstream release Telegram alert (notify-only) |
 | [`runtime-map.md`](runtime-map.md) | **canonical** (ops) | Canonical topology, ports, compose v2 rule (OPS-H1) |
 | [`runtime-surface-hardening.md`](runtime-surface-hardening.md) | runtime-derived | OPS-H1 inventory and hardening notes |
 | [`n8n-unified-customer-ingress-runbook.md`](n8n-unified-customer-ingress-runbook.md) | **canonical** (ops) | Production unified ingress (E1.9) |
