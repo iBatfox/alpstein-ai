@@ -49,7 +49,13 @@ from app.schemas.adapter_health_mapper import (
     adapter_health_to_response,
     isolation_summary_to_response,
 )
+from app.schemas.rate_limit import (
+    RateLimitViolationListResponse,
+    RateLimitViolationListSuccessEnvelope,
+)
+from app.schemas.rate_limit_mapper import rate_limit_violation_to_response
 from app.services.adapter_monitoring_service import AdapterMonitoringService
+from app.services.rate_limit_service import RateLimitService
 from app.services.dead_letter_service import DeadLetterService
 from app.services.replay_event_service import ReplayEventService
 from app.services.retry_lifecycle_service import RetryLifecycleService
@@ -61,6 +67,7 @@ replay_event_service = ReplayEventService()
 retry_lifecycle_service = RetryLifecycleService()
 dead_letter_service = DeadLetterService()
 adapter_monitoring_service = AdapterMonitoringService()
+rate_limit_service = RateLimitService()
 
 
 def _parse_uuid(value: str, *, field_name: str) -> uuid.UUID:
@@ -506,6 +513,51 @@ async def list_dead_letter_events(
     return DeadLetterEventListSuccessEnvelope(
         data=DeadLetterEventListResponse(
             items=[dead_letter_event_to_response(event) for event in events],
+            limit=limit,
+            offset=offset,
+        ),
+    ).model_dump(mode="json")
+
+
+@router.get(
+    "/rate-limits",
+    dependencies=[Depends(require_webhook_token)],
+)
+async def list_rate_limit_violations(
+    tenant_id: str = Query(..., min_length=1),
+    business_id: str = Query(..., min_length=1),
+    channel: str | None = Query(default=None),
+    scope_type: str | None = Query(default=None),
+    conversation_id: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    session: AsyncSession = Depends(get_db_session),
+) -> dict:
+    try:
+        parsed_tenant_id = _parse_uuid(tenant_id, field_name="tenant_id")
+        parsed_business_id = _parse_uuid(business_id, field_name="business_id")
+        parsed_conversation_id = (
+            _parse_uuid(conversation_id, field_name="conversation_id")
+            if conversation_id
+            else None
+        )
+    except ValueError as exc:
+        return _validation_error(str(exc))
+
+    violations = await rate_limit_service.list_violations(
+        session,
+        tenant_id=parsed_tenant_id,
+        business_id=parsed_business_id,
+        channel=channel,
+        scope_type=scope_type,
+        conversation_id=parsed_conversation_id,
+        limit=limit,
+        offset=offset,
+    )
+
+    return RateLimitViolationListSuccessEnvelope(
+        data=RateLimitViolationListResponse(
+            items=[rate_limit_violation_to_response(row) for row in violations],
             limit=limit,
             offset=offset,
         ),

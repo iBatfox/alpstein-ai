@@ -1093,6 +1093,49 @@ last_seen_at TIMESTAMP NOT NULL
 
 Single-owner lock per `(business_id, conversation_id, idempotency_key)`; `replay_count` for provider redelivery cap (E3.2).
 
+## rate_limit_buckets (E3.5a)
+
+Atomic ingress counters per scope and fixed time window. Backend-only writes.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| id | UUID PK | |
+| tenant_id | UUID FK | required |
+| business_id | UUID FK | required |
+| scope_type | VARCHAR(50) | `tenant` \| `business` \| `adapter` \| `conversation` |
+| scope_key | VARCHAR(255) | deterministic key (e.g. `{business_id}:{channel}` for adapter) |
+| channel | VARCHAR(50) NULL | set for adapter scope |
+| window_start | TIMESTAMP | UTC bucket start |
+| window_seconds | INT | window size (default 60) |
+| request_count | INT | monotonic within window |
+| created_at | TIMESTAMP | |
+| updated_at | TIMESTAMP | |
+
+**Unique:** `(tenant_id, business_id, scope_type, scope_key, window_start)`
+
+## rate_limit_violations (E3.5c)
+
+Append-only audit when ingress is rejected for rate limiting. No message text, secrets, or PII in `metadata`.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| id | UUID PK | |
+| tenant_id | UUID FK | |
+| business_id | UUID FK | |
+| scope_type | VARCHAR(50) | exceeded scope |
+| scope_key | VARCHAR(255) | |
+| channel | VARCHAR(50) NULL | adapter context |
+| conversation_id | UUID NULL | when applicable |
+| limit_value | INT | configured limit |
+| window_seconds | INT | |
+| window_start | TIMESTAMP | |
+| observed_count | INT | count at rejection |
+| correlation_id | TEXT NULL | observability correlation |
+| metadata | JSONB NULL | safe fields only |
+| created_at | TIMESTAMP | |
+
+**Indexes:** `(business_id, created_at)`, `(business_id, channel, created_at)`, `(scope_type, created_at)`
+
 ---
 
 # 23. Success Criteria

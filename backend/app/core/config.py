@@ -82,6 +82,34 @@ class Settings(BaseSettings):
         default=False,
         validation_alias="INGRESS_CONTAINMENT_ENABLED",
     )
+    rate_limit_enabled: bool = Field(
+        default=False,
+        validation_alias="RATE_LIMIT_ENABLED",
+    )
+    rate_limit_window_seconds: int = Field(
+        default=60,
+        validation_alias="RATE_LIMIT_WINDOW_SECONDS",
+    )
+    rate_limit_tenant_limit: int = Field(
+        default=1000,
+        validation_alias="RATE_LIMIT_TENANT_LIMIT",
+    )
+    rate_limit_business_limit: int = Field(
+        default=300,
+        validation_alias="RATE_LIMIT_BUSINESS_LIMIT",
+    )
+    rate_limit_adapter_telegram_limit: int = Field(
+        default=120,
+        validation_alias="RATE_LIMIT_ADAPTER_TELEGRAM_LIMIT",
+    )
+    rate_limit_adapter_website_chat_limit: int = Field(
+        default=120,
+        validation_alias="RATE_LIMIT_ADAPTER_WEBSITE_CHAT_LIMIT",
+    )
+    rate_limit_conversation_limit: int = Field(
+        default=30,
+        validation_alias="RATE_LIMIT_CONVERSATION_LIMIT",
+    )
 
     model_config = SettingsConfigDict(
         env_prefix="ALPSTEIN_AI_",

@@ -4,9 +4,15 @@
 
 # Next Steps
 
-## Recommended next task: **E2.8 ops gate** / **n8n delivery PATCH operator import**
+## Recommended next task: **E3.5d** → PostgreSQL concurrency validation (then staging enable)
 
-**E3.4 (done):** Ingress failure isolation — [`e3-4-ingress-failure-isolation.md`](../audits/e3-4-ingress-failure-isolation.md) · tasks `T-e3.4a`–`T-e3.4c` in `tasks/done/` · deploy: backend restart only; keep `ALPSTEIN_AI_INGRESS_CONTAINMENT_ENABLED=false` unless ops enables
+**E3.5 (accepted, merge OK):** Rate limiting — [`e3-5-rate-limiting.md`](../audits/e3-5-rate-limiting.md) · **`ALPSTEIN_AI_RATE_LIMIT_ENABLED` must stay `false` until E3.5d passes**
+
+**E3.5d (todo, non-blocking follow-up):** Real Postgres two-session race test — [`T-e3.5d-postgres-concurrency-validation.md`](../../tasks/todo/T-e3.5d-postgres-concurrency-validation.md)
+
+**E3.5 deploy (now):** `alembic upgrade head` (0018) + backend deploy; flag **off** · ops [`ingress-rate-limit-429.md`](../ops/ingress-rate-limit-429.md)
+
+**E3.4 (done):** Ingress failure isolation — [`e3-4-ingress-failure-isolation.md`](../audits/e3-4-ingress-failure-isolation.md) · tasks `T-e3.4a`–`T-e3.4c` in `tasks/done/`
 
 **E3.3 (done):** Adapter monitoring — [`e3-3-adapter-monitoring.md`](../audits/e3-3-adapter-monitoring.md) · tasks `T-e3.3a`–`T-e3.3c` in `tasks/done/`
 

@@ -96,6 +96,7 @@ def check_observability_routes(report: Report) -> None:
         ("/api/v1/observability/dead-letter", "dead-letter list (E3.2c)"),
         ("/api/v1/observability/adapters", "adapter health list (E3.3b)"),
         ("/api/v1/observability/adapters/{adapter}", "adapter health detail (E3.3b)"),
+        ("/api/v1/observability/rate-limits", "rate limit violations list (E3.5c)"),
     ]
     missing: list[str] = []
     for path, label in required:
@@ -156,8 +157,8 @@ def check_alembic_head(report: Report) -> None:
         cfg = Config(str(BACKEND_DIR / "alembic.ini"))
         script = ScriptDirectory.from_config(cfg)
         heads = script.get_heads()
-        if heads == ["0016"]:
-            report.add("E2-06", "Alembic head revision", "PASS", "0016")
+        if heads == ["0018"]:
+            report.add("E2-06", "Alembic head revision", "PASS", "0018")
         else:
             report.add("E2-06", "Alembic head revision", "FAIL", f"heads={heads}")
     except Exception as exc:

@@ -26,6 +26,7 @@ from app.services.adapter_health_policy import (
     adapter_health_thresholds,
     is_monitored_adapter,
 )
+from app.services.rate_limit_service import RateLimitService
 from app.services.ingress_isolation_policy import (
     AdapterIsolationView,
     IngressHealthMetrics,
@@ -69,6 +70,7 @@ class AdapterHealthSnapshot:
     delivery_pending_count: int
     retry_count: int
     dead_letter_count: int
+    rate_limit_violation_count: int
     delivery_failure_rate: float | None
     last_activity_at: datetime | None
     evaluated_at: datetime
@@ -89,6 +91,7 @@ class _ChannelAccumulator:
     delivery_dead_letter_count: int = 0
     retry_count: int = 0
     dead_letter_count: int = 0
+    rate_limit_violation_count: int = 0
     last_activity_at: datetime | None = None
     delivery_by_status: dict[str, int] = field(default_factory=dict)
 
@@ -100,8 +103,13 @@ class _ChannelAccumulator:
 
 
 class AdapterMonitoringService:
-    def __init__(self, app_settings: Settings | None = None) -> None:
+    def __init__(
+        self,
+        app_settings: Settings | None = None,
+        rate_limit_service: RateLimitService | None = None,
+    ) -> None:
         self._settings = app_settings or settings
+        self._rate_limit_service = rate_limit_service or RateLimitService(app_settings)
 
     def _window_hours(self, window_hours: int | None) -> int:
         if window_hours is None:
@@ -235,6 +243,13 @@ class AdapterMonitoringService:
             window_start=window_start,
             accumulators=accumulators,
         )
+        await self._load_rate_limit_violation_metrics(
+            session,
+            tenant_id=tenant_id,
+            business_id=business_id,
+            window_start=window_start,
+            accumulators=accumulators,
+        )
 
         delivery_thresholds = adapter_health_thresholds(self._settings)
         ingress_thresholds = ingress_health_thresholds(self._settings)
@@ -300,6 +315,7 @@ class AdapterMonitoringService:
                 delivery_pending_count=acc.delivery_pending_count,
                 retry_count=acc.retry_count,
                 dead_letter_count=acc.dead_letter_count,
+                rate_limit_violation_count=acc.rate_limit_violation_count,
                 delivery_failure_rate=failure_rate,
                 last_activity_at=acc.last_activity_at,
                 evaluated_at=evaluated_at,
@@ -337,6 +353,25 @@ class AdapterMonitoringService:
         summary = build_isolation_summary(final_views)
         ordered = [snapshots_by_adapter[key] for key in adapter_keys if key in snapshots_by_adapter]
         return ordered, summary
+
+    async def _load_rate_limit_violation_metrics(
+        self,
+        session: AsyncSession,
+        *,
+        tenant_id: uuid.UUID,
+        business_id: uuid.UUID,
+        window_start: datetime,
+        accumulators: dict[str, _ChannelAccumulator],
+    ) -> None:
+        for channel in accumulators:
+            count = await self._rate_limit_service.count_violations_for_channel(
+                session,
+                tenant_id=tenant_id,
+                business_id=business_id,
+                channel=channel,
+                since=window_start,
+            )
+            accumulators[channel].rate_limit_violation_count = count
 
     async def _load_trace_metrics(
         self,

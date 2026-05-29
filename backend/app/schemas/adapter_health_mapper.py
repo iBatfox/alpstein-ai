@@ -56,6 +56,7 @@ def adapter_health_to_response(snapshot: AdapterHealthSnapshot) -> AdapterHealth
         delivery_pending_count=snapshot.delivery_pending_count,
         retry_count=snapshot.retry_count,
         dead_letter_count=snapshot.dead_letter_count,
+        rate_limit_violation_count=snapshot.rate_limit_violation_count,
         delivery_failure_rate=snapshot.delivery_failure_rate,
         last_activity_at=snapshot.last_activity_at,
         evaluated_at=snapshot.evaluated_at,

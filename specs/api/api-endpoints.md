@@ -326,6 +326,7 @@ Response `data`:
       "delivery_pending_count": 1,
       "retry_count": 2,
       "dead_letter_count": 0,
+      "rate_limit_violation_count": 0,
       "delivery_failure_rate": 0.024,
       "last_activity_at": "2026-05-28T14:00:00Z"
     }
@@ -364,7 +365,48 @@ Same query params as list. Response `data` includes ingress/delivery split field
 }
 ```
 
-Metrics are derived at read time from `message_traces`, `delivery_events`, `retry_attempts`, and `dead_letter_events` within the lookback window.
+Metrics are derived at read time from `message_traces`, `delivery_events`, `retry_attempts`, `dead_letter_events`, and `rate_limit_violations` (violation count by channel) within the lookback window.
+
+## GET /api/v1/observability/rate-limits
+
+**E3.5c** — List rate-limit violation audit rows. Auth: same webhook/internal token as other observability routes.
+
+**Query (required):** `tenant_id`, `business_id`
+
+**Query (optional):** `channel`, `scope_type`, `conversation_id`, `limit` (default 20, max 100), `offset` (default 0)
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "items": [
+      {
+        "id": "uuid",
+        "scope_type": "conversation",
+        "scope_key": "uuid",
+        "channel": "telegram",
+        "conversation_id": "uuid",
+        "limit_value": 30,
+        "window_seconds": 60,
+        "window_start": "2026-05-28T12:00:00Z",
+        "observed_count": 31,
+        "correlation_id": "uuid",
+        "metadata": {
+          "retry_after_seconds": 42,
+          "limit": 30
+        },
+        "created_at": "2026-05-28T12:00:45Z"
+      }
+    ],
+    "limit": 20,
+    "offset": 0
+  }
+}
+```
+
+No prompts, message text, secrets, tokens, or raw provider payloads.
 
 **E3.4c optional ingress gate:** When `ALPSTEIN_AI_INGRESS_CONTAINMENT_ENABLED=true` (default **false**), `POST /api/v1/webhook/message` may return `503` with `error.code=ADAPTER_INGRESS_CONTAINED` for the failing adapter only (inbound dead-letter evidence + `containment_status=contained`). Peer adapter is never blocked.
 
@@ -445,6 +487,8 @@ Responsibilities:
 - save AI message;
 - create lead if needed;
 - return structured response to n8n.
+
+**E3.5 optional rate limiting:** When `ALPSTEIN_AI_RATE_LIMIT_ENABLED=true` (default **false**), non-duplicate ingress may return **429** with `error.code=RATE_LIMIT_EXCEEDED` and safe `error.metadata` (`scope_type`, `retry_after_seconds`, `limit`, etc.). Idempotent duplicates do not increment counters. Enforcement runs after duplicate detection and before E3.4 ingress containment and AI orchestration. n8n should apply exponential backoff on 429 (see `docs/ops/ingress-rate-limit-429.md`).
 
 ---
 
@@ -829,6 +873,8 @@ DATABASE_ERROR
 UNAUTHORIZED
 FORBIDDEN
 INTERNAL_ERROR
+ADAPTER_INGRESS_CONTAINED
+RATE_LIMIT_EXCEEDED
 ```
 
 Example:

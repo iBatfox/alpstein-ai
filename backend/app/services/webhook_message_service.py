@@ -46,6 +46,7 @@ from app.models.inbound_processing_lock import InboundProcessingLock
 from app.models.retry_attempt import RETRY_STATUS_EXHAUSTED
 from app.services.dead_letter_service import DeadLetterService
 from app.services.adapter_monitoring_service import AdapterMonitoringService
+from app.services.rate_limit_service import RateLimitService
 from app.services.replay_event_service import ReplayEventService
 from app.services.retry_lifecycle_service import RetryLifecycleService
 from app.services.retry_policy import inbound_replays_exhausted
@@ -123,6 +124,7 @@ class WebhookMessageService:
         retry_lifecycle_service: RetryLifecycleService | None = None,
         dead_letter_service: DeadLetterService | None = None,
         adapter_monitoring_service: AdapterMonitoringService | None = None,
+        rate_limit_service: RateLimitService | None = None,
     ) -> None:
         self.business_service = business_service or BusinessService()
         self.customer_service = customer_service or CustomerService()
@@ -156,6 +158,7 @@ class WebhookMessageService:
         self.adapter_monitoring_service = (
             adapter_monitoring_service or AdapterMonitoringService()
         )
+        self.rate_limit_service = rate_limit_service or RateLimitService()
 
     async def _should_reject_ingress(
         self,
@@ -208,14 +211,6 @@ class WebhookMessageService:
             flow_id=flow.id,
             flow_key=flow.flow_key,
         )
-
-        if await self._should_reject_ingress(
-            session,
-            tenant_id=tenant_id,
-            business_id=business.id,
-            channel=channel,
-        ):
-            raise AdapterIngressContainedError(channel)
 
         customer = await self.customer_service.get_or_create_customer(
             session,
@@ -352,6 +347,23 @@ class WebhookMessageService:
                 processing_status=trace_status,
                 correlation_id=trace_correlation,
             )
+
+        await self.rate_limit_service.consume_ingress_request(
+            session,
+            tenant_id=tenant_id,
+            business_id=business.id,
+            channel=channel,
+            conversation_id=conversation.id,
+            correlation_id=str(observability.correlation_id),
+        )
+
+        if await self._should_reject_ingress(
+            session,
+            tenant_id=tenant_id,
+            business_id=business.id,
+            channel=channel,
+        ):
+            raise AdapterIngressContainedError(channel)
 
         if message_trace is None:
             raise RuntimeError("message trace missing for new inbound message")

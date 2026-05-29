@@ -18,6 +18,7 @@ from app.exceptions import (
     FlowNotFoundError,
     TenantContextError,
 )
+from app.services.rate_limit_service import RateLimitExceededError
 from app.schemas.observability import (
     InvalidCorrelationIdError,
     X_CORRELATION_ID_HEADER,
@@ -130,6 +131,19 @@ async def post_webhook_message(
                 "error": {
                     "code": "ADAPTER_INGRESS_CONTAINED",
                     "message": "Ingress temporarily not accepted for this adapter",
+                },
+            },
+        )
+    except RateLimitExceededError as exc:
+        await session.rollback()
+        return JSONResponse(
+            status_code=429,
+            content={
+                "success": False,
+                "error": {
+                    "code": "RATE_LIMIT_EXCEEDED",
+                    "message": "Ingress rate limit exceeded",
+                    "metadata": exc.details.to_error_metadata(),
                 },
             },
         )

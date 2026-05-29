@@ -9,6 +9,8 @@ from app.models.inbound_processing_lock import InboundProcessingLock
 from app.models.replay_event import ReplayEvent
 from app.models.retry_attempt import RetryAttempt
 from app.models.dead_letter_event import DeadLetterEvent
+from app.models.rate_limit_bucket import RateLimitBucket
+from app.models.rate_limit_violation import RateLimitViolation
 from app.models.message_trace import MessageTrace
 from app.models.prompt_run import PromptRun
 from app.models.prompt_template import PromptTemplate
@@ -30,6 +32,8 @@ __all__ = [
     "ReplayEvent",
     "RetryAttempt",
     "DeadLetterEvent",
+    "RateLimitBucket",
+    "RateLimitViolation",
     "MessageTrace",
     "PromptRun",
     "PromptTemplate",
