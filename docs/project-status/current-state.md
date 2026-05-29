@@ -84,7 +84,7 @@ Specification-driven MVP with **backend AI orchestration complete**, **n8n test 
 - **E3.2 retry/dead-letter (done):** `retry_attempts` (0015), `dead_letter_events` + `dead_letter` delivery status (0016), retries/dead-letter observability APIs — [`e3-2-retry-dead-letter.md`](../audits/e3-2-retry-dead-letter.md)
 - **E3.3 adapter monitoring (done):** derived adapter health for `telegram` / `website_chat`; `GET /observability/adapters` — no new tables — [`e3-3-adapter-monitoring.md`](../audits/e3-3-adapter-monitoring.md)
 - **E3.4 ingress failure isolation (done):** ingress/delivery status split, `isolation_summary`, optional ingress gate (default off) — [`e3-4-ingress-failure-isolation.md`](../audits/e3-4-ingress-failure-isolation.md)
-- **E3.5 rate limiting (accepted):** PostgreSQL buckets + violations; `429 RATE_LIMIT_EXCEEDED`; flag default off — [`e3-5-rate-limiting.md`](../audits/e3-5-rate-limiting.md). Enable flag only after E3.5d passes.
+- **E3.5 rate limiting (accepted):** PostgreSQL buckets + violations; `429 RATE_LIMIT_EXCEEDED`; E3.5d concurrency validation **green** — [`e3-5d-postgres-concurrency-validation.md`](../audits/e3-5d-postgres-concurrency-validation.md). Staging enablement allowed; production after staging review.
 - **E3.6 anti-spam (implemented, review):** Deterministic rules + reversible containment; migrations `0019`–`0021`; flag default off — [`e3-6-anti-spam-protection.md`](../audits/e3-6-anti-spam-protection.md). Enable flag only after E3.5d + E3.6 staging validation.
 
 ### Missing / deferred

@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings, settings
@@ -178,11 +179,21 @@ class RateLimitService:
             created_at=now,
             updated_at=now,
         )
-        session.add(bucket)
-        await session.flush()
+        try:
+            async with session.begin_nested():
+                session.add(bucket)
+                await session.flush()
+        except IntegrityError:
+            pass
+
         locked = await session.execute(stmt)
         existing = locked.scalar_one_or_none()
-        return existing if existing is not None else bucket
+        if existing is None:
+            raise RuntimeError(
+                "rate_limit_buckets row missing after concurrent create "
+                f"({scope.scope_type=} {scope.scope_key=})"
+            )
+        return existing
 
     async def _record_violation(
         self,

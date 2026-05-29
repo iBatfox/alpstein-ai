@@ -2,11 +2,11 @@
 
 ## Rollout gate (mandatory)
 
-**Keep `ALPSTEIN_AI_RATE_LIMIT_ENABLED=false` until PostgreSQL concurrency validation is complete.**
+**E3.5d PostgreSQL concurrency validation is complete** ([`e3-5d-postgres-concurrency-validation.md`](../../docs/audits/e3-5d-postgres-concurrency-validation.md)).
 
-E3.5 ships with the flag default off. Do **not** enable in staging or production until task [`T-e3.5d-postgres-concurrency-validation.md`](../../tasks/todo/T-e3.5d-postgres-concurrency-validation.md) passes (two concurrent DB sessions, limit=1, one accept / one reject, bucket count=1, one violation row).
+You may enable `ALPSTEIN_AI_RATE_LIMIT_ENABLED=true` in **staging** for soak testing. Keep **production** off until staging review passes.
 
-Migrations (`0017`/`0018`) may be applied while the flag stays off — tables are inert when enforcement is disabled.
+`ALPSTEIN_AI_SPAM_PROTECTION_ENABLED` remains `false` until E3.6 staging validation completes.
 
 ---
 

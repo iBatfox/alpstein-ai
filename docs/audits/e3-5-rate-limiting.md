@@ -1,9 +1,9 @@
 # E3.5 — Rate limiting (implementation)
 
 **Branch:** `stabilization/runtime-baseline`  
-**Status:** **Accepted — merge allowed; concurrency validation follow-up open**  
+**Status:** **Accepted — E3.5d PostgreSQL concurrency validation complete**  
 **Design:** [`e3-5-rate-limiting-design.md`](e3-5-rate-limiting-design.md)  
-**Follow-up:** [`T-e3.5d-postgres-concurrency-validation.md`](../../tasks/todo/T-e3.5d-postgres-concurrency-validation.md)
+**Concurrency validation:** [`e3-5d-postgres-concurrency-validation.md`](e3-5d-postgres-concurrency-validation.md)
 
 ## Summary
 
@@ -43,14 +43,18 @@ validate → resolve business/tenant → flow/customer/conversation → save mes
 
 1. `alembic upgrade head` (through `0018`)
 2. Deploy backend with flag **off**
-3. **Rollout gate:** keep `ALPSTEIN_AI_RATE_LIMIT_ENABLED=false` in **all** environments until [`T-e3.5d-postgres-concurrency-validation.md`](../../tasks/todo/T-e3.5d-postgres-concurrency-validation.md) passes (real PostgreSQL two-session race test)
-4. After E3.5d green: enable in staging with tuned limits; production only after staging review
+3. **Rollout gate:** E3.5d concurrency validation is **green** — enable in **staging** next (`ALPSTEIN_AI_RATE_LIMIT_ENABLED=true` with tuned limits); production only after staging review
+4. E3.6 spam flag remains gated separately (E3.6 staging + `ALPSTEIN_AI_SPAM_PROTECTION_ENABLED`)
 
 ## Tests
 
 - `backend/tests/test_e3_5_rate_limit_policy.py` — unit/policy
 - `backend/tests/test_e3_5_rate_limiting.py` — mocked wiring/API
-- **Gap (E3.5d):** `SELECT FOR UPDATE` concurrency **not** verified against live Postgres yet
+- `backend/tests/test_e3_5_rate_limit_postgres_concurrency.py` — **E3.5d** real PostgreSQL `SELECT FOR UPDATE` races (requires `ALPSTEIN_AI_DATABASE_URL`; skipped otherwise)
+
+## E3.5d concurrency fix (2026-05-29)
+
+Concurrent first insert into `rate_limit_buckets` could raise `UniqueViolationError` when two transactions both saw no row under `FOR UPDATE`. `_get_or_create_bucket` now uses a nested savepoint + `IntegrityError` recovery, then re-locks the existing row.
 
 ## Rollback
 
