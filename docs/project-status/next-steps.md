@@ -36,6 +36,16 @@
 
 **OPS-H1** closed: [`runtime-surface-hardening.md`](../ops/runtime-surface-hardening.md) — canonical map in [`runtime-map.md`](../ops/runtime-map.md).
 
+**Phase F.2.1 (implemented, review):** ERPNext Lead sync in unified n8n ingress — [`n8n-erpnext-lead-sync.md`](../ops/n8n-erpnext-lead-sync.md) · audit [`f2-1-erpnext-lead-n8n-sync.md`](../audits/f2-1-erpnext-lead-n8n-sync.md) · task [`T-f2.1-erpnext-lead-n8n-workflow.md`](../../tasks/in-progress/T-f2.1-erpnext-lead-n8n-workflow.md) — **keep `ALPSTEIN_ERPNEXT_LEAD_SYNC_ENABLED=false` until staging smoke**
+
+**Phase F.1 (design done):** ERPNext install architecture — [`f1-erpnext-installation-operational-architecture.md`](../architecture/f1-erpnext-installation-operational-architecture.md) · operator runbook [`erpnext-production-deployment-runbook.md`](../ops/erpnext-production-deployment-runbook.md) · task [`T-f1-erpnext-installation-operational-architecture.md`](../../tasks/todo/T-f1-erpnext-installation-operational-architecture.md) — **Option A Docker + host nginx** · `https://crm.alpstein-ai.ch` · **no Alpstein integration** · operator deploy pending.
+
+**n8n update notify (O3):** Install timer per [`n8n-update-notification-runbook.md`](../ops/n8n-update-notification-runbook.md) §4; record first evidence §7.
+
+**E4 (design done):** [`e4-controlled-update-release-automation.md`](../architecture/e4-controlled-update-release-automation.md) — next impl slice **E4-R1** (`release-ctl` + audit). Manual deploy until then: [`e4-release-controller-runbook.md`](../ops/e4-release-controller-runbook.md) §3.
+
+**n8n update notify (design done):** [`n8n-update-notification-service.md`](../architecture/n8n-update-notification-service.md) — Telegram-only when new upstream release; **no auto-update** · task [`T-ops-n8n-update-notification.md`](../../tasks/todo/T-ops-n8n-update-notification.md)
+
 **RECOVERY-2** closed: [`recovery-compose-recreate-stabilization-2026-05-28.md`](../audits/recovery-compose-recreate-stabilization-2026-05-28.md) — use **`docker compose`** (v2) for stack ops; never `docker-compose --force-recreate` on v1.
 
 Phase **E0** closed: [`e0-telegram-reference-channel-remediation-2026-05-28.md`](../audits/e0-telegram-reference-channel-remediation-2026-05-28.md) — **PASS WITH WARNINGS** · Telegram reference channel baseline established.
@@ -50,6 +60,8 @@ Implementation follow-up: E1.6.3 runtime compatibility fix and E1.6.6 activation
 
 | Step | Status | Notes |
 |------|--------|-------|
+| **E4 design** | **done (spec)** | Release controller architecture E4.1–E4.6 |
+| **E4-R1** | planned | `release-ctl` + SQLite audit |
 | **OPS-H1** | **done (WARN)** | Runtime map; `0.0.0.0` dev servers flagged |
 | **RECOVERY-2** | **done (WARN)** | `docker compose` v2; recreate path safe |
 | **RECOVERY-1** | **done (WARN)** | Postgres/backend/n8n SoT; webhook smokes 200 |

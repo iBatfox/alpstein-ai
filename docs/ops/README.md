@@ -31,10 +31,11 @@ Runbooks describe **how to operate** the runtime described in [`../architecture/
 | Document | Doc status | Topic |
 |----------|------------|-------|
 | [`e4-release-controller-runbook.md`](e4-release-controller-runbook.md) | spec (pre-impl) | E4 release automation operator skeleton |
-| [`n8n-update-notification-runbook.md`](n8n-update-notification-runbook.md) | design | n8n upstream release Telegram alert (notify-only) |
+| [`n8n-update-notification-runbook.md`](n8n-update-notification-runbook.md) | implemented (O2+O3) | n8n upstream release Telegram alert + daily systemd timer |
 | [`runtime-map.md`](runtime-map.md) | **canonical** (ops) | Canonical topology, ports, compose v2 rule (OPS-H1) |
 | [`runtime-surface-hardening.md`](runtime-surface-hardening.md) | runtime-derived | OPS-H1 inventory and hardening notes |
-| [`n8n-unified-customer-ingress-runbook.md`](n8n-unified-customer-ingress-runbook.md) | **canonical** (ops) | Production unified ingress (E1.9) |
+| [`n8n-unified-customer-ingress-runbook.md`](n8n-unified-customer-ingress-runbook.md) | **canonical** (ops) | Production unified ingress (E1.9); §10 Telegram / n8n 2.x recovery |
+| [`../audits/telegram-incident-2026-05-29.md`](../audits/telegram-incident-2026-05-29.md) | incident report | INC-2026-05-29 — webhook + `N8N_BLOCK_ENV_ACCESS_IN_NODE` |
 | [`operational-ingress-policy.md`](operational-ingress-policy.md) | **canonical** (ops) | Single backend ingress (OPS-C1 / D4) |
 | [`n8n-runtime-export-parity.md`](n8n-runtime-export-parity.md) | **canonical** (ops) | Workflow export governance (Phase C) |
 | [`n8n-runtime-start.md`](n8n-runtime-start.md) | runtime-derived | Legacy host n8n Docker runtime |

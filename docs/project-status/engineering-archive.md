@@ -27,6 +27,7 @@
 | 2026-05-25 | Greeting, Langfuse, ATTR-2, demo separation | Backend greeting policy; dev tracing; attribution schema; Alpstein vs barbershop demo split |
 | 2026-05-25–27 | CIP-B intent + contact ownership | Intent slices in §2 for `alpstein_ai_demo_001`; hardcoded contacts removed from backend prompts |
 | 2026-05-27 | B2 deployment portability + D4 ops verification | Compose SoT, migrate-then-serve, readiness, JSON-safe metadata, replay lineage, ingress policy — **not** K8s/scale proof |
+| 2026-05-29 | INC Telegram ingress outage | n8n **2.22.5** — missing webhook + `N8N_BLOCK_ENV_ACCESS_IN_NODE`; resolved — [`telegram-incident-2026-05-29.md`](../audits/telegram-incident-2026-05-29.md) |
 | Ongoing | Phase E controlled expansion | T14.5/C5, CIP-D, ATTR-3+, C3/C4 parity, T13.6 retries; WhatsApp **deferred** |
 
 ---

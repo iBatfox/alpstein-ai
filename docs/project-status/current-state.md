@@ -4,13 +4,17 @@
 
 # Alpstein AI — Current State
 
-**As-of:** 2026-05-28 (OPS-H1 runtime surface documented)
+**As-of:** 2026-05-29 (n8n update notify O3 systemd)
 
 ## Project Phase
 
 Specification-driven MVP with **backend AI orchestration complete**, **n8n test + Telegram ingress workflows implemented** (ops maturity partial), and **conversational behavior extensions** (greeting, intent for one demo business, operator context) shipped in backend.
 
 **Phase D4 operational verification:** **complete** (D4.1–D4.4, U1, OPS-C1). Portable **Docker Compose** is the **operational source of truth** for backend verification; see [`d4-operational-wrap-up-2026-05-27.md`](../audits/d4-operational-wrap-up-2026-05-27.md).
+
+**n8n update notification (O2+O3):** Script [`scripts/ops/n8n_update_notify.py`](../../scripts/ops/n8n_update_notify.py) + daily systemd units in [`docs/ops/systemd/`](../ops/systemd/) — **notify-only**; operator must install timer + record first evidence ([`n8n-update-notification-runbook.md`](../ops/n8n-update-notification-runbook.md) §7).
+
+**Phase E4 (design):** **spec complete** — [`e4-controlled-update-release-automation.md`](../architecture/e4-controlled-update-release-automation.md). Release controller, Telegram approval, staging pipeline, prod gate, rollback, audit schema defined. **Not implemented** — manual compose path remains SoT until E4-R1.
 
 **OPS-H1 (runtime surface):** **PASS WITH NOTES** — [`runtime-map.md`](../ops/runtime-map.md) · [`runtime-surface-hardening.md`](../ops/runtime-surface-hardening.md). Canonical ports: **15679** (n8n), **8000** (backend loopback), **15433** (postgres loopback). Legacy **8010** / **15432** not listening; `backend_postgres` container absent. **Action item:** `python3 -m http.server` on **`0.0.0.0:8088` / `8090`** — use `--bind 127.0.0.1` or stop when idle.
 
