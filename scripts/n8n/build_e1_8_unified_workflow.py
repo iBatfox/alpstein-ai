@@ -1186,12 +1186,12 @@ def main() -> None:
             {
                 "httpMethod": "POST",
                 "path": "alpstein/unified-customer-ingress/instagram/incoming",
-                "responseMode": "onReceived",
+                "responseMode": "responseNode",
                 "options": {},
             },
             webhookId="alpstein-unified-instagram-backend-ingress",
             notesInFlow=True,
-            notes="T-N8N-IG-INGRESS: backend dispatch after Meta DM persist.",
+            notes="T-N8N-IG-INGRESS: backend dispatch after Meta DM persist. responseNode + Respond Instagram Ack (n8n 2.x).",
         ),
         node(
             "e1800001-0000-4000-8000-000000000003",
@@ -1446,6 +1446,20 @@ def main() -> None:
             2,
             [1860, 520],
             {"jsCode": INSTAGRAM_REPLY_DISABLED},
+        ),
+        node(
+            "ig180005-0000-4000-8000-000000000001",
+            "Respond Instagram Ack",
+            "n8n-nodes-base.respondToWebhook",
+            1.1,
+            [2120, 820],
+            {
+                "respondWith": "json",
+                "responseBody": "={{ { success: true, channel: 'instagram', correlation_id: $('Add Business Context').first().json.correlation_id } }}",
+                "options": {"responseCode": 200},
+            },
+            notesInFlow=True,
+            notes="T-N8N-IG-INGRESS: ack backend dispatch (no auto-reply). Required for n8n 2.x responseNode.",
         ),
         node(
             "e1800001-0000-4000-8000-00000000000e",
@@ -1904,6 +1918,12 @@ def main() -> None:
         "Route Reply Instagram": {
             "main": [[{"node": "Instagram Reply Disabled Logger", "type": "main", "index": 0}]]
         },
+        "Instagram Reply Disabled Logger": {
+            "main": [[{"node": "Respond Instagram Ack", "type": "main", "index": 0}]]
+        },
+        "Respond Instagram Ack": {
+            "main": [[{"node": "Prepare Delivery PATCH", "type": "main", "index": 0}]]
+        },
         "Respond Website Reply": {
             "main": [[{"node": "Prepare Delivery PATCH", "type": "main", "index": 0}]]
         },
@@ -1931,7 +1951,7 @@ def main() -> None:
         "connections": connections,
         "active": True,
         "settings": {"executionOrder": "v1"},
-        "versionId": "f2.3-instagram-ingress-v1",
+        "versionId": "f2.3-instagram-ingress-v2",
         "meta": {"templateCredsSetupCompleted": False},
         "tags": [
             {
