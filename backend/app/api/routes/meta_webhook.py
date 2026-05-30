@@ -12,6 +12,7 @@ from app.services.instagram_ingress import (
     ingress_log_extra,
 )
 from app.services.meta_webhook_intake import (
+    instagram_ingress_ignored_log_extra,
     instagram_payload_shape_diagnostic,
     meta_webhook_log_context,
     should_log_instagram_payload_shape,
@@ -109,6 +110,15 @@ async def receive_meta_webhook(
                     **ingress_log_extra(outcome.normalized),
                     "internal_message_id": str(outcome.internal_message_id),
                 },
+            )
+
+        if not result.outcomes:
+            logger.info(
+                "instagram ingress ignored",
+                extra=instagram_ingress_ignored_log_extra(
+                    body,
+                    source_account_id=settings.instagram_user_id.strip(),
+                ),
             )
 
         if should_log_instagram_payload_shape(

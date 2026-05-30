@@ -171,6 +171,227 @@ def extract_instagram_inbound_messages(body: dict[str, Any]) -> list[InstagramIn
     return results
 
 
+def instagram_ingress_ignored_log_extra(
+    body: dict[str, Any],
+    *,
+    source_account_id: str,
+) -> dict[str, Any]:
+    """Safe structured fields when Instagram ingress parses zero inbound messages."""
+    entry_keys, change_fields, has_messaging, raw_event_types, ignored_reason = (
+        _analyze_instagram_ignored_webhook(body)
+    )
+    entry = body.get("entry")
+    entry_count = len(entry) if isinstance(entry, list) else 0
+    obj = body.get("object")
+    return {
+        "object": obj if isinstance(obj, str) else None,
+        "entry_count": entry_count,
+        "entry_keys": entry_keys,
+        "change_fields": change_fields,
+        "has_messaging": has_messaging,
+        "raw_event_types": raw_event_types,
+        "ignored_reason": ignored_reason,
+        "source_account_id": source_account_id,
+    }
+
+
+def _analyze_instagram_ignored_webhook(
+    body: dict[str, Any],
+) -> tuple[list[str], list[str], bool, list[str], str]:
+    """Return entry_keys, change_fields, has_messaging, raw_event_types, ignored_reason."""
+    obj = body.get("object")
+    if obj != "instagram":
+        return [], [], False, [], "wrong_object"
+
+    entry = body.get("entry")
+    if not isinstance(entry, list) or not entry:
+        return [], [], False, [], "missing_entry"
+
+    entry_keys: set[str] = set()
+    change_fields: set[str] = set()
+    raw_event_types: list[str] = []
+    reason_candidates: list[str] = []
+    has_messaging = False
+
+    for item in entry:
+        if not isinstance(item, dict):
+            reason_candidates.append("invalid_entry_item")
+            continue
+        entry_keys.update(str(key) for key in item.keys())
+
+        messaging = item.get("messaging")
+        if isinstance(messaging, list):
+            has_messaging = True
+            for event in messaging:
+                _classify_messaging_event(event, raw_event_types, reason_candidates)
+
+        changes = item.get("changes")
+        if not isinstance(changes, list):
+            continue
+        for change in changes:
+            if not isinstance(change, dict):
+                reason_candidates.append("invalid_change_item")
+                continue
+            field = change.get("field")
+            field_name = field if isinstance(field, str) else None
+            if field_name:
+                change_fields.add(field_name)
+            value = change.get("value")
+            _classify_instagram_change(field_name, value, raw_event_types, reason_candidates)
+
+    ignored_reason = _select_instagram_ignored_reason(reason_candidates)
+    return (
+        sorted(entry_keys),
+        sorted(change_fields),
+        has_messaging,
+        raw_event_types,
+        ignored_reason,
+    )
+
+
+def _select_instagram_ignored_reason(reason_candidates: list[str]) -> str:
+    priority = (
+        "wrong_object",
+        "missing_entry",
+        "echo_message",
+        "deleted_message",
+        "no_text_content",
+        "missing_sender",
+        "read_or_delivery",
+        "non_message_change_field",
+        "unrecognized_message_structure",
+        "invalid_entry_item",
+        "invalid_change_item",
+        "no_inbound_candidates",
+    )
+    candidate_set = set(reason_candidates)
+    for reason in priority:
+        if reason in candidate_set:
+            return reason
+    if reason_candidates:
+        return reason_candidates[0]
+    return "no_inbound_candidates"
+
+
+def _classify_messaging_event(
+    event: Any,
+    raw_event_types: list[str],
+    reason_candidates: list[str],
+) -> None:
+    if not isinstance(event, dict):
+        reason_candidates.append("invalid_entry_item")
+        return
+    if "read" in event:
+        raw_event_types.append("entry.messaging.read")
+        reason_candidates.append("read_or_delivery")
+        return
+    if "delivery" in event:
+        raw_event_types.append("entry.messaging.delivery")
+        reason_candidates.append("read_or_delivery")
+        return
+
+    message = event.get("message")
+    if not isinstance(message, dict):
+        raw_event_types.append("entry.messaging.non_message")
+        reason_candidates.append("no_inbound_candidates")
+        return
+
+    if message.get("is_echo") is True:
+        raw_event_types.append("entry.messaging.echo")
+        reason_candidates.append("echo_message")
+        return
+    if message.get("is_deleted") is True:
+        raw_event_types.append("entry.messaging.deleted")
+        reason_candidates.append("deleted_message")
+        return
+    if not _extract_text_body(message).strip():
+        raw_event_types.append("entry.messaging.no_text")
+        reason_candidates.append("no_text_content")
+        return
+    if not _extract_actor_id(event.get("sender")):
+        raw_event_types.append("entry.messaging.missing_sender")
+        reason_candidates.append("missing_sender")
+        return
+    raw_event_types.append("entry.messaging.unparsed")
+
+
+def _classify_instagram_change(
+    field_name: str | None,
+    value: Any,
+    raw_event_types: list[str],
+    reason_candidates: list[str],
+) -> None:
+    if field_name in _NON_MESSAGE_INSTAGRAM_CHANGE_FIELDS:
+        raw_event_types.append(f"changes.{field_name}")
+        reason_candidates.append("non_message_change_field")
+        return
+
+    if field_name != "messages":
+        if field_name:
+            raw_event_types.append(f"changes.{field_name}")
+        reason_candidates.append("no_inbound_candidates")
+        return
+
+    if not isinstance(value, dict):
+        raw_event_types.append("changes.messages.invalid_value")
+        reason_candidates.append("unrecognized_message_structure")
+        return
+
+    singular_message = value.get("message")
+    if isinstance(singular_message, dict):
+        if singular_message.get("is_echo") is True:
+            raw_event_types.append("changes.value.message.echo")
+            reason_candidates.append("echo_message")
+            return
+        if singular_message.get("is_deleted") is True:
+            raw_event_types.append("changes.value.message.deleted")
+            reason_candidates.append("deleted_message")
+            return
+        if not _extract_text_body(singular_message).strip():
+            raw_event_types.append("changes.value.message.no_text")
+            reason_candidates.append("no_text_content")
+            return
+        if not _extract_actor_id(value.get("sender")):
+            raw_event_types.append("changes.value.message.missing_sender")
+            reason_candidates.append("missing_sender")
+            return
+        raw_event_types.append("changes.value.message.unparsed")
+        reason_candidates.append("unrecognized_message_structure")
+        return
+
+    messages = value.get("messages")
+    if isinstance(messages, list):
+        if not messages:
+            raw_event_types.append("changes.value.messages.empty")
+            reason_candidates.append("no_inbound_candidates")
+            return
+        for message in messages:
+            if not isinstance(message, dict):
+                continue
+            if message.get("is_echo") is True:
+                raw_event_types.append("changes.value.messages.echo")
+                reason_candidates.append("echo_message")
+                continue
+            if message.get("is_deleted") is True:
+                raw_event_types.append("changes.value.messages.deleted")
+                reason_candidates.append("deleted_message")
+                continue
+            if not _extract_text_body(message).strip():
+                raw_event_types.append("changes.value.messages.no_text")
+                reason_candidates.append("no_text_content")
+                continue
+            if not isinstance(message.get("from"), str):
+                raw_event_types.append("changes.value.messages.missing_sender")
+                reason_candidates.append("missing_sender")
+                continue
+            raw_event_types.append("changes.value.messages.unparsed")
+            reason_candidates.append("unrecognized_message_structure")
+        return
+
+    raw_event_types.append("changes.messages.unrecognized")
+    reason_candidates.append("unrecognized_message_structure")
+
+
 def instagram_payload_shape_diagnostic(body: dict[str, Any]) -> dict[str, Any]:
     """Safe structural snapshot when Instagram parser finds no inbound messages."""
     entry = body.get("entry")

@@ -412,6 +412,50 @@ async def test_meta_webhook_post_duplicate_instagram_ignored(
 
 
 @pytest.mark.anyio
+async def test_meta_webhook_post_logs_instagram_ignored_for_non_message_event(
+    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("app.core.config.settings.instagram_user_id", "27717448494529916")
+    monkeypatch.setattr(
+        "app.api.routes.meta_webhook.settings.instagram_user_id",
+        "27717448494529916",
+    )
+    payload = {
+        "object": "instagram",
+        "entry": [
+            {
+                "id": "IG_BUSINESS_ACCOUNT_ID",
+                "changes": [
+                    {
+                        "field": "messaging_seen",
+                        "value": {
+                            "sender": {"id": "17841400000000000"},
+                            "timestamp": 1520383572,
+                        },
+                    }
+                ],
+            }
+        ],
+    }
+
+    caplog.set_level(logging.INFO, logger="app.api.routes.meta_webhook")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/webhooks/meta", json=payload)
+
+    assert response.status_code == 200
+    ignored = [
+        record for record in caplog.records if record.getMessage() == "instagram ingress ignored"
+    ]
+    assert len(ignored) == 1
+    assert ignored[0].ignored_reason == "non_message_change_field"
+    assert ignored[0].change_fields == ["messaging_seen"]
+    assert ignored[0].source_account_id == "27717448494529916"
+    accepted = [record for record in caplog.records if record.getMessage() == "instagram ingress accepted"]
+    assert accepted == []
+
+
+@pytest.mark.anyio
 async def test_meta_webhook_post_logs_instagram_payload_shape_when_unparsed(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
