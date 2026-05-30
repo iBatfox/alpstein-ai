@@ -1,11 +1,21 @@
 import json
 import logging
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse, PlainTextResponse, Response
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.services.meta_webhook_intake import meta_webhook_log_context
+from app.db.session import get_db_session
+from app.services.instagram_ingress import (
+    get_instagram_ingress_persistence_service,
+    ingress_log_extra,
+)
+from app.services.meta_webhook_intake import (
+    instagram_payload_shape_diagnostic,
+    meta_webhook_log_context,
+    should_log_instagram_payload_shape,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -57,8 +67,11 @@ async def verify_meta_webhook(
 
 
 @router.post("/meta")
-async def receive_meta_webhook(request: Request) -> JSONResponse:
-    """Accept raw Meta webhook events; no processing or outbound replies yet."""
+async def receive_meta_webhook(
+    request: Request,
+    session: AsyncSession = Depends(get_db_session),
+) -> JSONResponse:
+    """Accept raw Meta webhook events; Instagram ingress persists inbound DMs only."""
     raw_body = await request.body()
     if not raw_body or not raw_body.strip():
         return _validation_error("Request body is required")
@@ -71,7 +84,45 @@ async def receive_meta_webhook(request: Request) -> JSONResponse:
     if not isinstance(body, dict):
         return _validation_error("Request body must be a JSON object")
 
-    log_context = meta_webhook_log_context(body)
-    logger.info("meta webhook event received", extra=log_context)
+    if body.get("object") == "instagram":
+        persistence = get_instagram_ingress_persistence_service()
+        try:
+            result = await persistence.process_webhook(session, body)
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            logger.exception("instagram ingress persistence failed")
+            return JSONResponse(status_code=200, content={"status": "received"})
+
+        for outcome in result.outcomes:
+            if outcome.skipped:
+                continue
+            if outcome.is_duplicate:
+                logger.info(
+                    "instagram ingress duplicate ignored",
+                    extra={"message_ids": [outcome.normalized.message_id]},
+                )
+                continue
+            logger.info(
+                "instagram ingress accepted",
+                extra={
+                    **ingress_log_extra(outcome.normalized),
+                    "internal_message_id": str(outcome.internal_message_id),
+                },
+            )
+
+        if should_log_instagram_payload_shape(
+            body,
+            accepted_count=result.accepted_count,
+            duplicate_count=len(result.duplicate_message_ids),
+        ):
+            shape = instagram_payload_shape_diagnostic(body)
+            logger.info(
+                "instagram payload shape %s",
+                json.dumps(shape, separators=(",", ":")),
+            )
+    else:
+        log_context = meta_webhook_log_context(body)
+        logger.info("meta webhook event received", extra=log_context)
 
     return JSONResponse(status_code=200, content={"status": "received"})
