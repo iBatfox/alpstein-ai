@@ -7,7 +7,6 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 OUT = REPO / "n8n/workflows/e1_8_unified_customer_ingress_skeleton.json"
-WEBSITE_WF = REPO / "n8n/workflows/e1_6_workflow_website_chat_mvp_skeleton.json"
 
 OPERATOR_CONTEXT = (
     "Alpstein AI demo business.\n"
@@ -1143,12 +1142,6 @@ def node(nid, name, ntype, type_version, position, parameters, **extra):
 
 
 def main() -> None:
-    website_code = next(
-        n["parameters"]["jsCode"]
-        for n in json.loads(WEBSITE_WF.read_text())["nodes"]
-        if n["name"] == "Normalize Website Chat Incoming"
-    )
-
     nodes = [
         node(
             "e1800001-0000-4000-8000-000000000001",
@@ -1163,22 +1156,6 @@ def main() -> None:
             notes="E1.8 INACTIVE: non-prod webhookId. Do not activate while production Telegram workflow is active.",
         ),
         node(
-            "e1800001-0000-4000-8000-000000000002",
-            "Website Chat Webhook",
-            "n8n-nodes-base.webhook",
-            2,
-            [0, 520],
-            {
-                "httpMethod": "POST",
-                "path": "alpstein/unified-customer-ingress/website-chat/incoming",
-                "responseMode": "responseNode",
-                "options": {},
-            },
-            webhookId="alpstein-unified-website-chat-ingress",
-            notesInFlow=True,
-            notes="E1.8 INACTIVE: non-prod path. Production uses alpstein/website-chat/incoming.",
-        ),
-        node(
             "ig180001-0000-4000-8000-000000000001",
             "Instagram Backend Event Webhook",
             "n8n-nodes-base.webhook",
@@ -1187,53 +1164,12 @@ def main() -> None:
             {
                 "httpMethod": "POST",
                 "path": "alpstein/unified-customer-ingress/instagram/incoming",
-                "responseMode": "responseNode",
-                "options": {},
+                "responseMode": "onReceived",
+                "options": {"responseCode": 200},
             },
             webhookId="alpstein-unified-instagram-backend-ingress",
             notesInFlow=True,
-            notes="T-N8N-IG-INGRESS: backend dispatch after Meta DM persist. responseNode + Respond Instagram Ack (n8n 2.x).",
-        ),
-        node(
-            "e1800001-0000-4000-8000-000000000003",
-            "IF Website Chat Enabled",
-            "n8n-nodes-base.if",
-            2.2,
-            [280, 520],
-            {
-                "conditions": {
-                    "options": {
-                        "caseSensitive": True,
-                        "leftValue": "",
-                        "typeValidation": "strict",
-                        "version": 2,
-                    },
-                    "conditions": [
-                        {
-                            "id": "cond-website-chat-enabled",
-                            "leftValue": "={{ $env.ALPSTEIN_WEBSITE_CHAT_ENABLED }}",
-                            "rightValue": "true",
-                            "operator": {"type": "string", "operation": "equals"},
-                        }
-                    ],
-                    "combinator": "and",
-                },
-                "options": {},
-            },
-            notesInFlow=True,
-            notes="E1.6.6 kill switch — Website branch only.",
-        ),
-        node(
-            "e1800001-0000-4000-8000-000000000004",
-            "Respond Website Chat Disabled",
-            "n8n-nodes-base.respondToWebhook",
-            1.1,
-            [560, 420],
-            {
-                "respondWith": "json",
-                "responseBody": "={{ { success: false, error: { code: 'WEBSITE_CHAT_DISABLED', message: 'Website chat is temporarily disabled.' } } }}",
-                "options": {"responseCode": 503},
-            },
+            notes="T-N8N-IG-INGRESS: backend dispatch after Meta DM persist. Immediate 200 response; no responseNode.",
         ),
         node(
             "e1800001-0000-4000-8000-000000000005",
@@ -1242,14 +1178,6 @@ def main() -> None:
             2,
             [280, 200],
             {"jsCode": NORMALIZE_TELEGRAM},
-        ),
-        node(
-            "e1800001-0000-4000-8000-000000000006",
-            "Normalize Website Chat Incoming",
-            "n8n-nodes-base.code",
-            2,
-            [560, 620],
-            {"jsCode": website_code},
         ),
         node(
             "ig180002-0000-4000-8000-000000000001",
@@ -1360,60 +1288,6 @@ def main() -> None:
             },
         ),
         node(
-            "e1800001-0000-4000-8000-00000000000c",
-            "Route Reply Website",
-            "n8n-nodes-base.if",
-            2.2,
-            [1600, 360],
-            {
-                "conditions": {
-                    "options": {
-                        "caseSensitive": True,
-                        "leftValue": "",
-                        "typeValidation": "strict",
-                        "version": 2,
-                    },
-                    "conditions": [
-                        {
-                            "id": "cond-channel-website",
-                            "leftValue": "={{ $json.channel }}",
-                            "rightValue": "website_chat",
-                            "operator": {"type": "string", "operation": "equals"},
-                        }
-                    ],
-                    "combinator": "and",
-                },
-                "options": {},
-            },
-        ),
-        node(
-            "e1800001-0000-4000-8000-00000000000d",
-            "Route Error Website",
-            "n8n-nodes-base.if",
-            2.2,
-            [1600, 520],
-            {
-                "conditions": {
-                    "options": {
-                        "caseSensitive": True,
-                        "leftValue": "",
-                        "typeValidation": "strict",
-                        "version": 2,
-                    },
-                    "conditions": [
-                        {
-                            "id": "cond-channel-website-err",
-                            "leftValue": "={{ $json.channel }}",
-                            "rightValue": "website_chat",
-                            "operator": {"type": "string", "operation": "equals"},
-                        }
-                    ],
-                    "combinator": "and",
-                },
-                "options": {},
-            },
-        ),
-        node(
             "ig180003-0000-4000-8000-000000000001",
             "Route Reply Instagram",
             "n8n-nodes-base.if",
@@ -1449,20 +1323,6 @@ def main() -> None:
             {"jsCode": INSTAGRAM_REPLY_DISABLED},
         ),
         node(
-            "ig180005-0000-4000-8000-000000000001",
-            "Respond Instagram Ack",
-            "n8n-nodes-base.respondToWebhook",
-            1.1,
-            [2120, 820],
-            {
-                "respondWith": "json",
-                "responseBody": "={{ { success: true, channel: 'instagram', correlation_id: $('Add Business Context').first().json.correlation_id } }}",
-                "options": {"responseCode": 200},
-            },
-            notesInFlow=True,
-            notes="T-N8N-IG-INGRESS: ack backend dispatch (no auto-reply). Required for n8n 2.x responseNode.",
-        ),
-        node(
             "e1800001-0000-4000-8000-00000000000e",
             "Telegram Send Message",
             "n8n-nodes-base.telegram",
@@ -1477,30 +1337,6 @@ def main() -> None:
             },
             continueOnFail=True,
             credentials={"telegramApi": {"name": "alpsteinai_0001bot"}},
-        ),
-        node(
-            "e1800001-0000-4000-8000-00000000000f",
-            "Respond Website Reply",
-            "n8n-nodes-base.respondToWebhook",
-            1.1,
-            [1860, 360],
-            {
-                "respondWith": "json",
-                "responseBody": "={{ $json }}",
-                "options": {"responseCode": 200},
-            },
-        ),
-        node(
-            "e1800001-0000-4000-8000-000000000010",
-            "Respond Website Error",
-            "n8n-nodes-base.respondToWebhook",
-            1.1,
-            [1860, 520],
-            {
-                "respondWith": "json",
-                "responseBody": "={{ $json }}",
-                "options": {"responseCode": 502},
-            },
         ),
         node(
             "e1800001-0000-4000-8000-000000000015",
@@ -1797,7 +1633,7 @@ def main() -> None:
         ),
         {
             "parameters": {
-                "content": "## Unified customer ingress + E2 delivery PATCH\n\nTelegram + Website + Instagram backend event → POST Backend → channel delivery → PATCH delivery outcome.\n\nRequires ALPSTEIN_OBSERVABILITY_TENANT_ID + ALPSTEIN_OBSERVABILITY_BUSINESS_ID (UUID).\n\nF.2.2: ERPNext tail — field dedupe + custom Lead fields — ALPSTEIN_ERPNEXT_LEAD_SYNC_ENABLED + erpnext_crm_api.\n\nT-N8N-IG-INGRESS: Instagram Meta webhook persists in backend, then dispatches here.",
+                "content": "## Unified customer ingress + E2 delivery PATCH\n\nTelegram + Instagram backend event → POST Backend → channel delivery → PATCH delivery outcome.\n\nWebsite channel is temporarily disabled until the Website Chat phase.\n\nRequires ALPSTEIN_OBSERVABILITY_TENANT_ID + ALPSTEIN_OBSERVABILITY_BUSINESS_ID (UUID).\n\nF.2.2: ERPNext tail — field dedupe + custom Lead fields — ALPSTEIN_ERPNEXT_LEAD_SYNC_ENABLED + erpnext_crm_api.\n\nT-N8N-IG-INGRESS: Instagram Meta webhook persists in backend, then dispatches here.",
                 "height": 340,
                 "width": 520,
                 "color": 4,
@@ -1814,22 +1650,10 @@ def main() -> None:
         "Telegram Trigger": {
             "main": [[{"node": "Normalize Telegram Incoming", "type": "main", "index": 0}]]
         },
-        "Website Chat Webhook": {
-            "main": [[{"node": "IF Website Chat Enabled", "type": "main", "index": 0}]]
-        },
         "Instagram Backend Event Webhook": {
             "main": [[{"node": "Normalize Instagram Incoming", "type": "main", "index": 0}]]
         },
-        "IF Website Chat Enabled": {
-            "main": [
-                [{"node": "Normalize Website Chat Incoming", "type": "main", "index": 0}],
-                [{"node": "Respond Website Chat Disabled", "type": "main", "index": 0}],
-            ]
-        },
         "Normalize Telegram Incoming": {
-            "main": [[{"node": "Add Business Context", "type": "main", "index": 0}]]
-        },
-        "Normalize Website Chat Incoming": {
             "main": [[{"node": "Add Business Context", "type": "main", "index": 0}]]
         },
         "Normalize Instagram Incoming": {
@@ -1893,7 +1717,6 @@ def main() -> None:
             "main": [
                 [
                     {"node": "Route Reply Telegram", "type": "main", "index": 0},
-                    {"node": "Route Reply Website", "type": "main", "index": 0},
                     {"node": "Route Reply Instagram", "type": "main", "index": 0},
                 ]
             ]
@@ -1902,7 +1725,6 @@ def main() -> None:
             "main": [
                 [
                     {"node": "Route Reply Telegram", "type": "main", "index": 0},
-                    {"node": "Route Error Website", "type": "main", "index": 0},
                     {"node": "Route Reply Instagram", "type": "main", "index": 0},
                 ]
             ]
@@ -1913,26 +1735,8 @@ def main() -> None:
         "Telegram Send Message": {
             "main": [[{"node": "Prepare Delivery PATCH", "type": "main", "index": 0}]]
         },
-        "Route Reply Website": {
-            "main": [[{"node": "Respond Website Reply", "type": "main", "index": 0}]]
-        },
         "Route Reply Instagram": {
             "main": [[{"node": "Instagram Reply Disabled Logger", "type": "main", "index": 0}]]
-        },
-        "Instagram Reply Disabled Logger": {
-            "main": [[{"node": "Respond Instagram Ack", "type": "main", "index": 0}]]
-        },
-        "Respond Instagram Ack": {
-            "main": [[{"node": "Prepare Delivery PATCH", "type": "main", "index": 0}]]
-        },
-        "Respond Website Reply": {
-            "main": [[{"node": "Prepare Delivery PATCH", "type": "main", "index": 0}]]
-        },
-        "Route Error Website": {
-            "main": [[{"node": "Respond Website Error", "type": "main", "index": 0}]]
-        },
-        "Respond Website Error": {
-            "main": [[{"node": "Prepare Delivery PATCH", "type": "main", "index": 0}]]
         },
         "Prepare Delivery PATCH": {
             "main": [[{"node": "PATCH Delivery Outcome", "type": "main", "index": 0}]]
@@ -1976,7 +1780,7 @@ def main() -> None:
         ],
     }
 
-    OUT.write_text(json.dumps(workflow, indent=2) + "\n")
+    OUT.write_text(json.dumps(workflow, indent=2, ensure_ascii=False) + "\n")
     print(f"Wrote {OUT} ({len(nodes)} nodes)")
 
 
