@@ -769,6 +769,13 @@ const leadDoc = {
   instagram_display_name: optString(normalized.instagram_context?.instagram_display_name),
 };
 
+if (channel === 'instagram') {
+  leadDoc.first_name = leadName;
+  leadDoc.middle_name = '';
+  leadDoc.last_name = '';
+  leadDoc.title = leadName;
+}
+
 if (phone) {
   leadDoc.mobile_no = phone;
   leadDoc.phone = phone;

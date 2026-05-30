@@ -11,6 +11,11 @@ from typing import Any
 import httpx
 
 from app.core.config import Settings, settings
+from app.services.instagram_client import (
+    InstagramClientError,
+    InstagramGraphClient,
+    InstagramUserProfile,
+)
 from app.services.instagram_ingress import NormalizedInstagramInboundMessage
 
 logger = logging.getLogger(__name__)
@@ -36,9 +41,11 @@ class InstagramN8nDispatchService:
         *,
         app_settings: Settings | None = None,
         http_client: httpx.AsyncClient | None = None,
+        profile_client: InstagramGraphClient | None = None,
     ) -> None:
         self._settings = app_settings or settings
         self._http_client = http_client
+        self._profile_client = profile_client
 
     def is_enabled(self) -> bool:
         return self._settings.instagram_n8n_ingress_enabled
@@ -55,7 +62,8 @@ class InstagramN8nDispatchService:
             return False
 
         webhook_url = self._settings.instagram_n8n_ingress_webhook_url.strip()
-        payload = build_instagram_n8n_event_payload(context)
+        profile = self._fetch_sender_profile(context)
+        payload = build_instagram_n8n_event_payload(context, profile=profile)
         log_extra = _dispatch_log_extra(context, webhook_url=webhook_url)
 
         logger.info(DISPATCH_LOG_STARTED, extra=log_extra)
@@ -87,17 +95,48 @@ class InstagramN8nDispatchService:
         )
         return True
 
+    def _fetch_sender_profile(
+        self,
+        context: InstagramN8nDispatchContext,
+    ) -> InstagramUserProfile | None:
+        sender_id = context.normalized.external_user_id.strip()
+        if not sender_id:
+            return None
 
-def build_instagram_n8n_event_payload(context: InstagramN8nDispatchContext) -> dict[str, Any]:
+        profile_client = self._profile_client or InstagramGraphClient(
+            app_settings=self._settings,
+        )
+        try:
+            return profile_client.get_user_profile(sender_id)
+        except InstagramClientError as exc:
+            logger.warning(
+                "instagram_profile_fetch_failed",
+                extra={
+                    **_dispatch_log_extra(context, webhook_url=None),
+                    "error_code": exc.code,
+                    "error_message": str(exc)[:300],
+                },
+            )
+            return None
+
+
+def build_instagram_n8n_event_payload(
+    context: InstagramN8nDispatchContext,
+    *,
+    profile: InstagramUserProfile | None = None,
+) -> dict[str, Any]:
     message = context.normalized
     correlation_id = context.correlation_id or uuid.uuid4()
     conversation_id = _external_conversation_id(message.external_chat_id)
     timestamp = _format_timestamp(message.received_at)
+    instagram_username = _clean_optional(profile.username if profile else None)
+    instagram_display_name = _clean_optional(profile.name if profile else None)
+    customer_name = instagram_display_name or instagram_username
 
     instagram_context = {
         "instagram_user_id": message.external_user_id,
-        "instagram_username": None,
-        "instagram_display_name": None,
+        "instagram_username": instagram_username,
+        "instagram_display_name": instagram_display_name,
         "instagram_account_id": message.source_account_id,
         "conversation_id": conversation_id,
     }
@@ -110,7 +149,7 @@ def build_instagram_n8n_event_payload(context: InstagramN8nDispatchContext) -> d
         "channel": "instagram",
         "customer": {
             "phone": None,
-            "name": None,
+            "name": customer_name,
             "email": None,
             "external_customer_id": message.external_user_id,
         },
@@ -160,6 +199,13 @@ def _format_timestamp(value: datetime) -> str:
     if value.tzinfo is not None:
         value = value.replace(tzinfo=None)
     return value.isoformat(timespec="seconds")
+
+
+def _clean_optional(value: str | None) -> str | None:
+    if value is None:
+        return None
+    text = value.strip()
+    return text or None
 
 
 _default_dispatch_service: InstagramN8nDispatchService | None = None
