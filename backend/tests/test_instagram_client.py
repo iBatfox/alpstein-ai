@@ -12,6 +12,7 @@ from app.services.instagram_client import (
     InstagramApiError,
     InstagramConfigurationError,
     INSTAGRAM_GRAPH_API_VERSION,
+    META_GRAPH_API_VERSION,
     InstagramExpiredTokenError,
     InstagramGraphClient,
     InstagramInvalidTokenError,
@@ -211,13 +212,14 @@ def test_get_user_profile_api_error(ig_settings: Settings) -> None:
 def test_send_text_message_success(ig_settings: Settings) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.method == "POST"
-        assert request.url.host == "graph.instagram.com"
-        assert request.url.path == f"/{INSTAGRAM_GRAPH_API_VERSION}/12345/messages"
+        assert request.url.host == "graph.facebook.com"
+        assert request.url.path == f"/{META_GRAPH_API_VERSION}/12345/messages"
         assert request.headers["authorization"] == "Bearer test-token"
         assert request.url.query == b""
         assert json.loads(request.content) == {
             "recipient": {"id": "17841400000000000"},
             "message": {"text": "Manual test"},
+            "messaging_type": "RESPONSE",
         }
         return httpx.Response(
             200,
@@ -240,6 +242,32 @@ def test_send_text_message_success(ig_settings: Settings) -> None:
 
     assert result.recipient_id == "17841400000000000"
     assert result.message_id == "mid.sent.001"
+
+
+def test_send_message_custom_messaging_type(ig_settings: Settings) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert json.loads(request.content)["messaging_type"] == "UPDATE"
+        return httpx.Response(
+            200,
+            json={
+                "recipient_id": "17841400000000000",
+                "message_id": "mid.sent.002",
+            },
+        )
+
+    transport = httpx.MockTransport(handler)
+    client = InstagramGraphClient(
+        app_settings=ig_settings,
+        http_client=httpx.Client(transport=transport),
+    )
+
+    result = client.send_message(
+        "17841400000000000",
+        "Hello",
+        messaging_type="UPDATE",
+    )
+
+    assert result.message_id == "mid.sent.002"
 
 
 def test_send_text_message_missing_token() -> None:

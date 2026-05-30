@@ -229,14 +229,60 @@ console.log(
 
 return [{ json: normalized }];"""
 
-INSTAGRAM_REPLY_DISABLED = r"""// T-N8N-IG-INGRESS — Instagram outbound reply intentionally disabled
+INSTAGRAM_REPLY_DISABLED = r"""// T-IG-OUTBOUND-REPLY — outbound kill switch off
 const item = $input.first().json;
 const log = {
   component: 'instagram_reply',
-  outcome: 'disabled',
+  outcome: 'instagram_reply_disabled',
   correlation_id: item.correlation_id,
   business_id: item.business_id,
   external_message_id: item.external_message_id || null,
+  execution_id: $execution.id,
+};
+console.log(JSON.stringify(log));
+return [{ json: log }];"""
+
+INSTAGRAM_REPLY_SKIPPED_DUPLICATE = r"""// T-IG-OUTBOUND-REPLY — skip send on duplicate inbound
+const item = $input.first().json;
+const log = {
+  component: 'instagram_reply',
+  outcome: 'instagram_reply_skipped_duplicate',
+  correlation_id: item.correlation_id,
+  business_id: item.business_id,
+  external_message_id: item.external_message_id || null,
+  execution_id: $execution.id,
+};
+console.log(JSON.stringify(log));
+return [{ json: log }];"""
+
+INSTAGRAM_REPLY_SENT = r"""// T-IG-OUTBOUND-REPLY — backend send succeeded
+const shaped = $('Route Reply Instagram').first().json;
+const send = $input.first().json;
+const providerMessageId =
+  send.success === true && send.data ? send.data.provider_message_id || null : null;
+const log = {
+  component: 'instagram_reply',
+  outcome: 'instagram_reply_sent',
+  correlation_id: shaped.correlation_id,
+  business_id: shaped.business_id,
+  external_message_id: shaped.external_message_id || null,
+  provider_message_id: providerMessageId,
+  execution_id: $execution.id,
+};
+console.log(JSON.stringify(log));
+return [{ json: log }];"""
+
+INSTAGRAM_REPLY_FAILED = r"""// T-IG-OUTBOUND-REPLY — backend send failed
+const shaped = $('Route Reply Instagram').first().json;
+const send = $input.first().json;
+const log = {
+  component: 'instagram_reply',
+  outcome: 'instagram_reply_failed',
+  correlation_id: shaped.correlation_id,
+  business_id: shaped.business_id,
+  external_message_id: shaped.external_message_id || null,
+  error_code: send.error?.code || 'INSTAGRAM_SEND_FAILED',
+  error_message: String(send.error?.message || 'Instagram outbound send failed').slice(0, 200),
   execution_id: $execution.id,
 };
 console.log(JSON.stringify(log));
@@ -313,10 +359,16 @@ if (channel === 'website_chat') {
 }
 
 if (channel === 'instagram') {
+  const ctx = normalized.instagram_context || {};
   const reply =
     backend.success === true && backend.data
       ? (backend.data.reply_to_customer || '').trim()
       : '';
+  const isDuplicate =
+    backend.success === true &&
+    backend.data &&
+    backend.data.message &&
+    backend.data.message.is_duplicate === true;
   return [
     {
       json: {
@@ -325,6 +377,9 @@ if (channel === 'instagram') {
         correlation_id: normalized.correlation_id,
         business_id: normalized.business_id,
         external_message_id: normalized.message?.external_message_id || null,
+        instagram_user_id:
+          ctx.instagram_user_id || normalized.customer?.external_customer_id || null,
+        is_duplicate: isDuplicate,
       },
     },
   ];
@@ -1326,8 +1381,182 @@ def main() -> None:
             "Instagram Reply Disabled Logger",
             "n8n-nodes-base.code",
             2,
-            [1860, 520],
+            [2120, 640],
             {"jsCode": INSTAGRAM_REPLY_DISABLED},
+        ),
+        node(
+            "ig180005-0000-4000-8000-000000000001",
+            "IF Instagram Outbound Enabled",
+            "n8n-nodes-base.if",
+            2.2,
+            [1860, 520],
+            {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": True,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 2,
+                    },
+                    "conditions": [
+                        {
+                            "id": "cond-ig-outbound-enabled",
+                            "leftValue": "={{ $env.ALPSTEIN_INSTAGRAM_OUTBOUND_ENABLED }}",
+                            "rightValue": "true",
+                            "operator": {"type": "string", "operation": "equals"},
+                        }
+                    ],
+                    "combinator": "and",
+                },
+                "options": {},
+            },
+        ),
+        node(
+            "ig180006-0000-4000-8000-000000000001",
+            "IF Instagram Should Send Reply",
+            "n8n-nodes-base.if",
+            2.2,
+            [2120, 480],
+            {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": True,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 2,
+                    },
+                    "conditions": [
+                        {
+                            "id": "cond-ig-has-reply",
+                            "leftValue": "={{ $json.reply_to_customer }}",
+                            "rightValue": "",
+                            "operator": {"type": "string", "operation": "notEmpty"},
+                        },
+                        {
+                            "id": "cond-ig-not-duplicate",
+                            "leftValue": "={{ $json.is_duplicate }}",
+                            "rightValue": True,
+                            "operator": {"type": "boolean", "operation": "notEquals"},
+                        },
+                    ],
+                    "combinator": "and",
+                },
+                "options": {},
+            },
+        ),
+        node(
+            "ig180007-0000-4000-8000-000000000001",
+            "POST Instagram Send via Backend",
+            "n8n-nodes-base.httpRequest",
+            4.2,
+            [2380, 440],
+            {
+                "method": "POST",
+                "url": "={{ $env.BACKEND_BASE_URL }}/api/v1/channels/instagram/send-message",
+                "sendHeaders": True,
+                "headerParameters": {
+                    "parameters": [
+                        {"name": "Content-Type", "value": "application/json"},
+                        {
+                            "name": "X-Alpstein-Webhook-Token",
+                            "value": "={{ $env.N8N_BACKEND_API_TOKEN }}",
+                        },
+                        {
+                            "name": "X-Correlation-Id",
+                            "value": "={{ $json.correlation_id }}",
+                        },
+                        {
+                            "name": "X-N8n-Execution-Id",
+                            "value": "={{ $execution.id }}",
+                        },
+                    ]
+                },
+                "sendBody": True,
+                "specifyBody": "json",
+                "jsonBody": """={\n  \"business_id\": {{ JSON.stringify($json.business_id) }},\n  \"recipient_id\": {{ JSON.stringify($json.instagram_user_id) }},\n  \"message_text\": {{ JSON.stringify($json.reply_to_customer) }},\n  \"correlation_id\": {{ JSON.stringify($json.correlation_id) }},\n  \"external_inbound_message_id\": {{ JSON.stringify($json.external_message_id) }}\n}""",
+                "options": {"timeout": 30000, "response": {"response": {"fullResponse": False}}},
+            },
+            onError="continueErrorOutput",
+            notesInFlow=True,
+            notes="T-IG-OUTBOUND-REPLY: n8n → backend → Meta Send API (never direct Meta).",
+        ),
+        node(
+            "ig180008-0000-4000-8000-000000000001",
+            "IF Instagram Send OK",
+            "n8n-nodes-base.if",
+            2.2,
+            [2640, 440],
+            {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": True,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 2,
+                    },
+                    "conditions": [
+                        {
+                            "id": "cond-ig-send-success",
+                            "leftValue": "={{ $json.success }}",
+                            "rightValue": True,
+                            "operator": {"type": "boolean", "operation": "equals"},
+                        }
+                    ],
+                    "combinator": "and",
+                },
+                "options": {},
+            },
+        ),
+        node(
+            "ig180009-0000-4000-8000-000000000001",
+            "Instagram Reply Sent Logger",
+            "n8n-nodes-base.code",
+            2,
+            [2900, 380],
+            {"jsCode": INSTAGRAM_REPLY_SENT},
+        ),
+        node(
+            "ig18000a-0000-4000-8000-000000000001",
+            "Instagram Reply Failed Logger",
+            "n8n-nodes-base.code",
+            2,
+            [2900, 500],
+            {"jsCode": INSTAGRAM_REPLY_FAILED},
+        ),
+        node(
+            "ig18000b-0000-4000-8000-000000000001",
+            "IF Instagram Is Duplicate",
+            "n8n-nodes-base.if",
+            2.2,
+            [2380, 580],
+            {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": True,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 2,
+                    },
+                    "conditions": [
+                        {
+                            "id": "cond-ig-is-duplicate",
+                            "leftValue": "={{ $json.is_duplicate }}",
+                            "rightValue": True,
+                            "operator": {"type": "boolean", "operation": "equals"},
+                        }
+                    ],
+                    "combinator": "and",
+                },
+                "options": {},
+            },
+        ),
+        node(
+            "ig18000c-0000-4000-8000-000000000001",
+            "Instagram Reply Skipped Duplicate Logger",
+            "n8n-nodes-base.code",
+            2,
+            [2640, 580],
+            {"jsCode": INSTAGRAM_REPLY_SKIPPED_DUPLICATE},
         ),
         node(
             "e1800001-0000-4000-8000-00000000000e",
@@ -1743,7 +1972,35 @@ def main() -> None:
             "main": [[{"node": "Prepare Delivery PATCH", "type": "main", "index": 0}]]
         },
         "Route Reply Instagram": {
-            "main": [[{"node": "Instagram Reply Disabled Logger", "type": "main", "index": 0}]]
+            "main": [[{"node": "IF Instagram Outbound Enabled", "type": "main", "index": 0}]]
+        },
+        "IF Instagram Outbound Enabled": {
+            "main": [
+                [{"node": "IF Instagram Should Send Reply", "type": "main", "index": 0}],
+                [{"node": "Instagram Reply Disabled Logger", "type": "main", "index": 0}],
+            ]
+        },
+        "IF Instagram Should Send Reply": {
+            "main": [
+                [{"node": "POST Instagram Send via Backend", "type": "main", "index": 0}],
+                [{"node": "IF Instagram Is Duplicate", "type": "main", "index": 0}],
+            ]
+        },
+        "POST Instagram Send via Backend": {
+            "main": [[{"node": "IF Instagram Send OK", "type": "main", "index": 0}]],
+            "error": [[{"node": "Instagram Reply Failed Logger", "type": "main", "index": 0}]],
+        },
+        "IF Instagram Send OK": {
+            "main": [
+                [{"node": "Instagram Reply Sent Logger", "type": "main", "index": 0}],
+                [{"node": "Instagram Reply Failed Logger", "type": "main", "index": 0}],
+            ]
+        },
+        "IF Instagram Is Duplicate": {
+            "main": [
+                [{"node": "Instagram Reply Skipped Duplicate Logger", "type": "main", "index": 0}],
+                [],
+            ]
         },
         "Prepare Delivery PATCH": {
             "main": [[{"node": "PATCH Delivery Outcome", "type": "main", "index": 0}]]
@@ -1763,7 +2020,7 @@ def main() -> None:
         "connections": connections,
         "active": True,
         "settings": {"executionOrder": "v1"},
-        "versionId": "f2.3-instagram-ingress-v2",
+        "versionId": "f2.4-instagram-outbound-v1",
         "meta": {"templateCredsSetupCompleted": False},
         "tags": [
             {

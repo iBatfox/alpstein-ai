@@ -11,8 +11,12 @@ from app.core.config import Settings, settings
 
 INSTAGRAM_GRAPH_ME_URL = "https://graph.instagram.com/me"
 INSTAGRAM_GRAPH_API_VERSION = "v24.0"
+META_GRAPH_API_VERSION = "v24.0"
 INSTAGRAM_MESSAGES_URL_TEMPLATE = (
     "https://graph.instagram.com/{api_version}/{ig_user_id}/messages"
+)
+META_INSTAGRAM_MESSAGES_URL_TEMPLATE = (
+    "https://graph.facebook.com/{api_version}/{ig_user_id}/messages"
 )
 INSTAGRAM_USER_PROFILE_URL_TEMPLATE = (
     "https://graph.instagram.com/{api_version}/{scoped_user_id}"
@@ -143,11 +147,17 @@ class InstagramGraphClient:
             expected_user_id=expected_user_id,
         )
 
-    def send_text_message(self, recipient_id: str, text: str) -> InstagramSendResult:
+    def send_message(
+        self,
+        recipient_id: str,
+        text: str,
+        messaging_type: str = "RESPONSE",
+    ) -> InstagramSendResult:
         access_token = self._settings.instagram_access_token.strip()
         ig_user_id = self._settings.instagram_user_id.strip()
         clean_recipient_id = recipient_id.strip()
         clean_text = text.strip()
+        clean_messaging_type = messaging_type.strip() or "RESPONSE"
 
         if not access_token:
             raise InstagramConfigurationError(
@@ -166,13 +176,14 @@ class InstagramGraphClient:
         if timeout is None:
             timeout = float(self._settings.ai_request_timeout_seconds)
 
-        url = INSTAGRAM_MESSAGES_URL_TEMPLATE.format(
-            api_version=INSTAGRAM_GRAPH_API_VERSION,
+        url = META_INSTAGRAM_MESSAGES_URL_TEMPLATE.format(
+            api_version=META_GRAPH_API_VERSION,
             ig_user_id=ig_user_id,
         )
         payload = {
             "recipient": {"id": clean_recipient_id},
             "message": {"text": clean_text},
+            "messaging_type": clean_messaging_type,
         }
         headers = {"Authorization": f"Bearer {access_token}"}
 
@@ -196,6 +207,9 @@ class InstagramGraphClient:
             ) from exc
 
         return _parse_send_response(response)
+
+    def send_text_message(self, recipient_id: str, text: str) -> InstagramSendResult:
+        return self.send_message(recipient_id, text, messaging_type="RESPONSE")
 
     def get_user_profile(self, scoped_user_id: str) -> InstagramUserProfile:
         access_token = self._settings.instagram_access_token.strip()
@@ -247,6 +261,21 @@ def get_profile(*, app_settings: Settings | None = None) -> InstagramProfile:
     return InstagramGraphClient(app_settings=app_settings).get_profile()
 
 
+def send_message(
+    recipient_id: str,
+    text: str,
+    *,
+    messaging_type: str = "RESPONSE",
+    app_settings: Settings | None = None,
+) -> InstagramSendResult:
+    """Send an Instagram DM via Meta Graph Send API."""
+    return InstagramGraphClient(app_settings=app_settings).send_message(
+        recipient_id,
+        text,
+        messaging_type=messaging_type,
+    )
+
+
 def send_text_message(
     recipient_id: str,
     text: str,
@@ -254,9 +283,11 @@ def send_text_message(
     app_settings: Settings | None = None,
 ) -> InstagramSendResult:
     """Send a manual Instagram text message to a webhook sender id."""
-    return InstagramGraphClient(app_settings=app_settings).send_text_message(
+    return send_message(
         recipient_id,
         text,
+        messaging_type="RESPONSE",
+        app_settings=app_settings,
     )
 
 

@@ -143,7 +143,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// E1.8 — shared reply shaping before channel delivery\nconst backend = $input.first().json;\nconst normalized = $('Add Business Context').first().json;\nconst channel = normalized.channel;\n\nconst SAFE_ERROR =\n  'Sorry, we could not process your message right now. Please try again in a moment.';\n\nif (channel === 'telegram') {\n  const chatId = normalized.telegram_chat_id;\n  if (backend.success !== true || !backend.data) {\n    return [\n      {\n        json: {\n          channel: 'telegram',\n          reply_to_customer: SAFE_ERROR,\n          telegram_chat_id: chatId,\n        },\n      },\n    ];\n  }\n  const reply = (backend.data.reply_to_customer || '').trim();\n  return [\n    {\n      json: {\n        channel: 'telegram',\n        reply_to_customer: reply || 'Thank you for your message.',\n        telegram_chat_id: chatId,\n      },\n    },\n  ];\n}\n\nif (channel === 'website_chat') {\n  const ctx = normalized.website_chat_context;\n  if (backend.success !== true || !backend.data) {\n    return [\n      {\n        json: {\n          channel: 'website_chat',\n          success: false,\n          correlation_id: normalized.correlation_id,\n          session_id: ctx.session_id,\n          visitor_id: ctx.visitor_id,\n          error: {\n            code: backend.error?.code || 'BACKEND_RESPONSE_FAILED',\n            message: backend.error?.message || 'Backend request was not successful',\n          },\n        },\n      },\n    ];\n  }\n  return [\n    {\n      json: {\n        channel: 'website_chat',\n        success: true,\n        correlation_id: normalized.correlation_id,\n        session_id: ctx.session_id,\n        visitor_id: ctx.visitor_id,\n        message: {\n          id: `ai:${Date.now()}`,\n          text: (backend.data.reply_to_customer || '').trim() || 'Thank you for your message.',\n          is_duplicate: backend.data.message?.is_duplicate === true,\n        },\n      },\n    },\n  ];\n}\n\nif (channel === 'instagram') {\n  const reply =\n    backend.success === true && backend.data\n      ? (backend.data.reply_to_customer || '').trim()\n      : '';\n  return [\n    {\n      json: {\n        channel: 'instagram',\n        reply_to_customer: reply,\n        correlation_id: normalized.correlation_id,\n        business_id: normalized.business_id,\n        external_message_id: normalized.message?.external_message_id || null,\n      },\n    },\n  ];\n}\n\nthrow new Error(`Unsupported channel for reply shaping: ${channel}`);"
+        "jsCode": "// E1.8 — shared reply shaping before channel delivery\nconst backend = $input.first().json;\nconst normalized = $('Add Business Context').first().json;\nconst channel = normalized.channel;\n\nconst SAFE_ERROR =\n  'Sorry, we could not process your message right now. Please try again in a moment.';\n\nif (channel === 'telegram') {\n  const chatId = normalized.telegram_chat_id;\n  if (backend.success !== true || !backend.data) {\n    return [\n      {\n        json: {\n          channel: 'telegram',\n          reply_to_customer: SAFE_ERROR,\n          telegram_chat_id: chatId,\n        },\n      },\n    ];\n  }\n  const reply = (backend.data.reply_to_customer || '').trim();\n  return [\n    {\n      json: {\n        channel: 'telegram',\n        reply_to_customer: reply || 'Thank you for your message.',\n        telegram_chat_id: chatId,\n      },\n    },\n  ];\n}\n\nif (channel === 'website_chat') {\n  const ctx = normalized.website_chat_context;\n  if (backend.success !== true || !backend.data) {\n    return [\n      {\n        json: {\n          channel: 'website_chat',\n          success: false,\n          correlation_id: normalized.correlation_id,\n          session_id: ctx.session_id,\n          visitor_id: ctx.visitor_id,\n          error: {\n            code: backend.error?.code || 'BACKEND_RESPONSE_FAILED',\n            message: backend.error?.message || 'Backend request was not successful',\n          },\n        },\n      },\n    ];\n  }\n  return [\n    {\n      json: {\n        channel: 'website_chat',\n        success: true,\n        correlation_id: normalized.correlation_id,\n        session_id: ctx.session_id,\n        visitor_id: ctx.visitor_id,\n        message: {\n          id: `ai:${Date.now()}`,\n          text: (backend.data.reply_to_customer || '').trim() || 'Thank you for your message.',\n          is_duplicate: backend.data.message?.is_duplicate === true,\n        },\n      },\n    },\n  ];\n}\n\nif (channel === 'instagram') {\n  const ctx = normalized.instagram_context || {};\n  const reply =\n    backend.success === true && backend.data\n      ? (backend.data.reply_to_customer || '').trim()\n      : '';\n  const isDuplicate =\n    backend.success === true &&\n    backend.data &&\n    backend.data.message &&\n    backend.data.message.is_duplicate === true;\n  return [\n    {\n      json: {\n        channel: 'instagram',\n        reply_to_customer: reply,\n        correlation_id: normalized.correlation_id,\n        business_id: normalized.business_id,\n        external_message_id: normalized.message?.external_message_id || null,\n        instagram_user_id:\n          ctx.instagram_user_id || normalized.customer?.external_customer_id || null,\n        is_duplicate: isDuplicate,\n      },\n    },\n  ];\n}\n\nthrow new Error(`Unsupported channel for reply shaping: ${channel}`);"
       },
       "id": "e1800001-0000-4000-8000-000000000009",
       "name": "Shape Canonical Customer Reply",
@@ -235,15 +235,244 @@
     },
     {
       "parameters": {
-        "jsCode": "// T-N8N-IG-INGRESS — Instagram outbound reply intentionally disabled\nconst item = $input.first().json;\nconst log = {\n  component: 'instagram_reply',\n  outcome: 'disabled',\n  correlation_id: item.correlation_id,\n  business_id: item.business_id,\n  external_message_id: item.external_message_id || null,\n  execution_id: $execution.id,\n};\nconsole.log(JSON.stringify(log));\nreturn [{ json: log }];"
+        "jsCode": "// T-IG-OUTBOUND-REPLY — outbound kill switch off\nconst item = $input.first().json;\nconst log = {\n  component: 'instagram_reply',\n  outcome: 'instagram_reply_disabled',\n  correlation_id: item.correlation_id,\n  business_id: item.business_id,\n  external_message_id: item.external_message_id || null,\n  execution_id: $execution.id,\n};\nconsole.log(JSON.stringify(log));\nreturn [{ json: log }];"
       },
       "id": "ig180004-0000-4000-8000-000000000001",
       "name": "Instagram Reply Disabled Logger",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
+        2120,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-ig-outbound-enabled",
+              "leftValue": "={{ $env.ALPSTEIN_INSTAGRAM_OUTBOUND_ENABLED }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ig180005-0000-4000-8000-000000000001",
+      "name": "IF Instagram Outbound Enabled",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
         1860,
         520
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-ig-has-reply",
+              "leftValue": "={{ $json.reply_to_customer }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            },
+            {
+              "id": "cond-ig-not-duplicate",
+              "leftValue": "={{ $json.is_duplicate }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ig180006-0000-4000-8000-000000000001",
+      "name": "IF Instagram Should Send Reply",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2120,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_BASE_URL }}/api/v1/channels/instagram/send-message",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Alpstein-Webhook-Token",
+              "value": "={{ $env.N8N_BACKEND_API_TOKEN }}"
+            },
+            {
+              "name": "X-Correlation-Id",
+              "value": "={{ $json.correlation_id }}"
+            },
+            {
+              "name": "X-N8n-Execution-Id",
+              "value": "={{ $execution.id }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"business_id\": {{ JSON.stringify($json.business_id) }},\n  \"recipient_id\": {{ JSON.stringify($json.instagram_user_id) }},\n  \"message_text\": {{ JSON.stringify($json.reply_to_customer) }},\n  \"correlation_id\": {{ JSON.stringify($json.correlation_id) }},\n  \"external_inbound_message_id\": {{ JSON.stringify($json.external_message_id) }}\n}",
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "fullResponse": false
+            }
+          }
+        }
+      },
+      "id": "ig180007-0000-4000-8000-000000000001",
+      "name": "POST Instagram Send via Backend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2380,
+        440
+      ],
+      "onError": "continueErrorOutput",
+      "notesInFlow": true,
+      "notes": "T-IG-OUTBOUND-REPLY: n8n → backend → Meta Send API (never direct Meta)."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-ig-send-success",
+              "leftValue": "={{ $json.success }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ig180008-0000-4000-8000-000000000001",
+      "name": "IF Instagram Send OK",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2640,
+        440
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// T-IG-OUTBOUND-REPLY — backend send succeeded\nconst shaped = $('Route Reply Instagram').first().json;\nconst send = $input.first().json;\nconst providerMessageId =\n  send.success === true && send.data ? send.data.provider_message_id || null : null;\nconst log = {\n  component: 'instagram_reply',\n  outcome: 'instagram_reply_sent',\n  correlation_id: shaped.correlation_id,\n  business_id: shaped.business_id,\n  external_message_id: shaped.external_message_id || null,\n  provider_message_id: providerMessageId,\n  execution_id: $execution.id,\n};\nconsole.log(JSON.stringify(log));\nreturn [{ json: log }];"
+      },
+      "id": "ig180009-0000-4000-8000-000000000001",
+      "name": "Instagram Reply Sent Logger",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2900,
+        380
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// T-IG-OUTBOUND-REPLY — backend send failed\nconst shaped = $('Route Reply Instagram').first().json;\nconst send = $input.first().json;\nconst log = {\n  component: 'instagram_reply',\n  outcome: 'instagram_reply_failed',\n  correlation_id: shaped.correlation_id,\n  business_id: shaped.business_id,\n  external_message_id: shaped.external_message_id || null,\n  error_code: send.error?.code || 'INSTAGRAM_SEND_FAILED',\n  error_message: String(send.error?.message || 'Instagram outbound send failed').slice(0, 200),\n  execution_id: $execution.id,\n};\nconsole.log(JSON.stringify(log));\nreturn [{ json: log }];"
+      },
+      "id": "ig18000a-0000-4000-8000-000000000001",
+      "name": "Instagram Reply Failed Logger",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2900,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-ig-is-duplicate",
+              "leftValue": "={{ $json.is_duplicate }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ig18000b-0000-4000-8000-000000000001",
+      "name": "IF Instagram Is Duplicate",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2380,
+        580
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// T-IG-OUTBOUND-REPLY — skip send on duplicate inbound\nconst item = $input.first().json;\nconst log = {\n  component: 'instagram_reply',\n  outcome: 'instagram_reply_skipped_duplicate',\n  correlation_id: item.correlation_id,\n  business_id: item.business_id,\n  external_message_id: item.external_message_id || null,\n  execution_id: $execution.id,\n};\nconsole.log(JSON.stringify(log));\nreturn [{ json: log }];"
+      },
+      "id": "ig18000c-0000-4000-8000-000000000001",
+      "name": "Instagram Reply Skipped Duplicate Logger",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        580
       ]
     },
     {
@@ -955,11 +1184,97 @@
       "main": [
         [
           {
+            "node": "IF Instagram Outbound Enabled",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Instagram Outbound Enabled": {
+      "main": [
+        [
+          {
+            "node": "IF Instagram Should Send Reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "Instagram Reply Disabled Logger",
             "type": "main",
             "index": 0
           }
         ]
+      ]
+    },
+    "IF Instagram Should Send Reply": {
+      "main": [
+        [
+          {
+            "node": "POST Instagram Send via Backend",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IF Instagram Is Duplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST Instagram Send via Backend": {
+      "main": [
+        [
+          {
+            "node": "IF Instagram Send OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ],
+      "error": [
+        [
+          {
+            "node": "Instagram Reply Failed Logger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Instagram Send OK": {
+      "main": [
+        [
+          {
+            "node": "Instagram Reply Sent Logger",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Instagram Reply Failed Logger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Instagram Is Duplicate": {
+      "main": [
+        [
+          {
+            "node": "Instagram Reply Skipped Duplicate Logger",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
       ]
     },
     "Prepare Delivery PATCH": {
@@ -1000,7 +1315,7 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "f2.3-instagram-ingress-v2",
+  "versionId": "f2.4-instagram-outbound-v1",
   "meta": {
     "templateCredsSetupCompleted": false
   },

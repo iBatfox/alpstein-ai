@@ -29,7 +29,10 @@ FIELD_SPECS: list[tuple[str, str, str, str, int, str | None]] = [
     ("alpstein_tenant_id", "Alpstein Tenant ID", "Data", "alpstein_business_id", 0, None),
     ("alpstein_external_user_id", "Alpstein External User ID", "Data", "alpstein_tenant_id", 1, None),
     ("alpstein_chat_id", "Alpstein Chat ID", "Data", "alpstein_external_user_id", 1, None),
-    ("alpstein_attribution_section", "Marketing Attribution", "Section Break", "alpstein_chat_id", 0, None),
+    ("alpstein_instagram_section", "Instagram", "Section Break", "alpstein_chat_id", 0, None),
+    ("instagram_username", "Instagram Username", "Data", "alpstein_instagram_section", 0, None),
+    ("instagram_display_name", "Instagram Display Name", "Data", "instagram_username", 0, None),
+    ("alpstein_attribution_section", "Marketing Attribution", "Section Break", "instagram_display_name", 0, None),
     ("first_touch_source", "First Touch Source", "Data", "alpstein_attribution_section", 0, None),
     ("first_touch_medium", "First Touch Medium", "Data", "first_touch_source", 0, None),
     ("first_touch_campaign", "First Touch Campaign", "Data", "first_touch_medium", 0, None),
@@ -47,10 +50,7 @@ FIELD_SPECS: list[tuple[str, str, str, str, int, str | None]] = [
     ("alpstein_telegram_section", "Telegram", "Section Break", "fbclid", 0, None),
     ("telegram_username", "Telegram Username", "Data", "alpstein_telegram_section", 0, None),
     ("telegram_language_code", "Telegram Language Code", "Data", "telegram_username", 0, None),
-    ("alpstein_instagram_section", "Instagram", "Section Break", "telegram_language_code", 0, None),
-    ("instagram_username", "Instagram Username", "Data", "alpstein_instagram_section", 0, None),
-    ("instagram_display_name", "Instagram Display Name", "Data", "instagram_username", 0, None),
-    ("alpstein_ops_section", "Alpstein Operations", "Section Break", "instagram_display_name", 0, None),
+    ("alpstein_ops_section", "Alpstein Operations", "Section Break", "telegram_language_code", 0, None),
     ("first_message_at", "First Message At", "Datetime", "alpstein_ops_section", 0, None),
     ("last_message_at", "Last Message At", "Datetime", "first_message_at", 0, None),
     ("conversation_count", "Conversation Count", "Int", "last_message_at", 0, None),
@@ -78,30 +78,49 @@ def ensure_custom_field(
     search_index: int = 0,
     options: str | None = None,
 ) -> str:
-    """Return 'created' | 'skipped'."""
+    """Return 'created' | 'updated' | 'skipped'."""
     import frappe
 
     name = f"Lead-{fieldname}"
-    if frappe.db.exists("Custom Field", name):
-        return "skipped"
+    if not frappe.db.exists("Custom Field", name):
+        doc: dict = {
+            "doctype": "Custom Field",
+            "dt": "Lead",
+            "fieldname": fieldname,
+            "label": label,
+            "fieldtype": fieldtype,
+            "insert_after": insert_after,
+            "search_index": search_index,
+            "translatable": 0,
+            "hidden": 0,
+        }
+        if options:
+            doc["options"] = options
+        if fieldtype == "Int":
+            doc["default"] = "0"
 
-    doc: dict = {
-        "doctype": "Custom Field",
-        "dt": "Lead",
-        "fieldname": fieldname,
-        "label": label,
-        "fieldtype": fieldtype,
-        "insert_after": insert_after,
-        "search_index": search_index,
-        "translatable": 0,
-    }
-    if options:
-        doc["options"] = options
-    if fieldtype == "Int":
-        doc["default"] = "0"
+        frappe.get_doc(doc).insert(ignore_permissions=True)
+        return "created"
 
-    frappe.get_doc(doc).insert(ignore_permissions=True)
-    return "created"
+    doc = frappe.get_doc("Custom Field", name)
+    changed = False
+    for attr, value in (
+        ("label", label),
+        ("fieldtype", fieldtype),
+        ("insert_after", insert_after),
+        ("search_index", search_index),
+        ("hidden", 0),
+    ):
+        if getattr(doc, attr) != value:
+            setattr(doc, attr, value)
+            changed = True
+    if options is not None and doc.options != options:
+        doc.options = options
+        changed = True
+    if changed:
+        doc.save(ignore_permissions=True)
+        return "updated"
+    return "skipped"
 
 
 def main() -> int:
@@ -109,6 +128,7 @@ def main() -> int:
     import frappe
 
     created: list[str] = []
+    updated: list[str] = []
     skipped: list[str] = []
 
     frappe.db.begin()
@@ -124,6 +144,8 @@ def main() -> int:
             )
             if result == "created":
                 created.append(fieldname)
+            elif result == "updated":
+                updated.append(fieldname)
             else:
                 skipped.append(fieldname)
         frappe.db.commit()
@@ -135,8 +157,10 @@ def main() -> int:
     summary = {
         "site": SITE,
         "created": created,
+        "updated": updated,
         "skipped": skipped,
         "created_count": len(created),
+        "updated_count": len(updated),
         "skipped_count": len(skipped),
     }
     print(json.dumps(summary, indent=2))

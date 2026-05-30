@@ -315,6 +315,14 @@ class WebhookMessageService:
                 correlation_id=str(observability.correlation_id),
                 event_type=REPLAY_EVENT_DUPLICATE_RETRY,
             )
+            ai_is_duplicate = await self._ai_duplicate_for_incoming_replay(
+                session,
+                tenant_id=tenant_id,
+                business_id=business.id,
+                conversation_id=conversation.id,
+                channel=channel,
+                persisted_duplicate=save_result.is_duplicate,
+            )
             reply_resolution = await self._resolve_reply_to_customer(
                 session,
                 tenant_id=tenant_id,
@@ -324,7 +332,7 @@ class WebhookMessageService:
                 incoming_message=save_result.message,
                 customer_message_text=request.message.text,
                 channel=channel,
-                is_duplicate=True,
+                is_duplicate=ai_is_duplicate,
                 operator_business_context=request.operator_business_context,
                 message_timestamp=request.message.timestamp,
                 raw_payload=request.message.raw_payload,
@@ -957,6 +965,31 @@ class WebhookMessageService:
         if last_ai_message is not None and last_ai_message.message_text.strip():
             return last_ai_message.message_text.strip()
         return DUPLICATE_SAFE_ACKNOWLEDGMENT
+
+    async def _ai_duplicate_for_incoming_replay(
+        self,
+        session: AsyncSession,
+        *,
+        tenant_id: uuid.UUID,
+        business_id: uuid.UUID,
+        conversation_id: uuid.UUID,
+        channel: str,
+        persisted_duplicate: bool,
+    ) -> bool:
+        """Skip AI on true duplicates; allow first AI pass after Meta persist + n8n re-ingress."""
+        if not persisted_duplicate:
+            return False
+        if channel != "instagram":
+            return True
+        last_ai_message = await self.message_service.find_last_outgoing_ai_message(
+            session,
+            tenant_id=tenant_id,
+            business_id=business_id,
+            conversation_id=conversation_id,
+        )
+        if last_ai_message is None:
+            return False
+        return True
 
 
 def _ai_reply_text_is_usable(ai_reply: AiReplyResult) -> bool:

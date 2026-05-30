@@ -243,6 +243,10 @@ class Settings(BaseSettings):
         default=10.0,
         validation_alias="ALPSTEIN_INSTAGRAM_N8N_DISPATCH_TIMEOUT_SECONDS",
     )
+    instagram_outbound_enabled: bool = Field(
+        default=False,
+        validation_alias="ALPSTEIN_INSTAGRAM_OUTBOUND_ENABLED",
+    )
 
     model_config = SettingsConfigDict(
         env_prefix="ALPSTEIN_AI_",
