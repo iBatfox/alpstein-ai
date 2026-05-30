@@ -127,7 +127,8 @@ return [
 ];"""
 
 NORMALIZE_INSTAGRAM = r"""// T-N8N-IG-INGRESS — backend Meta ingress event → canonical unified format
-const event = $input.first().json;
+const item = $input.first().json;
+const event = item.body ?? item;
 
 function optString(raw) {
   if (raw == null) return null;
