@@ -95,7 +95,7 @@ def test_ingress_normalizes_changes_value_message(ingress_service: InstagramIngr
     assert message.direction == "inbound"
     assert message.raw_event_type == "changes.value.message"
     assert message.source_account_id == "IG_SOURCE_ACCOUNT"
-    assert message.received_at == datetime.fromtimestamp(123, tz=UTC)
+    assert message.received_at == datetime.fromtimestamp(123, tz=UTC).replace(tzinfo=None)
 
 
 def test_ingress_normalizes_legacy_messaging(ingress_service: InstagramIngressService) -> None:

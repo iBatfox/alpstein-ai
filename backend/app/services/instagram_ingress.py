@@ -272,9 +272,10 @@ def _normalize_inbound_message(
 
 
 def _resolve_received_at(event_timestamp: str | None) -> datetime:
+    """Return naive UTC for TIMESTAMP WITHOUT TIME ZONE columns."""
     if event_timestamp and event_timestamp.isdigit():
-        return datetime.fromtimestamp(int(event_timestamp), tz=UTC)
-    return datetime.now(tz=UTC)
+        return datetime.fromtimestamp(int(event_timestamp), tz=UTC).replace(tzinfo=None)
+    return datetime.now(tz=UTC).replace(tzinfo=None)
 
 
 def _external_conversation_id(external_chat_id: str) -> str:
