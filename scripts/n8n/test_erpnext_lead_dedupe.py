@@ -99,6 +99,24 @@ class TestDedupeTiers:
         assert "tg123" in val
         assert flt[2] == ["alpstein_chat_id", "=", "tg123"]
 
+    def test_instagram_chat_id_tier(self) -> None:
+        tier, val, flt = choose_dedupe(
+            phone=None,
+            email=None,
+            chat_id="ig:17841400000000001",
+            external_id="17841400000000001",
+            channel="instagram",
+            business_id="demo_alpstein_001",
+            display_name=None,
+        )
+        assert tier == "chat_id"
+        assert val == "instagram:demo_alpstein_001:ig:17841400000000001"
+        assert flt == [
+            ["alpstein_channel", "=", "instagram"],
+            ["alpstein_business_id", "=", "demo_alpstein_001"],
+            ["alpstein_chat_id", "=", "ig:17841400000000001"],
+        ]
+
     def test_external_id_when_no_chat(self) -> None:
         tier, val, flt = choose_dedupe(
             phone=None,

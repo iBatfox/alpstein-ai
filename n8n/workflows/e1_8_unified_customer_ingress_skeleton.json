@@ -47,6 +47,25 @@
     },
     {
       "parameters": {
+        "httpMethod": "POST",
+        "path": "alpstein/unified-customer-ingress/instagram/incoming",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "ig180001-0000-4000-8000-000000000001",
+      "name": "Instagram Backend Event Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        820
+      ],
+      "webhookId": "alpstein-unified-instagram-backend-ingress",
+      "notesInFlow": true,
+      "notes": "T-N8N-IG-INGRESS: backend dispatch after Meta DM persist."
+    },
+    {
+      "parameters": {
         "conditions": {
           "options": {
             "caseSensitive": true,
@@ -125,6 +144,19 @@
     },
     {
       "parameters": {
+        "jsCode": "// T-N8N-IG-INGRESS \u2014 backend Meta ingress event \u2192 canonical unified format\nconst event = $input.first().json;\n\nfunction optString(raw) {\n  if (raw == null) return null;\n  const text = String(raw).trim();\n  return text === '' ? null : text;\n}\n\nfunction randomHex(length) {\n  let out = '';\n  while (out.length < length) {\n    out += Math.floor(Math.random() * 16).toString(16);\n  }\n  return out.slice(0, length);\n}\n\nfunction randomUuidV4() {\n  if (typeof crypto !== 'undefined' && crypto && typeof crypto.randomUUID === 'function') {\n    return crypto.randomUUID();\n  }\n  const bytes = randomHex(32).split('');\n  bytes[12] = '4';\n  const variant = ['8', '9', 'a', 'b'][Math.floor(Math.random() * 4)];\n  bytes[16] = variant;\n  return `${bytes.slice(0, 8).join('')}-${bytes.slice(8, 12).join('')}-${bytes.slice(12, 16).join('')}-${bytes.slice(16, 20).join('')}-${bytes.slice(20, 32).join('')}`;\n}\n\nconst correlation_id = optString(event.correlation_id) || randomUuidV4();\nconst business_id = optString(event.business_id);\nconst ctx = event.instagram_context || {};\nconst customer = event.customer || {};\nconst message = event.message || {};\nconst instagram_user_id =\n  optString(ctx.instagram_user_id) || optString(customer.external_customer_id);\n\nconsole.log(\n  JSON.stringify({\n    component: 'instagram_ingress',\n    outcome: 'instagram_ingress_received',\n    correlation_id,\n    business_id,\n    external_message_id: optString(message.external_message_id),\n    execution_id: $execution.id,\n  })\n);\n\nif (!business_id || !instagram_user_id) {\n  return [];\n}\n\nconst messageText = String(message.text || '').trim();\nif (!messageText) {\n  return [];\n}\n\nconst normalized = {\n  correlation_id,\n  business_id,\n  channel: 'instagram',\n  customer: {\n    phone: null,\n    name:\n      optString(ctx.instagram_display_name) ||\n      optString(ctx.instagram_username) ||\n      optString(customer.name),\n    email: null,\n    external_customer_id: instagram_user_id,\n  },\n  message: {\n    text: messageText,\n    external_message_id: optString(message.external_message_id),\n    external_conversation_id:\n      optString(message.external_conversation_id) || optString(ctx.conversation_id),\n    timestamp: optString(message.timestamp),\n    raw_payload:\n      message.raw_payload && typeof message.raw_payload === 'object'\n        ? message.raw_payload\n        : {},\n  },\n  instagram_context: {\n    instagram_user_id,\n    instagram_username: optString(ctx.instagram_username),\n    instagram_display_name: optString(ctx.instagram_display_name),\n    instagram_account_id: optString(ctx.instagram_account_id),\n    conversation_id:\n      optString(ctx.conversation_id) || optString(message.external_conversation_id),\n  },\n};\n\nconsole.log(\n  JSON.stringify({\n    component: 'instagram_ingress',\n    outcome: 'instagram_normalized',\n    correlation_id,\n    business_id,\n    external_message_id: normalized.message.external_message_id,\n    execution_id: $execution.id,\n  })\n);\n\nreturn [{ json: normalized }];"
+      },
+      "id": "ig180002-0000-4000-8000-000000000001",
+      "name": "Normalize Instagram Incoming",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        280,
+        820
+      ]
+    },
+    {
+      "parameters": {
         "keepOnlySet": false,
         "values": {
           "string": [
@@ -193,7 +225,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// E1.8 \u2014 shared reply shaping before channel delivery\nconst backend = $input.first().json;\nconst normalized = $('Add Business Context').first().json;\nconst channel = normalized.channel;\n\nconst SAFE_ERROR =\n  'Sorry, we could not process your message right now. Please try again in a moment.';\n\nif (channel === 'telegram') {\n  const chatId = normalized.telegram_chat_id;\n  if (backend.success !== true || !backend.data) {\n    return [\n      {\n        json: {\n          channel: 'telegram',\n          reply_to_customer: SAFE_ERROR,\n          telegram_chat_id: chatId,\n        },\n      },\n    ];\n  }\n  const reply = (backend.data.reply_to_customer || '').trim();\n  return [\n    {\n      json: {\n        channel: 'telegram',\n        reply_to_customer: reply || 'Thank you for your message.',\n        telegram_chat_id: chatId,\n      },\n    },\n  ];\n}\n\nif (channel === 'website_chat') {\n  const ctx = normalized.website_chat_context;\n  if (backend.success !== true || !backend.data) {\n    return [\n      {\n        json: {\n          channel: 'website_chat',\n          success: false,\n          correlation_id: normalized.correlation_id,\n          session_id: ctx.session_id,\n          visitor_id: ctx.visitor_id,\n          error: {\n            code: backend.error?.code || 'BACKEND_RESPONSE_FAILED',\n            message: backend.error?.message || 'Backend request was not successful',\n          },\n        },\n      },\n    ];\n  }\n  return [\n    {\n      json: {\n        channel: 'website_chat',\n        success: true,\n        correlation_id: normalized.correlation_id,\n        session_id: ctx.session_id,\n        visitor_id: ctx.visitor_id,\n        message: {\n          id: `ai:${Date.now()}`,\n          text: (backend.data.reply_to_customer || '').trim() || 'Thank you for your message.',\n          is_duplicate: backend.data.message?.is_duplicate === true,\n        },\n      },\n    },\n  ];\n}\n\nthrow new Error(`Unsupported channel for reply shaping: ${channel}`);"
+        "jsCode": "// E1.8 \u2014 shared reply shaping before channel delivery\nconst backend = $input.first().json;\nconst normalized = $('Add Business Context').first().json;\nconst channel = normalized.channel;\n\nconst SAFE_ERROR =\n  'Sorry, we could not process your message right now. Please try again in a moment.';\n\nif (channel === 'telegram') {\n  const chatId = normalized.telegram_chat_id;\n  if (backend.success !== true || !backend.data) {\n    return [\n      {\n        json: {\n          channel: 'telegram',\n          reply_to_customer: SAFE_ERROR,\n          telegram_chat_id: chatId,\n        },\n      },\n    ];\n  }\n  const reply = (backend.data.reply_to_customer || '').trim();\n  return [\n    {\n      json: {\n        channel: 'telegram',\n        reply_to_customer: reply || 'Thank you for your message.',\n        telegram_chat_id: chatId,\n      },\n    },\n  ];\n}\n\nif (channel === 'website_chat') {\n  const ctx = normalized.website_chat_context;\n  if (backend.success !== true || !backend.data) {\n    return [\n      {\n        json: {\n          channel: 'website_chat',\n          success: false,\n          correlation_id: normalized.correlation_id,\n          session_id: ctx.session_id,\n          visitor_id: ctx.visitor_id,\n          error: {\n            code: backend.error?.code || 'BACKEND_RESPONSE_FAILED',\n            message: backend.error?.message || 'Backend request was not successful',\n          },\n        },\n      },\n    ];\n  }\n  return [\n    {\n      json: {\n        channel: 'website_chat',\n        success: true,\n        correlation_id: normalized.correlation_id,\n        session_id: ctx.session_id,\n        visitor_id: ctx.visitor_id,\n        message: {\n          id: `ai:${Date.now()}`,\n          text: (backend.data.reply_to_customer || '').trim() || 'Thank you for your message.',\n          is_duplicate: backend.data.message?.is_duplicate === true,\n        },\n      },\n    },\n  ];\n}\n\nif (channel === 'instagram') {\n  const reply =\n    backend.success === true && backend.data\n      ? (backend.data.reply_to_customer || '').trim()\n      : '';\n  return [\n    {\n      json: {\n        channel: 'instagram',\n        reply_to_customer: reply,\n        correlation_id: normalized.correlation_id,\n        business_id: normalized.business_id,\n        external_message_id: normalized.message?.external_message_id || null,\n      },\n    },\n  ];\n}\n\nthrow new Error(`Unsupported channel for reply shaping: ${channel}`);"
       },
       "id": "e1800001-0000-4000-8000-000000000009",
       "name": "Shape Canonical Customer Reply",
@@ -206,7 +238,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// E1.8 \u2014 HTTP/transport failure per channel\nconst normalized = $('Add Business Context').first().json;\nconst channel = normalized.channel;\n\nif (channel === 'telegram') {\n  return [\n    {\n      json: {\n        channel: 'telegram',\n        reply_to_customer:\n          'Sorry, our service is temporarily unavailable. Please try again later.',\n        telegram_chat_id: normalized.telegram_chat_id,\n      },\n    },\n  ];\n}\n\nif (channel === 'website_chat') {\n  const ctx = normalized.website_chat_context;\n  return [\n    {\n      json: {\n        channel: 'website_chat',\n        success: false,\n        correlation_id: normalized.correlation_id,\n        session_id: ctx.session_id,\n        visitor_id: ctx.visitor_id,\n        error: {\n          code: 'N8N_BACKEND_REQUEST_FAILED',\n          message: 'Service is temporarily unavailable. Please retry.',\n        },\n      },\n    },\n  ];\n}\n\nthrow new Error(`Unsupported channel for transport error: ${channel}`);"
+        "jsCode": "// E1.8 \u2014 HTTP/transport failure per channel\nconst normalized = $('Add Business Context').first().json;\nconst channel = normalized.channel;\n\nif (channel === 'telegram') {\n  return [\n    {\n      json: {\n        channel: 'telegram',\n        reply_to_customer:\n          'Sorry, our service is temporarily unavailable. Please try again later.',\n        telegram_chat_id: normalized.telegram_chat_id,\n      },\n    },\n  ];\n}\n\nif (channel === 'website_chat') {\n  const ctx = normalized.website_chat_context;\n  return [\n    {\n      json: {\n        channel: 'website_chat',\n        success: false,\n        correlation_id: normalized.correlation_id,\n        session_id: ctx.session_id,\n        visitor_id: ctx.visitor_id,\n        error: {\n          code: 'N8N_BACKEND_REQUEST_FAILED',\n          message: 'Service is temporarily unavailable. Please retry.',\n        },\n      },\n    },\n  ];\n}\n\nif (channel === 'instagram') {\n  return [\n    {\n      json: {\n        channel: 'instagram',\n        correlation_id: normalized.correlation_id,\n        business_id: normalized.business_id,\n        external_message_id: normalized.message?.external_message_id || null,\n      },\n    },\n  ];\n}\n\nthrow new Error(`Unsupported channel for transport error: ${channel}`);"
       },
       "id": "e1800001-0000-4000-8000-00000000000a",
       "name": "Format Channel Backend Error",
@@ -313,6 +345,52 @@
       "typeVersion": 2.2,
       "position": [
         1600,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-channel-instagram",
+              "leftValue": "={{ $json.channel }}",
+              "rightValue": "instagram",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ig180003-0000-4000-8000-000000000001",
+      "name": "Route Reply Instagram",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1600,
+        520
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// T-N8N-IG-INGRESS \u2014 Instagram outbound reply intentionally disabled\nconst item = $input.first().json;\nconst log = {\n  component: 'instagram_reply',\n  outcome: 'disabled',\n  correlation_id: item.correlation_id,\n  business_id: item.business_id,\n  external_message_id: item.external_message_id || null,\n  execution_id: $execution.id,\n};\nconsole.log(JSON.stringify(log));\nreturn [{ json: log }];"
+      },
+      "id": "ig180004-0000-4000-8000-000000000001",
+      "name": "Instagram Reply Disabled Logger",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1860,
         520
       ]
     },
@@ -528,7 +606,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// F.2.2 \u2014 CRM copy after Alpstein SoT (field-based dedupe, non-blocking tail)\nconst enabled =\n  typeof $env !== 'undefined' && $env.ALPSTEIN_ERPNEXT_LEAD_SYNC_ENABLED === 'true';\nif (!enabled) {\n  return [];\n}\n\nconst backend = $('POST Backend').first().json;\nif (backend.success !== true || !backend.data) {\n  return [];\n}\n\nconst normalized = $('Add Business Context').first().json;\nconst customer = normalized.customer || {};\nconst channel = normalized.channel;\nconst businessId = normalized.business_id;\nconst bizFilter = ['alpstein_business_id', '=', businessId];\n\nfunction normalizePhone(raw) {\n  if (!raw) return null;\n  const digits = String(raw).replace(/\\D/g, '');\n  if (digits.length < 6) return null;\n  return digits;\n}\n\nfunction normalizeEmail(raw) {\n  if (!raw || typeof raw !== 'string') return null;\n  const email = raw.trim().toLowerCase();\n  return email.includes('@') ? email : null;\n}\n\nfunction normalizeName(raw) {\n  if (!raw) return null;\n  const name = String(raw).trim().replace(/\\s+/g, ' ');\n  return name || null;\n}\n\nfunction optString(raw) {\n  if (raw == null) return null;\n  const text = String(raw).trim();\n  return text === '' ? null : text;\n}\n\nfunction erpnextDateTime(raw) {\n  if (!raw) return null;\n  const d = new Date(raw);\n  if (Number.isNaN(d.getTime())) return null;\n  const pad = (n) => String(n).padStart(2, '0');\n  return (\n    d.getUTCFullYear() +\n    '-' +\n    pad(d.getUTCMonth() + 1) +\n    '-' +\n    pad(d.getUTCDate()) +\n    ' ' +\n    pad(d.getUTCHours()) +\n    ':' +\n    pad(d.getUTCMinutes()) +\n    ':' +\n    pad(d.getUTCSeconds())\n  );\n}\n\nconst phone = normalizePhone(customer.phone);\nconst email = normalizeEmail(customer.email);\nconst externalId = customer.external_customer_id\n  ? String(customer.external_customer_id)\n  : null;\nconst displayName = normalizeName(customer.name);\n\nlet chatId = null;\nif (channel === 'telegram' && normalized.telegram_chat_id) {\n  chatId = String(normalized.telegram_chat_id);\n} else if (channel === 'website_chat' && normalized.website_chat_context?.visitor_id) {\n  chatId = String(normalized.website_chat_context.visitor_id);\n}\n\nlet dedupeTier = null;\nlet dedupeValue = null;\nlet filters = null;\n\nif (phone) {\n  dedupeTier = 'phone';\n  dedupeValue = phone;\n  filters = [['mobile_no', '=', phone], bizFilter];\n} else if (email) {\n  dedupeTier = 'email';\n  dedupeValue = email;\n  filters = [['email_id', '=', email], bizFilter];\n} else if (chatId) {\n  dedupeTier = 'chat_id';\n  dedupeValue = `${channel}:${businessId}:${chatId}`;\n  filters = [\n    ['alpstein_channel', '=', channel],\n    bizFilter,\n    ['alpstein_chat_id', '=', chatId],\n  ];\n} else if (externalId) {\n  dedupeTier = 'external_id';\n  dedupeValue = `${channel}:${businessId}:${externalId}`;\n  filters = [\n    ['alpstein_channel', '=', channel],\n    bizFilter,\n    ['alpstein_external_user_id', '=', externalId],\n  ];\n} else {\n  const safeName = (displayName || 'visitor')\n    .toLowerCase()\n    .replace(/[^a-z0-9]+/g, '_')\n    .slice(0, 40);\n  dedupeTier = 'name_channel_business';\n  dedupeValue = `${safeName}:${channel}:${businessId}`;\n  const leadName = `${channel} / ${businessId} / ${displayName || 'visitor'}`;\n  filters = [['lead_name', '=', leadName], bizFilter];\n}\n\nconst messageAt =\n  erpnextDateTime(normalized.message?.timestamp) ||\n  erpnextDateTime(new Date().toISOString());\nconst tenantId =\n  backend.data?.tenant_id || backend.data?.tenant?.id || backend.data?.business?.tenant_id || null;\n\nconst attr = normalized.attribution || {};\nconst websitePayload = normalized.message?.raw_payload?.website_payload || {};\n\nfunction touchFromAttribution() {\n  const source = optString(attr.utm_source) || optString(attr.marketing_source);\n  return {\n    source,\n    medium: optString(attr.utm_medium),\n    campaign: optString(attr.utm_campaign) || optString(attr.campaign_id),\n    content: optString(attr.utm_content),\n    term: optString(attr.utm_term),\n    landing_page: optString(attr.landing_page_url),\n    referrer_url: optString(attr.referrer_url),\n    gclid: optString(websitePayload.gclid),\n    fbclid: optString(websitePayload.fbclid),\n  };\n}\n\nconst touch = touchFromAttribution();\n\nconst sourceMap = {\n  telegram: 'Telegram',\n  website_chat: 'Website Chat',\n  whatsapp: 'WhatsApp',\n  instagram: 'Instagram',\n};\n\nconst leadName =\n  displayName || (externalId ? `${channel} user ${externalId}` : `${channel} visitor`);\n\nconst leadDoc = {\n  lead_name: leadName,\n  status: 'Lead',\n  source: sourceMap[channel] || channel,\n  alpstein_channel: channel,\n  alpstein_business_id: businessId,\n  alpstein_tenant_id: tenantId ? String(tenantId) : null,\n  alpstein_external_user_id: externalId,\n  alpstein_chat_id: chatId,\n  first_message_at: messageAt,\n  last_message_at: messageAt,\n  conversation_count: 1,\n  last_message_channel: channel,\n  first_touch_source: touch.source,\n  first_touch_medium: touch.medium,\n  first_touch_campaign: touch.campaign,\n  first_touch_content: touch.content,\n  first_touch_term: touch.term,\n  last_touch_source: touch.source,\n  last_touch_medium: touch.medium,\n  last_touch_campaign: touch.campaign,\n  last_touch_content: touch.content,\n  last_touch_term: touch.term,\n  landing_page: touch.landing_page,\n  referrer_url: touch.referrer_url,\n  gclid: touch.gclid,\n  fbclid: touch.fbclid,\n  telegram_username: optString(normalized.telegram_username),\n  telegram_language_code: optString(normalized.telegram_language_code),\n};\n\nif (phone) {\n  leadDoc.mobile_no = phone;\n  leadDoc.phone = phone;\n}\nif (email) {\n  leadDoc.email_id = email;\n}\n\nconst searchFields = [\n  'name',\n  'lead_name',\n  'mobile_no',\n  'email_id',\n  'source',\n  'status',\n  'alpstein_channel',\n  'alpstein_business_id',\n  'alpstein_chat_id',\n  'alpstein_external_user_id',\n  'conversation_count',\n  'first_message_at',\n  'last_message_at',\n  'first_touch_source',\n  'last_touch_source',\n  'landing_page',\n  'telegram_username',\n];\n\nfunction buildQuery(params) {\n  return Object.entries(params)\n    .map(\n      ([k, v]) =>\n        encodeURIComponent(k) + '=' + encodeURIComponent(String(v))\n    )\n    .join('&');\n}\n\nconst searchQuery = buildQuery({\n  filters: JSON.stringify(filters),\n  fields: JSON.stringify(searchFields),\n  limit_page_length: '1',\n});\n\nconst searchPath = '/api/resource/Lead?' + searchQuery;\n\nreturn [\n  {\n    json: {\n      erpnext_search_path: searchPath,\n      erpnext_lead_doc: leadDoc,\n      erpnext_touch: touch,\n      erpnext_message_at: messageAt,\n      erpnext_dedupe_tier: dedupeTier,\n      erpnext_dedupe_value: dedupeValue,\n      correlation_id: normalized.correlation_id,\n      channel,\n      business_id: businessId,\n    },\n  },\n];"
+        "jsCode": "// F.2.2 \u2014 CRM copy after Alpstein SoT (field-based dedupe, non-blocking tail)\nconst enabled =\n  typeof $env !== 'undefined' && $env.ALPSTEIN_ERPNEXT_LEAD_SYNC_ENABLED === 'true';\nif (!enabled) {\n  return [];\n}\n\nconst backend = $('POST Backend').first().json;\nif (backend.success !== true || !backend.data) {\n  return [];\n}\n\nconst normalized = $('Add Business Context').first().json;\nconst customer = normalized.customer || {};\nconst channel = normalized.channel;\nconst businessId = normalized.business_id;\nconst bizFilter = ['alpstein_business_id', '=', businessId];\n\nconst isDuplicate = backend.data?.message?.is_duplicate === true;\nif (isDuplicate && channel !== 'instagram') {\n  return [];\n}\n\nfunction normalizePhone(raw) {\n  if (!raw) return null;\n  const digits = String(raw).replace(/\\D/g, '');\n  if (digits.length < 6) return null;\n  return digits;\n}\n\nfunction normalizeEmail(raw) {\n  if (!raw || typeof raw !== 'string') return null;\n  const email = raw.trim().toLowerCase();\n  return email.includes('@') ? email : null;\n}\n\nfunction normalizeName(raw) {\n  if (!raw) return null;\n  const name = String(raw).trim().replace(/\\s+/g, ' ');\n  return name || null;\n}\n\nfunction optString(raw) {\n  if (raw == null) return null;\n  const text = String(raw).trim();\n  return text === '' ? null : text;\n}\n\nfunction erpnextDateTime(raw) {\n  if (!raw) return null;\n  const d = new Date(raw);\n  if (Number.isNaN(d.getTime())) return null;\n  const pad = (n) => String(n).padStart(2, '0');\n  return (\n    d.getUTCFullYear() +\n    '-' +\n    pad(d.getUTCMonth() + 1) +\n    '-' +\n    pad(d.getUTCDate()) +\n    ' ' +\n    pad(d.getUTCHours()) +\n    ':' +\n    pad(d.getUTCMinutes()) +\n    ':' +\n    pad(d.getUTCSeconds())\n  );\n}\n\nconst phone = normalizePhone(customer.phone);\nconst email = normalizeEmail(customer.email);\nconst externalId = customer.external_customer_id\n  ? String(customer.external_customer_id)\n  : null;\nconst displayName = normalizeName(customer.name);\n\nlet chatId = null;\nif (channel === 'telegram' && normalized.telegram_chat_id) {\n  chatId = String(normalized.telegram_chat_id);\n} else if (channel === 'website_chat' && normalized.website_chat_context?.visitor_id) {\n  chatId = String(normalized.website_chat_context.visitor_id);\n} else if (channel === 'instagram') {\n  const ctx = normalized.instagram_context || {};\n  chatId = ctx.conversation_id\n    ? String(ctx.conversation_id)\n    : ctx.instagram_user_id\n      ? String(ctx.instagram_user_id)\n      : null;\n}\n\nlet dedupeTier = null;\nlet dedupeValue = null;\nlet filters = null;\n\nif (phone) {\n  dedupeTier = 'phone';\n  dedupeValue = phone;\n  filters = [['mobile_no', '=', phone], bizFilter];\n} else if (email) {\n  dedupeTier = 'email';\n  dedupeValue = email;\n  filters = [['email_id', '=', email], bizFilter];\n} else if (chatId) {\n  dedupeTier = 'chat_id';\n  dedupeValue = `${channel}:${businessId}:${chatId}`;\n  filters = [\n    ['alpstein_channel', '=', channel],\n    bizFilter,\n    ['alpstein_chat_id', '=', chatId],\n  ];\n} else if (externalId) {\n  dedupeTier = 'external_id';\n  dedupeValue = `${channel}:${businessId}:${externalId}`;\n  filters = [\n    ['alpstein_channel', '=', channel],\n    bizFilter,\n    ['alpstein_external_user_id', '=', externalId],\n  ];\n} else {\n  const safeName = (displayName || 'visitor')\n    .toLowerCase()\n    .replace(/[^a-z0-9]+/g, '_')\n    .slice(0, 40);\n  dedupeTier = 'name_channel_business';\n  dedupeValue = `${safeName}:${channel}:${businessId}`;\n  const leadName = `${channel} / ${businessId} / ${displayName || 'visitor'}`;\n  filters = [['lead_name', '=', leadName], bizFilter];\n}\n\nconst messageAt =\n  erpnextDateTime(normalized.message?.timestamp) ||\n  erpnextDateTime(new Date().toISOString());\nconst tenantId =\n  backend.data?.tenant_id || backend.data?.tenant?.id || backend.data?.business?.tenant_id || null;\n\nconst attr = normalized.attribution || {};\nconst websitePayload = normalized.message?.raw_payload?.website_payload || {};\n\nfunction touchFromAttribution() {\n  const source = optString(attr.utm_source) || optString(attr.marketing_source);\n  return {\n    source,\n    medium: optString(attr.utm_medium),\n    campaign: optString(attr.utm_campaign) || optString(attr.campaign_id),\n    content: optString(attr.utm_content),\n    term: optString(attr.utm_term),\n    landing_page: optString(attr.landing_page_url),\n    referrer_url: optString(attr.referrer_url),\n    gclid: optString(websitePayload.gclid),\n    fbclid: optString(websitePayload.fbclid),\n  };\n}\n\nconst touch = touchFromAttribution();\n\nconst sourceMap = {\n  telegram: 'Telegram',\n  website_chat: 'Website Chat',\n  whatsapp: 'WhatsApp',\n  instagram: 'Instagram',\n};\n\nconst leadNameBase =\n  displayName || (externalId ? `${channel} user ${externalId}` : `${channel} visitor`);\nlet leadName = leadNameBase;\nif (channel === 'instagram') {\n  const ctx = normalized.instagram_context || {};\n  leadName =\n    optString(ctx.instagram_display_name) ||\n    optString(ctx.instagram_username) ||\n    (externalId ? `instagram user ${externalId}` : 'instagram visitor');\n}\n\nconst leadDoc = {\n  lead_name: leadName,\n  status: 'Lead',\n  source: sourceMap[channel] || channel,\n  alpstein_channel: channel,\n  alpstein_business_id: businessId,\n  alpstein_tenant_id: tenantId ? String(tenantId) : null,\n  alpstein_external_user_id: externalId,\n  alpstein_chat_id: chatId,\n  first_message_at: messageAt,\n  last_message_at: messageAt,\n  conversation_count: 1,\n  last_message_channel: channel,\n  first_touch_source: touch.source,\n  first_touch_medium: touch.medium,\n  first_touch_campaign: touch.campaign,\n  first_touch_content: touch.content,\n  first_touch_term: touch.term,\n  last_touch_source: touch.source,\n  last_touch_medium: touch.medium,\n  last_touch_campaign: touch.campaign,\n  last_touch_content: touch.content,\n  last_touch_term: touch.term,\n  landing_page: touch.landing_page,\n  referrer_url: touch.referrer_url,\n  gclid: touch.gclid,\n  fbclid: touch.fbclid,\n  telegram_username: optString(normalized.telegram_username),\n  telegram_language_code: optString(normalized.telegram_language_code),\n  instagram_username: optString(normalized.instagram_context?.instagram_username),\n  instagram_display_name: optString(normalized.instagram_context?.instagram_display_name),\n};\n\nif (phone) {\n  leadDoc.mobile_no = phone;\n  leadDoc.phone = phone;\n}\nif (email) {\n  leadDoc.email_id = email;\n}\n\nconst searchFields = [\n  'name',\n  'lead_name',\n  'mobile_no',\n  'email_id',\n  'source',\n  'status',\n  'alpstein_channel',\n  'alpstein_business_id',\n  'alpstein_chat_id',\n  'alpstein_external_user_id',\n  'conversation_count',\n  'first_message_at',\n  'last_message_at',\n  'first_touch_source',\n  'last_touch_source',\n  'landing_page',\n  'telegram_username',\n  'instagram_username',\n  'instagram_display_name',\n];\n\nfunction buildQuery(params) {\n  return Object.entries(params)\n    .map(\n      ([k, v]) =>\n        encodeURIComponent(k) + '=' + encodeURIComponent(String(v))\n    )\n    .join('&');\n}\n\nconst searchQuery = buildQuery({\n  filters: JSON.stringify(filters),\n  fields: JSON.stringify(searchFields),\n  limit_page_length: '1',\n});\n\nconst searchPath = '/api/resource/Lead?' + searchQuery;\n\nreturn [\n  {\n    json: {\n      erpnext_search_path: searchPath,\n      erpnext_lead_doc: leadDoc,\n      erpnext_touch: touch,\n      erpnext_message_at: messageAt,\n      erpnext_dedupe_tier: dedupeTier,\n      erpnext_dedupe_value: dedupeValue,\n      correlation_id: normalized.correlation_id,\n      channel,\n      business_id: businessId,\n    },\n  },\n];"
       },
       "id": "f210001-0000-4000-8000-000000000001",
       "name": "Prepare ERPNext Lead Payload",
@@ -787,7 +865,7 @@
     },
     {
       "parameters": {
-        "content": "## Unified customer ingress + E2 delivery PATCH\n\nTelegram + Website \u2192 POST Backend \u2192 channel delivery \u2192 PATCH delivery outcome.\n\nRequires ALPSTEIN_OBSERVABILITY_TENANT_ID + ALPSTEIN_OBSERVABILITY_BUSINESS_ID (UUID).\n\nF.2.2: ERPNext tail \u2014 field dedupe + custom Lead fields \u2014 ALPSTEIN_ERPNEXT_LEAD_SYNC_ENABLED + erpnext_crm_api.",
+        "content": "## Unified customer ingress + E2 delivery PATCH\n\nTelegram + Website + Instagram backend event \u2192 POST Backend \u2192 channel delivery \u2192 PATCH delivery outcome.\n\nRequires ALPSTEIN_OBSERVABILITY_TENANT_ID + ALPSTEIN_OBSERVABILITY_BUSINESS_ID (UUID).\n\nF.2.2: ERPNext tail \u2014 field dedupe + custom Lead fields \u2014 ALPSTEIN_ERPNEXT_LEAD_SYNC_ENABLED + erpnext_crm_api.\n\nT-N8N-IG-INGRESS: Instagram Meta webhook persists in backend, then dispatches here.",
         "height": 340,
         "width": 520,
         "color": 4
@@ -825,6 +903,17 @@
         ]
       ]
     },
+    "Instagram Backend Event Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize Instagram Incoming",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "IF Website Chat Enabled": {
       "main": [
         [
@@ -855,6 +944,17 @@
       ]
     },
     "Normalize Website Chat Incoming": {
+      "main": [
+        [
+          {
+            "node": "Add Business Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Instagram Incoming": {
       "main": [
         [
           {
@@ -1031,6 +1131,11 @@
             "node": "Route Reply Website",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Route Reply Instagram",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -1045,6 +1150,11 @@
           },
           {
             "node": "Route Error Website",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Route Reply Instagram",
             "type": "main",
             "index": 0
           }
@@ -1078,6 +1188,17 @@
         [
           {
             "node": "Respond Website Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Reply Instagram": {
+      "main": [
+        [
+          {
+            "node": "Instagram Reply Disabled Logger",
             "type": "main",
             "index": 0
           }
@@ -1155,7 +1276,7 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "f2.2c-erpnext-http-request-nodes-v3",
+  "versionId": "f2.3-instagram-ingress-v1",
   "meta": {
     "templateCredsSetupCompleted": false
   },

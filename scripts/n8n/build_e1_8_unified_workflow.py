@@ -126,6 +126,122 @@ return [
   },
 ];"""
 
+NORMALIZE_INSTAGRAM = r"""// T-N8N-IG-INGRESS — backend Meta ingress event → canonical unified format
+const event = $input.first().json;
+
+function optString(raw) {
+  if (raw == null) return null;
+  const text = String(raw).trim();
+  return text === '' ? null : text;
+}
+
+function randomHex(length) {
+  let out = '';
+  while (out.length < length) {
+    out += Math.floor(Math.random() * 16).toString(16);
+  }
+  return out.slice(0, length);
+}
+
+function randomUuidV4() {
+  if (typeof crypto !== 'undefined' && crypto && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  const bytes = randomHex(32).split('');
+  bytes[12] = '4';
+  const variant = ['8', '9', 'a', 'b'][Math.floor(Math.random() * 4)];
+  bytes[16] = variant;
+  return `${bytes.slice(0, 8).join('')}-${bytes.slice(8, 12).join('')}-${bytes.slice(12, 16).join('')}-${bytes.slice(16, 20).join('')}-${bytes.slice(20, 32).join('')}`;
+}
+
+const correlation_id = optString(event.correlation_id) || randomUuidV4();
+const business_id = optString(event.business_id);
+const ctx = event.instagram_context || {};
+const customer = event.customer || {};
+const message = event.message || {};
+const instagram_user_id =
+  optString(ctx.instagram_user_id) || optString(customer.external_customer_id);
+
+console.log(
+  JSON.stringify({
+    component: 'instagram_ingress',
+    outcome: 'instagram_ingress_received',
+    correlation_id,
+    business_id,
+    external_message_id: optString(message.external_message_id),
+    execution_id: $execution.id,
+  })
+);
+
+if (!business_id || !instagram_user_id) {
+  return [];
+}
+
+const messageText = String(message.text || '').trim();
+if (!messageText) {
+  return [];
+}
+
+const normalized = {
+  correlation_id,
+  business_id,
+  channel: 'instagram',
+  customer: {
+    phone: null,
+    name:
+      optString(ctx.instagram_display_name) ||
+      optString(ctx.instagram_username) ||
+      optString(customer.name),
+    email: null,
+    external_customer_id: instagram_user_id,
+  },
+  message: {
+    text: messageText,
+    external_message_id: optString(message.external_message_id),
+    external_conversation_id:
+      optString(message.external_conversation_id) || optString(ctx.conversation_id),
+    timestamp: optString(message.timestamp),
+    raw_payload:
+      message.raw_payload && typeof message.raw_payload === 'object'
+        ? message.raw_payload
+        : {},
+  },
+  instagram_context: {
+    instagram_user_id,
+    instagram_username: optString(ctx.instagram_username),
+    instagram_display_name: optString(ctx.instagram_display_name),
+    instagram_account_id: optString(ctx.instagram_account_id),
+    conversation_id:
+      optString(ctx.conversation_id) || optString(message.external_conversation_id),
+  },
+};
+
+console.log(
+  JSON.stringify({
+    component: 'instagram_ingress',
+    outcome: 'instagram_normalized',
+    correlation_id,
+    business_id,
+    external_message_id: normalized.message.external_message_id,
+    execution_id: $execution.id,
+  })
+);
+
+return [{ json: normalized }];"""
+
+INSTAGRAM_REPLY_DISABLED = r"""// T-N8N-IG-INGRESS — Instagram outbound reply intentionally disabled
+const item = $input.first().json;
+const log = {
+  component: 'instagram_reply',
+  outcome: 'disabled',
+  correlation_id: item.correlation_id,
+  business_id: item.business_id,
+  external_message_id: item.external_message_id || null,
+  execution_id: $execution.id,
+};
+console.log(JSON.stringify(log));
+return [{ json: log }];"""
+
 SHAPE_CANONICAL = r"""// E1.8 — shared reply shaping before channel delivery
 const backend = $input.first().json;
 const normalized = $('Add Business Context').first().json;
@@ -196,6 +312,24 @@ if (channel === 'website_chat') {
   ];
 }
 
+if (channel === 'instagram') {
+  const reply =
+    backend.success === true && backend.data
+      ? (backend.data.reply_to_customer || '').trim()
+      : '';
+  return [
+    {
+      json: {
+        channel: 'instagram',
+        reply_to_customer: reply,
+        correlation_id: normalized.correlation_id,
+        business_id: normalized.business_id,
+        external_message_id: normalized.message?.external_message_id || null,
+      },
+    },
+  ];
+}
+
 throw new Error(`Unsupported channel for reply shaping: ${channel}`);"""
 
 FORMAT_CHANNEL_ERROR = r"""// E1.8 — HTTP/transport failure per channel
@@ -229,6 +363,19 @@ if (channel === 'website_chat') {
           code: 'N8N_BACKEND_REQUEST_FAILED',
           message: 'Service is temporarily unavailable. Please retry.',
         },
+      },
+    },
+  ];
+}
+
+if (channel === 'instagram') {
+  return [
+    {
+      json: {
+        channel: 'instagram',
+        correlation_id: normalized.correlation_id,
+        business_id: normalized.business_id,
+        external_message_id: normalized.message?.external_message_id || null,
       },
     },
   ];
@@ -435,6 +582,11 @@ const channel = normalized.channel;
 const businessId = normalized.business_id;
 const bizFilter = ['alpstein_business_id', '=', businessId];
 
+const isDuplicate = backend.data?.message?.is_duplicate === true;
+if (isDuplicate && channel !== 'instagram') {
+  return [];
+}
+
 function normalizePhone(raw) {
   if (!raw) return null;
   const digits = String(raw).replace(/\D/g, '');
@@ -492,6 +644,13 @@ if (channel === 'telegram' && normalized.telegram_chat_id) {
   chatId = String(normalized.telegram_chat_id);
 } else if (channel === 'website_chat' && normalized.website_chat_context?.visitor_id) {
   chatId = String(normalized.website_chat_context.visitor_id);
+} else if (channel === 'instagram') {
+  const ctx = normalized.instagram_context || {};
+  chatId = ctx.conversation_id
+    ? String(ctx.conversation_id)
+    : ctx.instagram_user_id
+      ? String(ctx.instagram_user_id)
+      : null;
 }
 
 let dedupeTier = null;
@@ -566,8 +725,16 @@ const sourceMap = {
   instagram: 'Instagram',
 };
 
-const leadName =
+const leadNameBase =
   displayName || (externalId ? `${channel} user ${externalId}` : `${channel} visitor`);
+let leadName = leadNameBase;
+if (channel === 'instagram') {
+  const ctx = normalized.instagram_context || {};
+  leadName =
+    optString(ctx.instagram_display_name) ||
+    optString(ctx.instagram_username) ||
+    (externalId ? `instagram user ${externalId}` : 'instagram visitor');
+}
 
 const leadDoc = {
   lead_name: leadName,
@@ -598,6 +765,8 @@ const leadDoc = {
   fbclid: touch.fbclid,
   telegram_username: optString(normalized.telegram_username),
   telegram_language_code: optString(normalized.telegram_language_code),
+  instagram_username: optString(normalized.instagram_context?.instagram_username),
+  instagram_display_name: optString(normalized.instagram_context?.instagram_display_name),
 };
 
 if (phone) {
@@ -626,6 +795,8 @@ const searchFields = [
   'last_touch_source',
   'landing_page',
   'telegram_username',
+  'instagram_username',
+  'instagram_display_name',
 ];
 
 function buildQuery(params) {
@@ -1007,6 +1178,22 @@ def main() -> None:
             notes="E1.8 INACTIVE: non-prod path. Production uses alpstein/website-chat/incoming.",
         ),
         node(
+            "ig180001-0000-4000-8000-000000000001",
+            "Instagram Backend Event Webhook",
+            "n8n-nodes-base.webhook",
+            2,
+            [0, 820],
+            {
+                "httpMethod": "POST",
+                "path": "alpstein/unified-customer-ingress/instagram/incoming",
+                "responseMode": "onReceived",
+                "options": {},
+            },
+            webhookId="alpstein-unified-instagram-backend-ingress",
+            notesInFlow=True,
+            notes="T-N8N-IG-INGRESS: backend dispatch after Meta DM persist.",
+        ),
+        node(
             "e1800001-0000-4000-8000-000000000003",
             "IF Website Chat Enabled",
             "n8n-nodes-base.if",
@@ -1062,6 +1249,14 @@ def main() -> None:
             2,
             [560, 620],
             {"jsCode": website_code},
+        ),
+        node(
+            "ig180002-0000-4000-8000-000000000001",
+            "Normalize Instagram Incoming",
+            "n8n-nodes-base.code",
+            2,
+            [280, 820],
+            {"jsCode": NORMALIZE_INSTAGRAM},
         ),
         node(
             "e1800001-0000-4000-8000-000000000007",
@@ -1216,6 +1411,41 @@ def main() -> None:
                 },
                 "options": {},
             },
+        ),
+        node(
+            "ig180003-0000-4000-8000-000000000001",
+            "Route Reply Instagram",
+            "n8n-nodes-base.if",
+            2.2,
+            [1600, 520],
+            {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": True,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 2,
+                    },
+                    "conditions": [
+                        {
+                            "id": "cond-channel-instagram",
+                            "leftValue": "={{ $json.channel }}",
+                            "rightValue": "instagram",
+                            "operator": {"type": "string", "operation": "equals"},
+                        }
+                    ],
+                    "combinator": "and",
+                },
+                "options": {},
+            },
+        ),
+        node(
+            "ig180004-0000-4000-8000-000000000001",
+            "Instagram Reply Disabled Logger",
+            "n8n-nodes-base.code",
+            2,
+            [1860, 520],
+            {"jsCode": INSTAGRAM_REPLY_DISABLED},
         ),
         node(
             "e1800001-0000-4000-8000-00000000000e",
@@ -1552,7 +1782,7 @@ def main() -> None:
         ),
         {
             "parameters": {
-                "content": "## Unified customer ingress + E2 delivery PATCH\n\nTelegram + Website → POST Backend → channel delivery → PATCH delivery outcome.\n\nRequires ALPSTEIN_OBSERVABILITY_TENANT_ID + ALPSTEIN_OBSERVABILITY_BUSINESS_ID (UUID).\n\nF.2.2: ERPNext tail — field dedupe + custom Lead fields — ALPSTEIN_ERPNEXT_LEAD_SYNC_ENABLED + erpnext_crm_api.",
+                "content": "## Unified customer ingress + E2 delivery PATCH\n\nTelegram + Website + Instagram backend event → POST Backend → channel delivery → PATCH delivery outcome.\n\nRequires ALPSTEIN_OBSERVABILITY_TENANT_ID + ALPSTEIN_OBSERVABILITY_BUSINESS_ID (UUID).\n\nF.2.2: ERPNext tail — field dedupe + custom Lead fields — ALPSTEIN_ERPNEXT_LEAD_SYNC_ENABLED + erpnext_crm_api.\n\nT-N8N-IG-INGRESS: Instagram Meta webhook persists in backend, then dispatches here.",
                 "height": 340,
                 "width": 520,
                 "color": 4,
@@ -1572,6 +1802,9 @@ def main() -> None:
         "Website Chat Webhook": {
             "main": [[{"node": "IF Website Chat Enabled", "type": "main", "index": 0}]]
         },
+        "Instagram Backend Event Webhook": {
+            "main": [[{"node": "Normalize Instagram Incoming", "type": "main", "index": 0}]]
+        },
         "IF Website Chat Enabled": {
             "main": [
                 [{"node": "Normalize Website Chat Incoming", "type": "main", "index": 0}],
@@ -1582,6 +1815,9 @@ def main() -> None:
             "main": [[{"node": "Add Business Context", "type": "main", "index": 0}]]
         },
         "Normalize Website Chat Incoming": {
+            "main": [[{"node": "Add Business Context", "type": "main", "index": 0}]]
+        },
+        "Normalize Instagram Incoming": {
             "main": [[{"node": "Add Business Context", "type": "main", "index": 0}]]
         },
         "Add Business Context": {
@@ -1643,6 +1879,7 @@ def main() -> None:
                 [
                     {"node": "Route Reply Telegram", "type": "main", "index": 0},
                     {"node": "Route Reply Website", "type": "main", "index": 0},
+                    {"node": "Route Reply Instagram", "type": "main", "index": 0},
                 ]
             ]
         },
@@ -1651,6 +1888,7 @@ def main() -> None:
                 [
                     {"node": "Route Reply Telegram", "type": "main", "index": 0},
                     {"node": "Route Error Website", "type": "main", "index": 0},
+                    {"node": "Route Reply Instagram", "type": "main", "index": 0},
                 ]
             ]
         },
@@ -1662,6 +1900,9 @@ def main() -> None:
         },
         "Route Reply Website": {
             "main": [[{"node": "Respond Website Reply", "type": "main", "index": 0}]]
+        },
+        "Route Reply Instagram": {
+            "main": [[{"node": "Instagram Reply Disabled Logger", "type": "main", "index": 0}]]
         },
         "Respond Website Reply": {
             "main": [[{"node": "Prepare Delivery PATCH", "type": "main", "index": 0}]]
@@ -1690,7 +1931,7 @@ def main() -> None:
         "connections": connections,
         "active": True,
         "settings": {"executionOrder": "v1"},
-        "versionId": "f2.2c-erpnext-http-request-nodes-v3",
+        "versionId": "f2.3-instagram-ingress-v1",
         "meta": {"templateCredsSetupCompleted": False},
         "tags": [
             {

@@ -61,6 +61,8 @@ class InstagramIngressPersistOutcome:
     skipped: bool
     skip_reason: str | None = None
     internal_message_id: uuid.UUID | None = None
+    tenant_id: uuid.UUID | None = None
+    business_external_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -233,6 +235,8 @@ class InstagramIngressPersistenceService:
             is_duplicate=save_result.is_duplicate,
             skipped=False,
             internal_message_id=save_result.message.id,
+            tenant_id=business.tenant_id,
+            business_external_id=business.external_id,
         )
 
 

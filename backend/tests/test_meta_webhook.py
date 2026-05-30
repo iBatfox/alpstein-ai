@@ -47,6 +47,9 @@ def mock_instagram_persistence(monkeypatch: pytest.MonkeyPatch):
 
     persistence = reset_instagram_ingress_services_for_tests()
     ingress_service = InstagramIngressService()
+    dispatch = MagicMock()
+    dispatch.dispatch_persisted_message = AsyncMock(return_value=True)
+    monkeypatch.setattr(route, "get_instagram_n8n_dispatch_service", lambda: dispatch)
 
     async def _process_webhook(_session, body):
         parsed = ingress_service.parse_meta_webhook(body)

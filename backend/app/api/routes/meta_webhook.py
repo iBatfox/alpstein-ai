@@ -11,6 +11,10 @@ from app.services.instagram_ingress import (
     get_instagram_ingress_persistence_service,
     ingress_log_extra,
 )
+from app.services.instagram_n8n_dispatch_service import (
+    InstagramN8nDispatchContext,
+    get_instagram_n8n_dispatch_service,
+)
 from app.services.meta_webhook_intake import (
     instagram_ingress_ignored_log_extra,
     instagram_payload_shape_diagnostic,
@@ -111,6 +115,19 @@ async def receive_meta_webhook(
                     "internal_message_id": str(outcome.internal_message_id),
                 },
             )
+            if (
+                outcome.internal_message_id is not None
+                and outcome.tenant_id is not None
+                and outcome.business_external_id
+            ):
+                await get_instagram_n8n_dispatch_service().dispatch_persisted_message(
+                    InstagramN8nDispatchContext(
+                        tenant_id=outcome.tenant_id,
+                        business_external_id=outcome.business_external_id,
+                        internal_message_id=outcome.internal_message_id,
+                        normalized=outcome.normalized,
+                    ),
+                )
 
         if not result.outcomes:
             logger.info(

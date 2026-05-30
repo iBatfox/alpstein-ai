@@ -33,6 +33,7 @@ Safe to re-run: existing Custom Field records are skipped.
 | Last touch | `last_touch_source`, `last_touch_medium`, `last_touch_campaign`, `last_touch_content`, `last_touch_term` |
 | URLs / click IDs | `landing_page`, `referrer_url`, `gclid`, `fbclid` |
 | Telegram | `telegram_username`, `telegram_language_code` |
+| Instagram | `instagram_username`, `instagram_display_name` |
 | Operations | `first_message_at`, `last_message_at`, `conversation_count`, `last_message_channel` |
 
 Indexed (`search_index=1`) for API filters: `alpstein_channel`, `alpstein_business_id`, `alpstein_external_user_id`, `alpstein_chat_id`.

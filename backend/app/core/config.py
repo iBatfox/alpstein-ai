@@ -219,6 +219,30 @@ class Settings(BaseSettings):
         default="",
         validation_alias="WHATSAPP_ACCESS_TOKEN",
     )
+    instagram_app_id: str = Field(default="", validation_alias="INSTAGRAM_APP_ID")
+    instagram_app_secret: str = Field(
+        default="",
+        validation_alias="INSTAGRAM_APP_SECRET",
+    )
+    instagram_access_token: str = Field(
+        default="",
+        validation_alias="INSTAGRAM_ACCESS_TOKEN",
+    )
+    instagram_user_id: str = Field(default="", validation_alias="INSTAGRAM_USER_ID")
+    instagram_n8n_ingress_enabled: bool = Field(
+        default=False,
+        validation_alias="ALPSTEIN_INSTAGRAM_N8N_INGRESS_ENABLED",
+    )
+    instagram_n8n_ingress_webhook_url: str = Field(
+        default=(
+            "http://n8n:5678/webhook/alpstein/unified-customer-ingress/instagram/incoming"
+        ),
+        validation_alias="ALPSTEIN_INSTAGRAM_N8N_INGRESS_WEBHOOK_URL",
+    )
+    instagram_n8n_dispatch_timeout_seconds: float = Field(
+        default=10.0,
+        validation_alias="ALPSTEIN_INSTAGRAM_N8N_DISPATCH_TIMEOUT_SECONDS",
+    )
 
     model_config = SettingsConfigDict(
         env_prefix="ALPSTEIN_AI_",
