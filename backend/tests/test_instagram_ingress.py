@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 
 import pytest
 
 from app.core.config import Settings
-from app.services.instagram_ingress import InstagramIngressService
+from app.services.instagram_ingress import InstagramIngressService, _resolve_received_at
 
 REAL_CHANGE_VALUE_PAYLOAD = {
     "object": "instagram",
@@ -260,3 +261,78 @@ def test_ingress_ignores_non_instagram_object(ingress_service: InstagramIngressS
         {"object": "whatsapp_business_account", "entry": []},
     )
     assert result.messages == ()
+
+
+def test_resolve_received_at_seconds() -> None:
+    expected = datetime.fromtimestamp(1520383572, tz=UTC).replace(tzinfo=None)
+    assert _resolve_received_at("1520383572") == expected
+
+
+def test_resolve_received_at_milliseconds() -> None:
+    expected = datetime.fromtimestamp(1520383572, tz=UTC).replace(tzinfo=None)
+    assert _resolve_received_at("1520383572000") == expected
+
+
+def test_resolve_received_at_milliseconds_as_string_via_parse(
+    ingress_service: InstagramIngressService,
+) -> None:
+    payload = {
+        "object": "instagram",
+        "entry": [
+            {
+                "changes": [
+                    {
+                        "field": "messages",
+                        "value": {
+                            "sender": {"id": "SENDER_ID"},
+                            "timestamp": 1737900000000,
+                            "message": {
+                                "mid": "MID_MS_001",
+                                "text": "real production dm",
+                            },
+                        },
+                    }
+                ],
+            }
+        ],
+    }
+
+    result = ingress_service.parse_meta_webhook(payload)
+
+    assert len(result.messages) == 1
+    assert result.messages[0].received_at == datetime.fromtimestamp(
+        1737900000,
+        tz=UTC,
+    ).replace(tzinfo=None)
+    assert result.messages[0].received_at.tzinfo is None
+
+
+def test_resolve_received_at_missing_timestamp_fallback(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.WARNING, logger="app.services.instagram_ingress")
+    before = datetime.now(tz=UTC).replace(tzinfo=None)
+
+    resolved = _resolve_received_at(None)
+
+    after = datetime.now(tz=UTC).replace(tzinfo=None)
+    assert before <= resolved <= after
+    assert resolved.tzinfo is None
+    assert any(
+        record.getMessage() == "instagram ingress timestamp fallback to now"
+        for record in caplog.records
+    )
+
+
+def test_resolve_received_at_invalid_timestamp_fallback(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level(logging.WARNING, logger="app.services.instagram_ingress")
+
+    resolved = _resolve_received_at("not-a-timestamp")
+
+    assert resolved.tzinfo is None
+    assert any(
+        record.getMessage() == "instagram ingress timestamp fallback to now"
+        for record in caplog.records
+    )

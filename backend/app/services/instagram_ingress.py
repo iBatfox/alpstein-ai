@@ -273,9 +273,34 @@ def _normalize_inbound_message(
 
 def _resolve_received_at(event_timestamp: str | None) -> datetime:
     """Return naive UTC for TIMESTAMP WITHOUT TIME ZONE columns."""
-    if event_timestamp and event_timestamp.isdigit():
-        return datetime.fromtimestamp(int(event_timestamp), tz=UTC).replace(tzinfo=None)
-    return datetime.now(tz=UTC).replace(tzinfo=None)
+    fallback = datetime.now(tz=UTC).replace(tzinfo=None)
+
+    if event_timestamp is None:
+        logger.warning(
+            "instagram ingress timestamp fallback to now",
+            extra={"reason": "missing", "event_timestamp": None},
+        )
+        return fallback
+
+    raw = event_timestamp.strip()
+    if not raw.isdigit():
+        logger.warning(
+            "instagram ingress timestamp fallback to now",
+            extra={"reason": "non_numeric", "event_timestamp": raw[:32]},
+        )
+        return fallback
+
+    try:
+        numeric = int(raw)
+        if len(raw) >= 13 or numeric > 10_000_000_000:
+            numeric //= 1000
+        return datetime.fromtimestamp(numeric, tz=UTC).replace(tzinfo=None)
+    except (ValueError, OverflowError, TypeError, OSError):
+        logger.warning(
+            "instagram ingress timestamp fallback to now",
+            extra={"reason": "invalid", "event_timestamp": raw[:32]},
+        )
+        return fallback
 
 
 def _external_conversation_id(external_chat_id: str) -> str:
