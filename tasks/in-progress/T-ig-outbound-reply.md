@@ -14,6 +14,8 @@ When AI produces `reply_to_customer` for Instagram, n8n calls backend
 ## Rules
 
 - n8n must not call Meta directly
+- **Use existing workflow only:** `alpstein-customer-ingress` ID `aYrRmAGKhP4TJbG9` — no second workflow
+- Instagram outbound branch is parallel from `POST Backend` inside unified workflow
 - `ALPSTEIN_INSTAGRAM_OUTBOUND_ENABLED=false` by default
 - Do not change Telegram branch or ERPNext dedupe logic
 - Do not re-enable Website Chat
