@@ -1167,6 +1167,217 @@ return [{ json: log }];
 """
 )
 
+SYNC_ERPNEXT_COMMUNICATIONS = (
+    ERPNEXT_HTTP_HELPERS
+    + r"""// T-f2.3 — ERPNext Communication read model from Alpstein message turn
+const leadResult = $input.first().json;
+if (!['created', 'updated'].includes(leadResult.outcome) || !leadResult.erpnext_lead_id) {
+  return [];
+}
+
+const normalized = $('Add Business Context').first().json;
+const backend = $('POST Backend').first().json;
+if (backend.success !== true || !backend.data) {
+  return [];
+}
+
+const data = backend.data;
+const channel = normalized.channel;
+const businessId = normalized.business_id;
+const leadName = leadResult.erpnext_lead_id;
+
+function optString(raw) {
+  if (raw == null) return null;
+  const text = String(raw).trim();
+  return text === '' ? null : text;
+}
+
+function erpnextDateTime(raw) {
+  if (!raw) return null;
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return null;
+  const pad = (n) => String(n).padStart(2, '0');
+  return (
+    d.getUTCFullYear() +
+    '-' +
+    pad(d.getUTCMonth() + 1) +
+    '-' +
+    pad(d.getUTCDate()) +
+    ' ' +
+    pad(d.getUTCHours()) +
+    ':' +
+    pad(d.getUTCMinutes()) +
+    ':' +
+    pad(d.getUTCSeconds())
+  );
+}
+
+function channelMedium(value) {
+  const map = {
+    telegram: 'Telegram',
+    instagram: 'Instagram',
+    whatsapp: 'WhatsApp',
+    website_chat: 'Website Chat',
+  };
+  return map[value] || value || 'Other';
+}
+
+function buildQuery(params) {
+  return Object.entries(params)
+    .map(([k, v]) => encodeURIComponent(k) + '=' + encodeURIComponent(String(v)))
+    .join('&');
+}
+
+function truncate(value, max) {
+  const text = String(value ?? '').trim();
+  if (text.length <= max) return text;
+  return text.slice(0, max - 3) + '...';
+}
+
+const inboundExternalId =
+  optString(normalized.message?.external_message_id) ||
+  (data.message?.id ? `alpstein:message:${data.message.id}` : null);
+const inboundText = optString(normalized.message?.text);
+const inboundDate =
+  erpnextDateTime(normalized.message?.timestamp) || erpnextDateTime(new Date().toISOString());
+const conversationId = optString(data.conversation?.id);
+
+const docs = [];
+if (inboundExternalId && inboundText) {
+  docs.push({
+    reference_doctype: 'Lead',
+    reference_name: leadName,
+    communication_type: 'Communication',
+    communication_medium: channelMedium(channel),
+    sent_or_received: 'Received',
+    content: inboundText,
+    text_content: inboundText,
+    subject: `Inbound ${channelMedium(channel)} message`,
+    communication_date: inboundDate,
+    alpstein_external_message_id: inboundExternalId,
+    alpstein_channel: channel,
+    alpstein_business_id: businessId,
+    alpstein_direction: 'incoming',
+    alpstein_sender_type: 'customer',
+    alpstein_conversation_id: conversationId,
+  });
+}
+
+const replyText = optString(data.reply_to_customer);
+const outboundId =
+  optString(data.delivery?.outbound_message_id) ||
+  (inboundExternalId ? `alpstein:ai:${inboundExternalId}` : null);
+if (outboundId && replyText) {
+  docs.push({
+    reference_doctype: 'Lead',
+    reference_name: leadName,
+    communication_type: 'Communication',
+    communication_medium: channelMedium(channel),
+    sent_or_received: 'Sent',
+    content: replyText,
+    text_content: replyText,
+    subject: `AI ${channelMedium(channel)} reply`,
+    communication_date: erpnextDateTime(new Date().toISOString()),
+    alpstein_external_message_id: outboundId,
+    alpstein_channel: channel,
+    alpstein_business_id: businessId,
+    alpstein_direction: 'outgoing',
+    alpstein_sender_type: 'ai',
+    alpstein_conversation_id: conversationId,
+  });
+}
+
+if (!docs.length) {
+  return [];
+}
+
+const baseUrl = ($env.ERPNEXT_BASE_URL || 'https://crm.alpstein-ai.ch').replace(/\/$/, '');
+const results = [];
+
+for (const doc of docs) {
+  const logBase = {
+    component: 'erpnext_communication_sync',
+    channel,
+    correlation_id: normalized.correlation_id,
+    business_id: businessId,
+    erpnext_lead_id: leadName,
+    external_message_id: doc.alpstein_external_message_id,
+    sender_type: doc.alpstein_sender_type,
+    execution_id: $execution.id,
+  };
+
+  try {
+    const filters = [
+      ['alpstein_external_message_id', '=', doc.alpstein_external_message_id],
+      ['alpstein_business_id', '=', businessId],
+    ];
+    const searchPath =
+      '/api/resource/Communication?' +
+      buildQuery({
+        filters: JSON.stringify(filters),
+        fields: JSON.stringify(['name']),
+        limit_page_length: '1',
+      });
+    const searchResponse = await this.helpers.httpRequestWithAuthentication.call(
+      this,
+      'httpHeaderAuth',
+      {
+        method: 'GET',
+        url: baseUrl + searchPath,
+        json: true,
+        timeout: 15000,
+      }
+    );
+    const existingRows = Array.isArray(searchResponse?.data) ? searchResponse.data : [];
+    if (existingRows.length > 0) {
+      const log = {
+        ...logBase,
+        outcome: 'skipped_duplicate',
+        erpnext_communication_id: existingRows[0].name || null,
+      };
+      console.log(JSON.stringify(log));
+      results.push({ json: log });
+      continue;
+    }
+
+    const createResponse = await this.helpers.httpRequestWithAuthentication.call(
+      this,
+      'httpHeaderAuth',
+      {
+        method: 'POST',
+        url: baseUrl + '/api/resource/Communication',
+        body: doc,
+        json: true,
+        timeout: 15000,
+      }
+    );
+    const communicationId = createResponse?.data?.name || createResponse?.name || null;
+    const log = {
+      ...logBase,
+      outcome: communicationId ? 'created' : 'failed',
+      erpnext_communication_id: communicationId,
+    };
+    if (!communicationId) {
+      log.error_message = 'ERPNext response missing Communication name';
+    }
+    console.log(JSON.stringify(log));
+    results.push({ json: log });
+  } catch (error) {
+    const log = {
+      ...logBase,
+      outcome: 'failed',
+      erpnext_communication_id: null,
+      error_message: truncate(error?.message || error, 200),
+    };
+    console.log(JSON.stringify(log));
+    results.push({ json: log });
+  }
+}
+
+return results;
+"""
+)
+
 ERPNEXT_CREDENTIALS = {"httpHeaderAuth": {"name": "erpnext_crm_api"}}
 
 POST_JSON_BODY = (
@@ -1793,9 +2004,21 @@ def main() -> None:
             notesInFlow=True,
             notes="F.2.1: console JSON log — does not affect customer reply path.",
         ),
+        node(
+            "f230001-0000-4000-8000-000000000001",
+            "Sync ERPNext Communications",
+            "n8n-nodes-base.code",
+            2,
+            [3160, 900],
+            {"jsCode": SYNC_ERPNEXT_COMMUNICATIONS},
+            continueOnFail=True,
+            credentials=ERPNEXT_CREDENTIALS,
+            notesInFlow=True,
+            notes="T-f2.3: Linked Communication read model. Idempotent by alpstein_external_message_id + alpstein_business_id.",
+        ),
         {
             "parameters": {
-                "content": "## Unified customer ingress + E2 delivery PATCH\n\nTelegram + Instagram backend event → POST Backend → channel delivery → PATCH delivery outcome.\n\nWebsite channel is temporarily disabled until the Website Chat phase.\n\nRequires ALPSTEIN_OBSERVABILITY_TENANT_ID + ALPSTEIN_OBSERVABILITY_BUSINESS_ID (UUID).\n\nF.2.2: ERPNext tail — field dedupe + custom Lead fields — ALPSTEIN_ERPNEXT_LEAD_SYNC_ENABLED + erpnext_crm_api.\n\nT-N8N-IG-INGRESS: Instagram Meta webhook persists in backend, then dispatches here.\n\nT-IG-OUTBOUND-REPLY: Instagram POST Backend parallel branch → IF Outbound Enabled → POST send-message → Result Logger (kill switch default OFF).",
+                "content": "## Unified customer ingress + E2 delivery PATCH\n\nTelegram + Instagram backend event → POST Backend → channel delivery → PATCH delivery outcome.\n\nWebsite channel is temporarily disabled until the Website Chat phase.\n\nRequires ALPSTEIN_OBSERVABILITY_TENANT_ID + ALPSTEIN_OBSERVABILITY_BUSINESS_ID (UUID).\n\nF.2.2: ERPNext tail — field dedupe + custom Lead fields — ALPSTEIN_ERPNEXT_LEAD_SYNC_ENABLED + erpnext_crm_api.\n\nT-f2.3: ERPNext Lead conversation history read model writes linked Communication rows after successful Lead sync.\n\nT-N8N-IG-INGRESS: Instagram Meta webhook persists in backend, then dispatches here.\n\nT-IG-OUTBOUND-REPLY: Instagram POST Backend parallel branch → IF Outbound Enabled → POST send-message → Result Logger (kill switch default OFF).",
                 "height": 340,
                 "width": 520,
                 "color": 4,
@@ -1875,6 +2098,9 @@ def main() -> None:
         },
         "Create ERPNext Lead": {
             "main": [[{"node": "ERPNext Result Logger", "type": "main", "index": 0}]]
+        },
+        "ERPNext Result Logger": {
+            "main": [[{"node": "Sync ERPNext Communications", "type": "main", "index": 0}]]
         },
         "Shape Canonical Customer Reply": {
             "main": [[{"node": "Route Reply Telegram", "type": "main", "index": 0}]]
