@@ -590,6 +590,12 @@ ERPNEXT_UPDATE_URL = (
     f"+ encodeURIComponent($json.erpnext_lead_name) }}}}"
 )
 ERPNEXT_CREATE_URL = f"={{{{ {ERPNEXT_BASE_URL_EXPR} + '/api/resource/Lead' }}}}"
+ERPNEXT_COMMUNICATION_SEARCH_URL = (
+    f"={{{{ {ERPNEXT_BASE_URL_EXPR} + $json.erpnext_communication_search_path }}}}"
+)
+ERPNEXT_COMMUNICATION_CREATE_URL = (
+    f"={{{{ {ERPNEXT_BASE_URL_EXPR} + '/api/resource/Communication' }}}}"
+)
 
 ERPNEXT_HTTP_AUTH = {
     "authentication": "genericCredentialType",
@@ -1167,7 +1173,7 @@ return [{ json: log }];
 """
 )
 
-SYNC_ERPNEXT_COMMUNICATIONS = (
+PREPARE_ERPNEXT_COMMUNICATIONS = (
     ERPNEXT_HTTP_HELPERS
     + r"""// T-f2.3 — ERPNext Communication read model from Alpstein message turn
 const leadResult = $input.first().json;
@@ -1291,90 +1297,140 @@ if (!docs.length) {
   return [];
 }
 
-const baseUrl = ($env.ERPNEXT_BASE_URL || 'https://crm.alpstein-ai.ch').replace(/\/$/, '');
-const results = [];
-
-for (const doc of docs) {
-  const logBase = {
-    component: 'erpnext_communication_sync',
-    channel,
-    correlation_id: normalized.correlation_id,
-    business_id: businessId,
-    erpnext_lead_id: leadName,
-    external_message_id: doc.alpstein_external_message_id,
-    sender_type: doc.alpstein_sender_type,
-    execution_id: $execution.id,
+return docs.map((doc) => {
+  const filters = [
+    ['alpstein_external_message_id', '=', doc.alpstein_external_message_id],
+    ['alpstein_business_id', '=', businessId],
+  ];
+  const searchPath =
+    '/api/resource/Communication?' +
+    buildQuery({
+      filters: JSON.stringify(filters),
+      fields: JSON.stringify(['name']),
+      limit_page_length: '1',
+    });
+  return {
+    json: {
+      erpnext_communication_search_path: searchPath,
+      erpnext_communication_body: doc,
+      erpnext_communication_log_base: {
+        component: 'erpnext_communication_sync',
+        channel,
+        correlation_id: normalized.correlation_id,
+        business_id: businessId,
+        erpnext_lead_id: leadName,
+        external_message_id: doc.alpstein_external_message_id,
+        sender_type: doc.alpstein_sender_type,
+        execution_id: $execution.id,
+      },
+    },
   };
+});
+"""
+)
 
-  try {
-    const filters = [
-      ['alpstein_external_message_id', '=', doc.alpstein_external_message_id],
-      ['alpstein_business_id', '=', businessId],
-    ];
-    const searchPath =
-      '/api/resource/Communication?' +
-      buildQuery({
-        filters: JSON.stringify(filters),
-        fields: JSON.stringify(['name']),
-        limit_page_length: '1',
-      });
-    const searchResponse = await this.helpers.httpRequestWithAuthentication.call(
-      this,
-      'httpHeaderAuth',
-      {
-        method: 'GET',
-        url: baseUrl + searchPath,
-        json: true,
-        timeout: 15000,
-      }
-    );
-    const existingRows = Array.isArray(searchResponse?.data) ? searchResponse.data : [];
-    if (existingRows.length > 0) {
-      const log = {
-        ...logBase,
-        outcome: 'skipped_duplicate',
-        erpnext_communication_id: existingRows[0].name || null,
-      };
-      console.log(JSON.stringify(log));
-      results.push({ json: log });
-      continue;
-    }
+PARSE_ERPNEXT_COMMUNICATION_SEARCH = (
+    ERPNEXT_HTTP_HELPERS
+    + r"""// T-f2.3 — interpret ERPNext Communication search response
+const prep = $('Prepare ERPNext Communications').all()[$itemIndex].json;
+const item = $input.first().json;
 
-    const createResponse = await this.helpers.httpRequestWithAuthentication.call(
-      this,
-      'httpHeaderAuth',
-      {
-        method: 'POST',
-        url: baseUrl + '/api/resource/Communication',
-        body: doc,
-        json: true,
-        timeout: 15000,
-      }
-    );
-    const communicationId = createResponse?.data?.name || createResponse?.name || null;
-    const log = {
-      ...logBase,
-      outcome: communicationId ? 'created' : 'failed',
-      erpnext_communication_id: communicationId,
-    };
-    if (!communicationId) {
-      log.error_message = 'ERPNext response missing Communication name';
-    }
-    console.log(JSON.stringify(log));
-    results.push({ json: log });
-  } catch (error) {
-    const log = {
-      ...logBase,
-      outcome: 'failed',
+if (isHttpFailure(item)) {
+  return [
+    {
+      json: {
+        ...prep,
+        erpnext_communication_search_ok: false,
+        erpnext_communication_exists: false,
+        erpnext_communication_id: null,
+        erpnext_communication_search_error: getHttpError(item) || 'ERPNext Communication search failed',
+        erpnext_http_status: getHttpStatus(item),
+      },
+    },
+  ];
+}
+
+const rows = getErpnextListRows(item);
+const existing = rows.length > 0 ? rows[0] : null;
+
+return [
+  {
+    json: {
+      ...prep,
+      erpnext_communication_search_ok: true,
+      erpnext_communication_exists: !!existing,
+      erpnext_communication_id: existing?.name || null,
+      erpnext_communication_search_error: null,
+      erpnext_http_status: getHttpStatus(item),
+    },
+  },
+];
+"""
+)
+
+ERPNEXT_COMMUNICATION_RESULT_LOGGER = (
+    ERPNEXT_HTTP_HELPERS
+    + r"""// T-f2.3 — Communication sync result logger
+const item = $input.first().json;
+
+function truncate(value, max) {
+  const text = String(value ?? '').trim();
+  if (text.length <= max) return text;
+  return text.slice(0, max - 3) + '...';
+}
+
+function logAndReturn(log) {
+  console.log(JSON.stringify(log));
+  return [{ json: log }];
+}
+
+if (item.erpnext_communication_log_base) {
+  const base = item.erpnext_communication_log_base;
+  if (item.erpnext_communication_search_ok === false) {
+    return logAndReturn({
+      ...base,
+      outcome: 'search_failed',
       erpnext_communication_id: null,
-      error_message: truncate(error?.message || error, 200),
-    };
-    console.log(JSON.stringify(log));
-    results.push({ json: log });
+      http_status: item.erpnext_http_status ?? getHttpStatus(item),
+      error_message: truncate(
+        item.erpnext_communication_search_error || 'ERPNext Communication search failed',
+        200
+      ),
+    });
+  }
+  if (item.erpnext_communication_exists === true) {
+    return logAndReturn({
+      ...base,
+      outcome: 'skipped_duplicate',
+      erpnext_communication_id: item.erpnext_communication_id || null,
+      http_status: item.erpnext_http_status ?? getHttpStatus(item),
+      error_message: null,
+    });
   }
 }
 
-return results;
+const body = unwrapHttpBody(item);
+const data = body?.data && typeof body.data === 'object' ? body.data : {};
+const communicationId = data.name || getErpnextDocName(item);
+const failed = isHttpFailure(item) || !communicationId;
+const log = {
+  component: 'erpnext_communication_sync',
+  channel: data.alpstein_channel || null,
+  correlation_id: null,
+  business_id: data.alpstein_business_id || null,
+  erpnext_lead_id: data.reference_name || null,
+  external_message_id: data.alpstein_external_message_id || null,
+  sender_type: data.alpstein_sender_type || null,
+  execution_id: $execution.id,
+  outcome: failed ? 'failed' : 'created',
+  erpnext_communication_id: communicationId || null,
+  http_status: getHttpStatus(item),
+  error_message: failed
+    ? truncate(getHttpError(item) || 'ERPNext response missing Communication name', 200)
+    : null,
+};
+
+return logAndReturn(log);
 """
 )
 
@@ -2006,15 +2062,135 @@ def main() -> None:
         ),
         node(
             "f230001-0000-4000-8000-000000000001",
-            "Sync ERPNext Communications",
+            "Prepare ERPNext Communications",
             "n8n-nodes-base.code",
             2,
             [3160, 900],
-            {"jsCode": SYNC_ERPNEXT_COMMUNICATIONS},
+            {"jsCode": PREPARE_ERPNEXT_COMMUNICATIONS},
             continueOnFail=True,
+            notesInFlow=True,
+            notes="T-f2.3: Prepare linked Communication read-model rows. Idempotent by alpstein_external_message_id + alpstein_business_id.",
+        ),
+        node(
+            "f230001-0000-4000-8000-000000000002",
+            "Search ERPNext Communication",
+            "n8n-nodes-base.httpRequest",
+            4.2,
+            [3420, 900],
+            {
+                "method": "GET",
+                "url": ERPNEXT_COMMUNICATION_SEARCH_URL,
+                "authentication": ERPNEXT_HTTP_AUTH["authentication"],
+                "genericAuthType": ERPNEXT_HTTP_AUTH["genericAuthType"],
+                "options": ERPNEXT_HTTP_OPTIONS,
+            },
+            continueOnFail=True,
+            onError="continueRegularOutput",
             credentials=ERPNEXT_CREDENTIALS,
             notesInFlow=True,
-            notes="T-f2.3: Linked Communication read model. Idempotent by alpstein_external_message_id + alpstein_business_id.",
+            notes="T-f2.3: Communication dedupe lookup via ERPNext HTTP Request node.",
+        ),
+        node(
+            "f230001-0000-4000-8000-000000000003",
+            "Parse ERPNext Communication Search",
+            "n8n-nodes-base.code",
+            2,
+            [3680, 900],
+            {"jsCode": PARSE_ERPNEXT_COMMUNICATION_SEARCH},
+        ),
+        node(
+            "f230001-0000-4000-8000-000000000004",
+            "IF ERPNext Communication Search OK",
+            "n8n-nodes-base.if",
+            2.2,
+            [3940, 900],
+            {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": True,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 2,
+                    },
+                    "conditions": [
+                        {
+                            "id": "cond-erpnext-communication-search-ok",
+                            "leftValue": "={{ $json.erpnext_communication_search_ok }}",
+                            "rightValue": "",
+                            "operator": {
+                                "type": "boolean",
+                                "operation": "true",
+                                "singleValue": True,
+                            },
+                        }
+                    ],
+                    "combinator": "and",
+                },
+                "options": {},
+            },
+        ),
+        node(
+            "f230001-0000-4000-8000-000000000005",
+            "IF ERPNext Communication Exists",
+            "n8n-nodes-base.if",
+            2.2,
+            [4200, 820],
+            {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": True,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 2,
+                    },
+                    "conditions": [
+                        {
+                            "id": "cond-erpnext-communication-exists",
+                            "leftValue": "={{ $json.erpnext_communication_exists }}",
+                            "rightValue": "",
+                            "operator": {
+                                "type": "boolean",
+                                "operation": "true",
+                                "singleValue": True,
+                            },
+                        }
+                    ],
+                    "combinator": "and",
+                },
+                "options": {},
+            },
+        ),
+        node(
+            "f230001-0000-4000-8000-000000000006",
+            "Create ERPNext Communication",
+            "n8n-nodes-base.httpRequest",
+            4.2,
+            [4460, 920],
+            {
+                "method": "POST",
+                "url": ERPNEXT_COMMUNICATION_CREATE_URL,
+                "authentication": ERPNEXT_HTTP_AUTH["authentication"],
+                "genericAuthType": ERPNEXT_HTTP_AUTH["genericAuthType"],
+                "sendBody": True,
+                "specifyBody": "json",
+                "jsonBody": "={{ $json.erpnext_communication_body }}",
+                "options": ERPNEXT_HTTP_OPTIONS,
+            },
+            continueOnFail=True,
+            onError="continueRegularOutput",
+            credentials=ERPNEXT_CREDENTIALS,
+            notesInFlow=True,
+            notes="T-f2.3: Create linked Communication after dedupe miss.",
+        ),
+        node(
+            "f230001-0000-4000-8000-000000000007",
+            "ERPNext Communication Result Logger",
+            "n8n-nodes-base.code",
+            2,
+            [4720, 900],
+            {"jsCode": ERPNEXT_COMMUNICATION_RESULT_LOGGER},
+            notesInFlow=True,
+            notes="T-f2.3: console JSON log for Communication sync outcome.",
         ),
         {
             "parameters": {
@@ -2100,7 +2276,31 @@ def main() -> None:
             "main": [[{"node": "ERPNext Result Logger", "type": "main", "index": 0}]]
         },
         "ERPNext Result Logger": {
-            "main": [[{"node": "Sync ERPNext Communications", "type": "main", "index": 0}]]
+            "main": [[{"node": "Prepare ERPNext Communications", "type": "main", "index": 0}]]
+        },
+        "Prepare ERPNext Communications": {
+            "main": [[{"node": "Search ERPNext Communication", "type": "main", "index": 0}]]
+        },
+        "Search ERPNext Communication": {
+            "main": [[{"node": "Parse ERPNext Communication Search", "type": "main", "index": 0}]]
+        },
+        "Parse ERPNext Communication Search": {
+            "main": [[{"node": "IF ERPNext Communication Search OK", "type": "main", "index": 0}]]
+        },
+        "IF ERPNext Communication Search OK": {
+            "main": [
+                [{"node": "IF ERPNext Communication Exists", "type": "main", "index": 0}],
+                [{"node": "ERPNext Communication Result Logger", "type": "main", "index": 0}],
+            ]
+        },
+        "IF ERPNext Communication Exists": {
+            "main": [
+                [{"node": "ERPNext Communication Result Logger", "type": "main", "index": 0}],
+                [{"node": "Create ERPNext Communication", "type": "main", "index": 0}],
+            ]
+        },
+        "Create ERPNext Communication": {
+            "main": [[{"node": "ERPNext Communication Result Logger", "type": "main", "index": 0}]]
         },
         "Shape Canonical Customer Reply": {
             "main": [[{"node": "Route Reply Telegram", "type": "main", "index": 0}]]

@@ -831,10 +831,10 @@
     },
     {
       "parameters": {
-        "jsCode": "\nfunction getHttpStatus(json) {\n  if (!json || typeof json !== 'object') return null;\n  return (\n    json.statusCode ??\n    json.status ??\n    json.response?.statusCode ??\n    json.response?.status ??\n    json.error?.statusCode ??\n    json.error?.status ??\n    null\n  );\n}\n\nfunction getHttpError(json) {\n  if (!json || typeof json !== 'object') return null;\n  return (\n    json.message ??\n    json.error?.message ??\n    json.errorMessage ??\n    json.body?.message ??\n    json.body?.exception ??\n    json.body?._server_messages ??\n    json.exception ??\n    null\n  );\n}\n\nfunction unwrapHttpBody(json) {\n  if (!json || typeof json !== 'object') return null;\n  if (json.body != null) {\n    if (typeof json.body === 'string') {\n      try {\n        return JSON.parse(json.body);\n      } catch {\n        return { message: json.body };\n      }\n    }\n    return json.body;\n  }\n  if (json.response?.body != null) {\n    const inner = json.response.body;\n    if (typeof inner === 'string') {\n      try {\n        return JSON.parse(inner);\n      } catch {\n        return { message: inner };\n      }\n    }\n    return inner;\n  }\n  return json;\n}\n\nfunction getErpnextListRows(json) {\n  const body = unwrapHttpBody(json);\n  const data = body?.data ?? json?.data ?? json?.response?.body?.data;\n  return Array.isArray(data) ? data : [];\n}\n\nfunction getErpnextDocName(json) {\n  const body = unwrapHttpBody(json);\n  const data = body?.data ?? json?.data ?? json?.response?.body?.data;\n  if (data && typeof data === 'object' && data.name) return data.name;\n  if (json?.name) return json.name;\n  if (body?.name) return body.name;\n  return null;\n}\n\nfunction isHttpFailure(json) {\n  if (!json || typeof json !== 'object') return true;\n  if (json.__transport_error === true) return true;\n  if (typeof json.error === 'string' && json.error.trim() !== '') return true;\n  if (json.error && typeof json.error === 'object' && !getHttpStatus(json) && !json.body) {\n    return true;\n  }\n  const status = getHttpStatus(json);\n  if (status != null && status >= 400) return true;\n  const body = unwrapHttpBody(json);\n  if (body?.exc || body?.exception) return true;\n  return false;\n}\n// T-f2.3 — ERPNext Communication read model from Alpstein message turn\nconst leadResult = $input.first().json;\nif (!['created', 'updated'].includes(leadResult.outcome) || !leadResult.erpnext_lead_id) {\n  return [];\n}\n\nconst normalized = $('Add Business Context').first().json;\nconst backend = $('POST Backend').first().json;\nif (backend.success !== true || !backend.data) {\n  return [];\n}\n\nconst data = backend.data;\nconst channel = normalized.channel;\nconst businessId = normalized.business_id;\nconst leadName = leadResult.erpnext_lead_id;\n\nfunction optString(raw) {\n  if (raw == null) return null;\n  const text = String(raw).trim();\n  return text === '' ? null : text;\n}\n\nfunction erpnextDateTime(raw) {\n  if (!raw) return null;\n  const d = new Date(raw);\n  if (Number.isNaN(d.getTime())) return null;\n  const pad = (n) => String(n).padStart(2, '0');\n  return (\n    d.getUTCFullYear() +\n    '-' +\n    pad(d.getUTCMonth() + 1) +\n    '-' +\n    pad(d.getUTCDate()) +\n    ' ' +\n    pad(d.getUTCHours()) +\n    ':' +\n    pad(d.getUTCMinutes()) +\n    ':' +\n    pad(d.getUTCSeconds())\n  );\n}\n\nfunction channelMedium(value) {\n  const map = {\n    telegram: 'Telegram',\n    instagram: 'Instagram',\n    whatsapp: 'WhatsApp',\n    website_chat: 'Website Chat',\n  };\n  return map[value] || value || 'Other';\n}\n\nfunction buildQuery(params) {\n  return Object.entries(params)\n    .map(([k, v]) => encodeURIComponent(k) + '=' + encodeURIComponent(String(v)))\n    .join('&');\n}\n\nfunction truncate(value, max) {\n  const text = String(value ?? '').trim();\n  if (text.length <= max) return text;\n  return text.slice(0, max - 3) + '...';\n}\n\nconst inboundExternalId =\n  optString(normalized.message?.external_message_id) ||\n  (data.message?.id ? `alpstein:message:${data.message.id}` : null);\nconst inboundText = optString(normalized.message?.text);\nconst inboundDate =\n  erpnextDateTime(normalized.message?.timestamp) || erpnextDateTime(new Date().toISOString());\nconst conversationId = optString(data.conversation?.id);\n\nconst docs = [];\nif (inboundExternalId && inboundText) {\n  docs.push({\n    reference_doctype: 'Lead',\n    reference_name: leadName,\n    communication_type: 'Communication',\n    communication_medium: channelMedium(channel),\n    sent_or_received: 'Received',\n    content: inboundText,\n    text_content: inboundText,\n    subject: `Inbound ${channelMedium(channel)} message`,\n    communication_date: inboundDate,\n    alpstein_external_message_id: inboundExternalId,\n    alpstein_channel: channel,\n    alpstein_business_id: businessId,\n    alpstein_direction: 'incoming',\n    alpstein_sender_type: 'customer',\n    alpstein_conversation_id: conversationId,\n  });\n}\n\nconst replyText = optString(data.reply_to_customer);\nconst outboundId =\n  optString(data.delivery?.outbound_message_id) ||\n  (inboundExternalId ? `alpstein:ai:${inboundExternalId}` : null);\nif (outboundId && replyText) {\n  docs.push({\n    reference_doctype: 'Lead',\n    reference_name: leadName,\n    communication_type: 'Communication',\n    communication_medium: channelMedium(channel),\n    sent_or_received: 'Sent',\n    content: replyText,\n    text_content: replyText,\n    subject: `AI ${channelMedium(channel)} reply`,\n    communication_date: erpnextDateTime(new Date().toISOString()),\n    alpstein_external_message_id: outboundId,\n    alpstein_channel: channel,\n    alpstein_business_id: businessId,\n    alpstein_direction: 'outgoing',\n    alpstein_sender_type: 'ai',\n    alpstein_conversation_id: conversationId,\n  });\n}\n\nif (!docs.length) {\n  return [];\n}\n\nconst baseUrl = ($env.ERPNEXT_BASE_URL || 'https://crm.alpstein-ai.ch').replace(/\\/$/, '');\nconst results = [];\n\nfor (const doc of docs) {\n  const logBase = {\n    component: 'erpnext_communication_sync',\n    channel,\n    correlation_id: normalized.correlation_id,\n    business_id: businessId,\n    erpnext_lead_id: leadName,\n    external_message_id: doc.alpstein_external_message_id,\n    sender_type: doc.alpstein_sender_type,\n    execution_id: $execution.id,\n  };\n\n  try {\n    const filters = [\n      ['alpstein_external_message_id', '=', doc.alpstein_external_message_id],\n      ['alpstein_business_id', '=', businessId],\n    ];\n    const searchPath =\n      '/api/resource/Communication?' +\n      buildQuery({\n        filters: JSON.stringify(filters),\n        fields: JSON.stringify(['name']),\n        limit_page_length: '1',\n      });\n    const searchResponse = await this.helpers.httpRequestWithAuthentication.call(\n      this,\n      'httpHeaderAuth',\n      {\n        method: 'GET',\n        url: baseUrl + searchPath,\n        json: true,\n        timeout: 15000,\n      }\n    );\n    const existingRows = Array.isArray(searchResponse?.data) ? searchResponse.data : [];\n    if (existingRows.length > 0) {\n      const log = {\n        ...logBase,\n        outcome: 'skipped_duplicate',\n        erpnext_communication_id: existingRows[0].name || null,\n      };\n      console.log(JSON.stringify(log));\n      results.push({ json: log });\n      continue;\n    }\n\n    const createResponse = await this.helpers.httpRequestWithAuthentication.call(\n      this,\n      'httpHeaderAuth',\n      {\n        method: 'POST',\n        url: baseUrl + '/api/resource/Communication',\n        body: doc,\n        json: true,\n        timeout: 15000,\n      }\n    );\n    const communicationId = createResponse?.data?.name || createResponse?.name || null;\n    const log = {\n      ...logBase,\n      outcome: communicationId ? 'created' : 'failed',\n      erpnext_communication_id: communicationId,\n    };\n    if (!communicationId) {\n      log.error_message = 'ERPNext response missing Communication name';\n    }\n    console.log(JSON.stringify(log));\n    results.push({ json: log });\n  } catch (error) {\n    const log = {\n      ...logBase,\n      outcome: 'failed',\n      erpnext_communication_id: null,\n      error_message: truncate(error?.message || error, 200),\n    };\n    console.log(JSON.stringify(log));\n    results.push({ json: log });\n  }\n}\n\nreturn results;\n"
+        "jsCode": "\nfunction getHttpStatus(json) {\n  if (!json || typeof json !== 'object') return null;\n  return (\n    json.statusCode ??\n    json.status ??\n    json.response?.statusCode ??\n    json.response?.status ??\n    json.error?.statusCode ??\n    json.error?.status ??\n    null\n  );\n}\n\nfunction getHttpError(json) {\n  if (!json || typeof json !== 'object') return null;\n  return (\n    json.message ??\n    json.error?.message ??\n    json.errorMessage ??\n    json.body?.message ??\n    json.body?.exception ??\n    json.body?._server_messages ??\n    json.exception ??\n    null\n  );\n}\n\nfunction unwrapHttpBody(json) {\n  if (!json || typeof json !== 'object') return null;\n  if (json.body != null) {\n    if (typeof json.body === 'string') {\n      try {\n        return JSON.parse(json.body);\n      } catch {\n        return { message: json.body };\n      }\n    }\n    return json.body;\n  }\n  if (json.response?.body != null) {\n    const inner = json.response.body;\n    if (typeof inner === 'string') {\n      try {\n        return JSON.parse(inner);\n      } catch {\n        return { message: inner };\n      }\n    }\n    return inner;\n  }\n  return json;\n}\n\nfunction getErpnextListRows(json) {\n  const body = unwrapHttpBody(json);\n  const data = body?.data ?? json?.data ?? json?.response?.body?.data;\n  return Array.isArray(data) ? data : [];\n}\n\nfunction getErpnextDocName(json) {\n  const body = unwrapHttpBody(json);\n  const data = body?.data ?? json?.data ?? json?.response?.body?.data;\n  if (data && typeof data === 'object' && data.name) return data.name;\n  if (json?.name) return json.name;\n  if (body?.name) return body.name;\n  return null;\n}\n\nfunction isHttpFailure(json) {\n  if (!json || typeof json !== 'object') return true;\n  if (json.__transport_error === true) return true;\n  if (typeof json.error === 'string' && json.error.trim() !== '') return true;\n  if (json.error && typeof json.error === 'object' && !getHttpStatus(json) && !json.body) {\n    return true;\n  }\n  const status = getHttpStatus(json);\n  if (status != null && status >= 400) return true;\n  const body = unwrapHttpBody(json);\n  if (body?.exc || body?.exception) return true;\n  return false;\n}\n// T-f2.3 — ERPNext Communication read model from Alpstein message turn\nconst leadResult = $input.first().json;\nif (!['created', 'updated'].includes(leadResult.outcome) || !leadResult.erpnext_lead_id) {\n  return [];\n}\n\nconst normalized = $('Add Business Context').first().json;\nconst backend = $('POST Backend').first().json;\nif (backend.success !== true || !backend.data) {\n  return [];\n}\n\nconst data = backend.data;\nconst channel = normalized.channel;\nconst businessId = normalized.business_id;\nconst leadName = leadResult.erpnext_lead_id;\n\nfunction optString(raw) {\n  if (raw == null) return null;\n  const text = String(raw).trim();\n  return text === '' ? null : text;\n}\n\nfunction erpnextDateTime(raw) {\n  if (!raw) return null;\n  const d = new Date(raw);\n  if (Number.isNaN(d.getTime())) return null;\n  const pad = (n) => String(n).padStart(2, '0');\n  return (\n    d.getUTCFullYear() +\n    '-' +\n    pad(d.getUTCMonth() + 1) +\n    '-' +\n    pad(d.getUTCDate()) +\n    ' ' +\n    pad(d.getUTCHours()) +\n    ':' +\n    pad(d.getUTCMinutes()) +\n    ':' +\n    pad(d.getUTCSeconds())\n  );\n}\n\nfunction channelMedium(value) {\n  const map = {\n    telegram: 'Telegram',\n    instagram: 'Instagram',\n    whatsapp: 'WhatsApp',\n    website_chat: 'Website Chat',\n  };\n  return map[value] || value || 'Other';\n}\n\nfunction buildQuery(params) {\n  return Object.entries(params)\n    .map(([k, v]) => encodeURIComponent(k) + '=' + encodeURIComponent(String(v)))\n    .join('&');\n}\n\nfunction truncate(value, max) {\n  const text = String(value ?? '').trim();\n  if (text.length <= max) return text;\n  return text.slice(0, max - 3) + '...';\n}\n\nconst inboundExternalId =\n  optString(normalized.message?.external_message_id) ||\n  (data.message?.id ? `alpstein:message:${data.message.id}` : null);\nconst inboundText = optString(normalized.message?.text);\nconst inboundDate =\n  erpnextDateTime(normalized.message?.timestamp) || erpnextDateTime(new Date().toISOString());\nconst conversationId = optString(data.conversation?.id);\n\nconst docs = [];\nif (inboundExternalId && inboundText) {\n  docs.push({\n    reference_doctype: 'Lead',\n    reference_name: leadName,\n    communication_type: 'Communication',\n    communication_medium: channelMedium(channel),\n    sent_or_received: 'Received',\n    content: inboundText,\n    text_content: inboundText,\n    subject: `Inbound ${channelMedium(channel)} message`,\n    communication_date: inboundDate,\n    alpstein_external_message_id: inboundExternalId,\n    alpstein_channel: channel,\n    alpstein_business_id: businessId,\n    alpstein_direction: 'incoming',\n    alpstein_sender_type: 'customer',\n    alpstein_conversation_id: conversationId,\n  });\n}\n\nconst replyText = optString(data.reply_to_customer);\nconst outboundId =\n  optString(data.delivery?.outbound_message_id) ||\n  (inboundExternalId ? `alpstein:ai:${inboundExternalId}` : null);\nif (outboundId && replyText) {\n  docs.push({\n    reference_doctype: 'Lead',\n    reference_name: leadName,\n    communication_type: 'Communication',\n    communication_medium: channelMedium(channel),\n    sent_or_received: 'Sent',\n    content: replyText,\n    text_content: replyText,\n    subject: `AI ${channelMedium(channel)} reply`,\n    communication_date: erpnextDateTime(new Date().toISOString()),\n    alpstein_external_message_id: outboundId,\n    alpstein_channel: channel,\n    alpstein_business_id: businessId,\n    alpstein_direction: 'outgoing',\n    alpstein_sender_type: 'ai',\n    alpstein_conversation_id: conversationId,\n  });\n}\n\nif (!docs.length) {\n  return [];\n}\n\nreturn docs.map((doc) => {\n  const filters = [\n    ['alpstein_external_message_id', '=', doc.alpstein_external_message_id],\n    ['alpstein_business_id', '=', businessId],\n  ];\n  const searchPath =\n    '/api/resource/Communication?' +\n    buildQuery({\n      filters: JSON.stringify(filters),\n      fields: JSON.stringify(['name']),\n      limit_page_length: '1',\n    });\n  return {\n    json: {\n      erpnext_communication_search_path: searchPath,\n      erpnext_communication_body: doc,\n      erpnext_communication_log_base: {\n        component: 'erpnext_communication_sync',\n        channel,\n        correlation_id: normalized.correlation_id,\n        business_id: businessId,\n        erpnext_lead_id: leadName,\n        external_message_id: doc.alpstein_external_message_id,\n        sender_type: doc.alpstein_sender_type,\n        execution_id: $execution.id,\n      },\n    },\n  };\n});\n"
       },
       "id": "f230001-0000-4000-8000-000000000001",
-      "name": "Sync ERPNext Communications",
+      "name": "Prepare ERPNext Communications",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -842,13 +842,177 @@
         900
       ],
       "continueOnFail": true,
+      "notesInFlow": true,
+      "notes": "T-f2.3: Prepare linked Communication read-model rows. Idempotent by alpstein_external_message_id + alpstein_business_id."
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ ($env.ERPNEXT_BASE_URL || 'https://crm.alpstein-ai.ch').replace(/\\/$/, '') + $json.erpnext_communication_search_path }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 15000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "f230001-0000-4000-8000-000000000002",
+      "name": "Search ERPNext Communication",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3420,
+        900
+      ],
+      "continueOnFail": true,
+      "onError": "continueRegularOutput",
       "credentials": {
         "httpHeaderAuth": {
           "name": "erpnext_crm_api"
         }
       },
       "notesInFlow": true,
-      "notes": "T-f2.3: Linked Communication read model. Idempotent by alpstein_external_message_id + alpstein_business_id."
+      "notes": "T-f2.3: Communication dedupe lookup via ERPNext HTTP Request node."
+    },
+    {
+      "parameters": {
+        "jsCode": "\nfunction getHttpStatus(json) {\n  if (!json || typeof json !== 'object') return null;\n  return (\n    json.statusCode ??\n    json.status ??\n    json.response?.statusCode ??\n    json.response?.status ??\n    json.error?.statusCode ??\n    json.error?.status ??\n    null\n  );\n}\n\nfunction getHttpError(json) {\n  if (!json || typeof json !== 'object') return null;\n  return (\n    json.message ??\n    json.error?.message ??\n    json.errorMessage ??\n    json.body?.message ??\n    json.body?.exception ??\n    json.body?._server_messages ??\n    json.exception ??\n    null\n  );\n}\n\nfunction unwrapHttpBody(json) {\n  if (!json || typeof json !== 'object') return null;\n  if (json.body != null) {\n    if (typeof json.body === 'string') {\n      try {\n        return JSON.parse(json.body);\n      } catch {\n        return { message: json.body };\n      }\n    }\n    return json.body;\n  }\n  if (json.response?.body != null) {\n    const inner = json.response.body;\n    if (typeof inner === 'string') {\n      try {\n        return JSON.parse(inner);\n      } catch {\n        return { message: inner };\n      }\n    }\n    return inner;\n  }\n  return json;\n}\n\nfunction getErpnextListRows(json) {\n  const body = unwrapHttpBody(json);\n  const data = body?.data ?? json?.data ?? json?.response?.body?.data;\n  return Array.isArray(data) ? data : [];\n}\n\nfunction getErpnextDocName(json) {\n  const body = unwrapHttpBody(json);\n  const data = body?.data ?? json?.data ?? json?.response?.body?.data;\n  if (data && typeof data === 'object' && data.name) return data.name;\n  if (json?.name) return json.name;\n  if (body?.name) return body.name;\n  return null;\n}\n\nfunction isHttpFailure(json) {\n  if (!json || typeof json !== 'object') return true;\n  if (json.__transport_error === true) return true;\n  if (typeof json.error === 'string' && json.error.trim() !== '') return true;\n  if (json.error && typeof json.error === 'object' && !getHttpStatus(json) && !json.body) {\n    return true;\n  }\n  const status = getHttpStatus(json);\n  if (status != null && status >= 400) return true;\n  const body = unwrapHttpBody(json);\n  if (body?.exc || body?.exception) return true;\n  return false;\n}\n// T-f2.3 — interpret ERPNext Communication search response\nconst prep = $('Prepare ERPNext Communications').all()[$itemIndex].json;\nconst item = $input.first().json;\n\nif (isHttpFailure(item)) {\n  return [\n    {\n      json: {\n        ...prep,\n        erpnext_communication_search_ok: false,\n        erpnext_communication_exists: false,\n        erpnext_communication_id: null,\n        erpnext_communication_search_error: getHttpError(item) || 'ERPNext Communication search failed',\n        erpnext_http_status: getHttpStatus(item),\n      },\n    },\n  ];\n}\n\nconst rows = getErpnextListRows(item);\nconst existing = rows.length > 0 ? rows[0] : null;\n\nreturn [\n  {\n    json: {\n      ...prep,\n      erpnext_communication_search_ok: true,\n      erpnext_communication_exists: !!existing,\n      erpnext_communication_id: existing?.name || null,\n      erpnext_communication_search_error: null,\n      erpnext_http_status: getHttpStatus(item),\n    },\n  },\n];\n"
+      },
+      "id": "f230001-0000-4000-8000-000000000003",
+      "name": "Parse ERPNext Communication Search",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3680,
+        900
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-erpnext-communication-search-ok",
+              "leftValue": "={{ $json.erpnext_communication_search_ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f230001-0000-4000-8000-000000000004",
+      "name": "IF ERPNext Communication Search OK",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3940,
+        900
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "cond-erpnext-communication-exists",
+              "leftValue": "={{ $json.erpnext_communication_exists }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f230001-0000-4000-8000-000000000005",
+      "name": "IF ERPNext Communication Exists",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        4200,
+        820
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.ERPNEXT_BASE_URL || 'https://crm.alpstein-ai.ch').replace(/\\/$/, '') + '/api/resource/Communication' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.erpnext_communication_body }}",
+        "options": {
+          "timeout": 15000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "f230001-0000-4000-8000-000000000006",
+      "name": "Create ERPNext Communication",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4460,
+        920
+      ],
+      "continueOnFail": true,
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "erpnext_crm_api"
+        }
+      },
+      "notesInFlow": true,
+      "notes": "T-f2.3: Create linked Communication after dedupe miss."
+    },
+    {
+      "parameters": {
+        "jsCode": "\nfunction getHttpStatus(json) {\n  if (!json || typeof json !== 'object') return null;\n  return (\n    json.statusCode ??\n    json.status ??\n    json.response?.statusCode ??\n    json.response?.status ??\n    json.error?.statusCode ??\n    json.error?.status ??\n    null\n  );\n}\n\nfunction getHttpError(json) {\n  if (!json || typeof json !== 'object') return null;\n  return (\n    json.message ??\n    json.error?.message ??\n    json.errorMessage ??\n    json.body?.message ??\n    json.body?.exception ??\n    json.body?._server_messages ??\n    json.exception ??\n    null\n  );\n}\n\nfunction unwrapHttpBody(json) {\n  if (!json || typeof json !== 'object') return null;\n  if (json.body != null) {\n    if (typeof json.body === 'string') {\n      try {\n        return JSON.parse(json.body);\n      } catch {\n        return { message: json.body };\n      }\n    }\n    return json.body;\n  }\n  if (json.response?.body != null) {\n    const inner = json.response.body;\n    if (typeof inner === 'string') {\n      try {\n        return JSON.parse(inner);\n      } catch {\n        return { message: inner };\n      }\n    }\n    return inner;\n  }\n  return json;\n}\n\nfunction getErpnextListRows(json) {\n  const body = unwrapHttpBody(json);\n  const data = body?.data ?? json?.data ?? json?.response?.body?.data;\n  return Array.isArray(data) ? data : [];\n}\n\nfunction getErpnextDocName(json) {\n  const body = unwrapHttpBody(json);\n  const data = body?.data ?? json?.data ?? json?.response?.body?.data;\n  if (data && typeof data === 'object' && data.name) return data.name;\n  if (json?.name) return json.name;\n  if (body?.name) return body.name;\n  return null;\n}\n\nfunction isHttpFailure(json) {\n  if (!json || typeof json !== 'object') return true;\n  if (json.__transport_error === true) return true;\n  if (typeof json.error === 'string' && json.error.trim() !== '') return true;\n  if (json.error && typeof json.error === 'object' && !getHttpStatus(json) && !json.body) {\n    return true;\n  }\n  const status = getHttpStatus(json);\n  if (status != null && status >= 400) return true;\n  const body = unwrapHttpBody(json);\n  if (body?.exc || body?.exception) return true;\n  return false;\n}\n// T-f2.3 — Communication sync result logger\nconst item = $input.first().json;\n\nfunction truncate(value, max) {\n  const text = String(value ?? '').trim();\n  if (text.length <= max) return text;\n  return text.slice(0, max - 3) + '...';\n}\n\nfunction logAndReturn(log) {\n  console.log(JSON.stringify(log));\n  return [{ json: log }];\n}\n\nif (item.erpnext_communication_log_base) {\n  const base = item.erpnext_communication_log_base;\n  if (item.erpnext_communication_search_ok === false) {\n    return logAndReturn({\n      ...base,\n      outcome: 'search_failed',\n      erpnext_communication_id: null,\n      http_status: item.erpnext_http_status ?? getHttpStatus(item),\n      error_message: truncate(\n        item.erpnext_communication_search_error || 'ERPNext Communication search failed',\n        200\n      ),\n    });\n  }\n  if (item.erpnext_communication_exists === true) {\n    return logAndReturn({\n      ...base,\n      outcome: 'skipped_duplicate',\n      erpnext_communication_id: item.erpnext_communication_id || null,\n      http_status: item.erpnext_http_status ?? getHttpStatus(item),\n      error_message: null,\n    });\n  }\n}\n\nconst body = unwrapHttpBody(item);\nconst data = body?.data && typeof body.data === 'object' ? body.data : {};\nconst communicationId = data.name || getErpnextDocName(item);\nconst failed = isHttpFailure(item) || !communicationId;\nconst log = {\n  component: 'erpnext_communication_sync',\n  channel: data.alpstein_channel || null,\n  correlation_id: null,\n  business_id: data.alpstein_business_id || null,\n  erpnext_lead_id: data.reference_name || null,\n  external_message_id: data.alpstein_external_message_id || null,\n  sender_type: data.alpstein_sender_type || null,\n  execution_id: $execution.id,\n  outcome: failed ? 'failed' : 'created',\n  erpnext_communication_id: communicationId || null,\n  http_status: getHttpStatus(item),\n  error_message: failed\n    ? truncate(getHttpError(item) || 'ERPNext response missing Communication name', 200)\n    : null,\n};\n\nreturn logAndReturn(log);\n"
+      },
+      "id": "f230001-0000-4000-8000-000000000007",
+      "name": "ERPNext Communication Result Logger",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4720,
+        900
+      ],
+      "notesInFlow": true,
+      "notes": "T-f2.3: console JSON log for Communication sync outcome."
     },
     {
       "parameters": {
@@ -1075,7 +1239,87 @@
       "main": [
         [
           {
-            "node": "Sync ERPNext Communications",
+            "node": "Prepare ERPNext Communications",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare ERPNext Communications": {
+      "main": [
+        [
+          {
+            "node": "Search ERPNext Communication",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search ERPNext Communication": {
+      "main": [
+        [
+          {
+            "node": "Parse ERPNext Communication Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse ERPNext Communication Search": {
+      "main": [
+        [
+          {
+            "node": "IF ERPNext Communication Search OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF ERPNext Communication Search OK": {
+      "main": [
+        [
+          {
+            "node": "IF ERPNext Communication Exists",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "ERPNext Communication Result Logger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF ERPNext Communication Exists": {
+      "main": [
+        [
+          {
+            "node": "ERPNext Communication Result Logger",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create ERPNext Communication",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create ERPNext Communication": {
+      "main": [
+        [
+          {
+            "node": "ERPNext Communication Result Logger",
             "type": "main",
             "index": 0
           }
