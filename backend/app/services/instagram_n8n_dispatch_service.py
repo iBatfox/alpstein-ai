@@ -24,6 +24,9 @@ DISPATCH_LOG_STARTED = "instagram_n8n_dispatch_started"
 DISPATCH_LOG_SUCCEEDED = "instagram_n8n_dispatch_succeeded"
 DISPATCH_LOG_FAILED = "instagram_n8n_dispatch_failed"
 DISPATCH_LOG_SKIPPED_DISABLED = "instagram_n8n_dispatch_skipped_disabled"
+PROFILE_ENRICHMENT_LOG_STARTED = "instagram_profile_enrichment_started"
+PROFILE_ENRICHMENT_LOG_SUCCEEDED = "instagram_profile_enrichment_succeeded"
+PROFILE_ENRICHMENT_LOG_FAILED = "instagram_profile_enrichment_failed"
 
 
 @dataclass(frozen=True)
@@ -106,18 +109,41 @@ class InstagramN8nDispatchService:
         profile_client = self._profile_client or InstagramGraphClient(
             app_settings=self._settings,
         )
+        log_extra = _dispatch_log_extra(context, webhook_url=None)
+        logger.info(
+            f"{PROFILE_ENRICHMENT_LOG_STARTED} external_user_id={sender_id}",
+            extra=log_extra,
+        )
         try:
-            return profile_client.get_user_profile(sender_id)
+            profile = profile_client.get_user_profile(sender_id)
         except InstagramClientError as exc:
             logger.warning(
-                "instagram_profile_fetch_failed",
+                (
+                    f"{PROFILE_ENRICHMENT_LOG_FAILED} external_user_id={sender_id} "
+                    f"error_code={exc.code} error_message={str(exc)[:300]}"
+                ),
                 extra={
-                    **_dispatch_log_extra(context, webhook_url=None),
+                    **log_extra,
                     "error_code": exc.code,
                     "error_message": str(exc)[:300],
                 },
             )
             return None
+
+        logger.info(
+            (
+                f"{PROFILE_ENRICHMENT_LOG_SUCCEEDED} external_user_id={sender_id} "
+                f"has_username={bool(_clean_optional(profile.username))} "
+                f"has_display_name={bool(_clean_optional(profile.name))}"
+            ),
+            extra={
+                **log_extra,
+                "profile_id": profile.id,
+                "has_username": bool(_clean_optional(profile.username)),
+                "has_display_name": bool(_clean_optional(profile.name)),
+            },
+        )
+        return profile
 
 
 def build_instagram_n8n_event_payload(

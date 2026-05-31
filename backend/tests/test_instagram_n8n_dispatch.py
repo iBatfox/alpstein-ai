@@ -19,6 +19,9 @@ from app.services.instagram_n8n_dispatch_service import (
     DISPATCH_LOG_FAILED,
     DISPATCH_LOG_SKIPPED_DISABLED,
     DISPATCH_LOG_SUCCEEDED,
+    PROFILE_ENRICHMENT_LOG_FAILED,
+    PROFILE_ENRICHMENT_LOG_STARTED,
+    PROFILE_ENRICHMENT_LOG_SUCCEEDED,
     InstagramN8nDispatchContext,
     InstagramN8nDispatchService,
     build_instagram_n8n_event_payload,
@@ -136,7 +139,10 @@ async def test_dispatch_succeeds_when_enabled() -> None:
 
 
 @pytest.mark.anyio
-async def test_dispatch_enriches_instagram_profile_when_enabled() -> None:
+async def test_dispatch_enriches_instagram_profile_when_enabled(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    caplog.set_level("INFO", logger="app.services.instagram_n8n_dispatch_service")
     response = MagicMock()
     response.status_code = 200
     response.raise_for_status = MagicMock()
@@ -168,6 +174,18 @@ async def test_dispatch_enriches_instagram_profile_when_enabled() -> None:
     assert payload["customer"]["name"] == "Ivan Bataiev-Lykhvar"
     assert payload["instagram_context"]["instagram_username"] == "ibatfox"
     assert payload["instagram_context"]["instagram_display_name"] == "Ivan Bataiev-Lykhvar"
+    assert any(
+        record.getMessage().startswith(PROFILE_ENRICHMENT_LOG_STARTED)
+        and getattr(record, "external_user_id") == "17841400000000001"
+        for record in caplog.records
+    )
+    assert any(
+        record.getMessage().startswith(PROFILE_ENRICHMENT_LOG_SUCCEEDED)
+        and getattr(record, "profile_id") == "17841400000000001"
+        and getattr(record, "has_username") is True
+        and getattr(record, "has_display_name") is True
+        for record in caplog.records
+    )
 
 
 @pytest.mark.anyio
@@ -201,8 +219,9 @@ async def test_dispatch_profile_fetch_failure_falls_back(
     _args, kwargs = client.post.await_args
     assert kwargs["json"]["customer"]["name"] is None
     assert any(
-        record.getMessage() == "instagram_profile_fetch_failed"
+        record.getMessage().startswith(PROFILE_ENRICHMENT_LOG_FAILED)
         and getattr(record, "error_code") == "API_ERROR"
+        and "Application does not have permission" in getattr(record, "error_message")
         for record in caplog.records
     )
 
