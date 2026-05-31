@@ -26,6 +26,19 @@ Add a visible ERPNext Lead tab/block after "Подробности" called "Ис
 - Add Lead UI tab/section "История переписки" and render linked Communications as chat.
 - Sync inbound customer and outbound AI replies for Instagram and Telegram.
 
+## Follow-up UI fix — 2026-05-31
+
+- Keep linked ERPNext `Communication` rows as the source for Lead conversation history.
+- Update only the ERPNext Lead Client Script embedded in
+  `scripts/erpnext/create_alpstein_lead_fields.py`.
+- Render the existing `alpstein_conversation_history` HTML field as a fixed-height
+  scrollable chat window.
+- Preserve oldest-to-newest order and auto-scroll to the newest message after render.
+- Keep the active n8n workflow, Communication creation, Lead dedupe, AI logic, and
+  Instagram/Telegram transport unchanged.
+- Add runtime validation for visible Alpstein Lead fields, Client Script presence,
+  and Communication query ordering.
+
 ## Idempotency
 
 Before creating a Communication, search by:

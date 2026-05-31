@@ -27,12 +27,22 @@ LEAD_FIELD_SPECS: list[tuple[str, str, str, str, int, str | None]] = [
     ("alpstein_channel", "Alpstein Channel", "Data", "alpstein_section", 1, None),
     ("alpstein_business_id", "Alpstein Business ID", "Data", "alpstein_channel", 1, None),
     ("alpstein_tenant_id", "Alpstein Tenant ID", "Data", "alpstein_business_id", 0, None),
-    ("alpstein_external_user_id", "Alpstein External User ID", "Data", "alpstein_tenant_id", 1, None),
+    ("alpstein_identity_column", "Alpstein Identity Column", "Column Break", "alpstein_tenant_id", 0, None),
+    ("alpstein_external_user_id", "Alpstein External User ID", "Data", "alpstein_identity_column", 1, None),
     ("alpstein_chat_id", "Alpstein Chat ID", "Data", "alpstein_external_user_id", 1, None),
-    ("alpstein_instagram_section", "Instagram", "Section Break", "alpstein_chat_id", 0, None),
-    ("instagram_username", "Instagram Username", "Data", "alpstein_instagram_section", 0, None),
+    ("alpstein_social_section", "Alpstein Social Profiles", "Section Break", "alpstein_chat_id", 0, None),
+    ("telegram_username", "Telegram Username", "Data", "alpstein_social_section", 0, None),
+    ("telegram_language_code", "Telegram Language Code", "Data", "telegram_username", 0, None),
+    ("alpstein_social_column", "Alpstein Social Column", "Column Break", "telegram_language_code", 0, None),
+    ("instagram_username", "Instagram Username", "Data", "alpstein_social_column", 0, None),
     ("instagram_display_name", "Instagram Display Name", "Data", "instagram_username", 0, None),
-    ("alpstein_attribution_section", "Marketing Attribution", "Section Break", "instagram_display_name", 0, None),
+    ("alpstein_ops_section", "Alpstein Operations", "Section Break", "instagram_display_name", 0, None),
+    ("first_message_at", "First Message At", "Datetime", "alpstein_ops_section", 0, None),
+    ("last_message_at", "Last Message At", "Datetime", "first_message_at", 0, None),
+    ("alpstein_ops_column", "Alpstein Operations Column", "Column Break", "last_message_at", 0, None),
+    ("conversation_count", "Conversation Count", "Int", "alpstein_ops_column", 0, None),
+    ("last_message_channel", "Last Message Channel", "Data", "conversation_count", 0, None),
+    ("alpstein_attribution_section", "Marketing Attribution", "Section Break", "last_message_channel", 0, None),
     ("first_touch_source", "First Touch Source", "Data", "alpstein_attribution_section", 0, None),
     ("first_touch_medium", "First Touch Medium", "Data", "first_touch_source", 0, None),
     ("first_touch_campaign", "First Touch Campaign", "Data", "first_touch_medium", 0, None),
@@ -47,14 +57,6 @@ LEAD_FIELD_SPECS: list[tuple[str, str, str, str, int, str | None]] = [
     ("referrer_url", "Referrer URL", "Data", "landing_page", 0, None),
     ("gclid", "Google Click ID", "Data", "referrer_url", 0, None),
     ("fbclid", "Facebook Click ID", "Data", "gclid", 0, None),
-    ("alpstein_telegram_section", "Telegram", "Section Break", "fbclid", 0, None),
-    ("telegram_username", "Telegram Username", "Data", "alpstein_telegram_section", 0, None),
-    ("telegram_language_code", "Telegram Language Code", "Data", "telegram_username", 0, None),
-    ("alpstein_ops_section", "Alpstein Operations", "Section Break", "telegram_language_code", 0, None),
-    ("first_message_at", "First Message At", "Datetime", "alpstein_ops_section", 0, None),
-    ("last_message_at", "Last Message At", "Datetime", "first_message_at", 0, None),
-    ("conversation_count", "Conversation Count", "Int", "last_message_at", 0, None),
-    ("last_message_channel", "Last Message Channel", "Data", "conversation_count", 0, None),
 ]
 
 COMMUNICATION_FIELD_SPECS: list[tuple[str, str, str, str, int, str | None]] = [
@@ -120,11 +122,22 @@ function alpstein_message_side(row) {
   return 'left';
 }
 
+function alpstein_sender_label(row) {
+  const sender = String(row.alpstein_sender_type || '').toLowerCase();
+  const direction = String(row.alpstein_direction || '').toLowerCase();
+  const sentOrReceived = String(row.sent_or_received || '').toLowerCase();
+  if (sender === 'ai') return 'AI';
+  if (sender === 'operator' || sender === 'owner') return 'Operator';
+  if (sender === 'customer') return 'Customer';
+  if (direction === 'outgoing' || sentOrReceived === 'sent') return 'AI';
+  return 'Customer';
+}
+
 function alpstein_render_empty(frm, message) {
   const field = frm.fields_dict.alpstein_conversation_history;
   if (!field) return;
   field.$wrapper.html(
-    `<div class="alpstein-chat-empty">${alpstein_escape_html(message)}</div>`
+    `<div class="alpstein-chat-scroll"><div class="alpstein-chat-empty">${alpstein_escape_html(message)}</div></div>`
   );
 }
 
@@ -141,6 +154,7 @@ function alpstein_render_rows(frm, rows) {
     .map((row) => {
       const side = alpstein_message_side(row);
       const channel = alpstein_format_channel(row.alpstein_channel || row.communication_medium);
+      const sender = alpstein_sender_label(row);
       const timestamp = row.communication_date
         ? frappe.datetime.str_to_user(row.communication_date)
         : '';
@@ -148,6 +162,7 @@ function alpstein_render_rows(frm, rows) {
         <div class="alpstein-chat-row alpstein-chat-row-${side}">
           <div class="alpstein-chat-bubble">
             <div class="alpstein-chat-meta">
+              <span class="alpstein-chat-sender">${alpstein_escape_html(sender)}</span>
               <span class="alpstein-chat-badge">${alpstein_escape_html(channel)}</span>
               <span>${alpstein_escape_html(timestamp)}</span>
             </div>
@@ -164,7 +179,14 @@ function alpstein_render_rows(frm, rows) {
         display: flex;
         flex-direction: column;
         gap: 10px;
-        padding: 12px 0;
+        padding: 12px;
+      }
+      .alpstein-chat-scroll {
+        max-height: 600px;
+        overflow-y: auto;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        background: var(--fg-color);
       }
       .alpstein-chat-row {
         display: flex;
@@ -195,6 +217,10 @@ function alpstein_render_rows(frm, rows) {
         color: var(--text-muted);
         font-size: 12px;
       }
+      .alpstein-chat-sender {
+        color: var(--text-color);
+        font-weight: 600;
+      }
       .alpstein-chat-badge {
         border: 1px solid var(--border-color);
         border-radius: 999px;
@@ -207,12 +233,19 @@ function alpstein_render_rows(frm, rows) {
         line-height: 1.45;
       }
       .alpstein-chat-empty {
-        padding: 12px 0;
+        padding: 12px;
         color: var(--text-muted);
       }
     </style>
-    <div class="alpstein-chat-wrap">${html}</div>
+    <div class="alpstein-chat-scroll">
+      <div class="alpstein-chat-wrap">${html}</div>
+    </div>
   `);
+
+  const scrollEl = field.$wrapper.find('.alpstein-chat-scroll').get(0);
+  if (scrollEl) {
+    scrollEl.scrollTop = scrollEl.scrollHeight;
+  }
 }
 
 function alpstein_render_conversation_history(frm) {
@@ -276,6 +309,47 @@ COMMUNICATION_MEDIUM_OPTIONS = "\n".join(
         "Website Chat",
     ]
 )
+
+VISIBLE_LEAD_FIELD_CHECKS = [
+    "alpstein_channel",
+    "alpstein_business_id",
+    "alpstein_external_user_id",
+    "alpstein_chat_id",
+    "instagram_username",
+    "instagram_display_name",
+    "telegram_username",
+    "telegram_language_code",
+    "first_message_at",
+    "last_message_at",
+    "conversation_count",
+    LEAD_HISTORY_HTML_FIELD,
+]
+
+LATEST_LEAD_DIAGNOSTIC_FIELDS = [
+    "name",
+    "creation",
+    "modified",
+    "lead_name",
+    "first_name",
+    "last_name",
+    "source",
+    "alpstein_channel",
+    "alpstein_business_id",
+    "alpstein_external_user_id",
+    "alpstein_chat_id",
+    "instagram_username",
+    "instagram_display_name",
+    "telegram_username",
+    "telegram_language_code",
+    "first_message_at",
+    "last_message_at",
+    "conversation_count",
+]
+
+LEGACY_LEAD_LAYOUT_FIELDS = [
+    "alpstein_instagram_section",
+    "alpstein_telegram_section",
+]
 
 
 def _init_frappe() -> None:
@@ -442,6 +516,123 @@ def ensure_communication_medium_options() -> str:
     return "updated" if existing_options else "created"
 
 
+def hide_legacy_lead_layout_fields() -> list[str]:
+    import frappe
+
+    updated = []
+    for fieldname in LEGACY_LEAD_LAYOUT_FIELDS:
+        name = f"Lead-{fieldname}"
+        if not frappe.db.exists("Custom Field", name):
+            continue
+        doc = frappe.get_doc("Custom Field", name)
+        if int(getattr(doc, "hidden", 0) or 0) == 1:
+            continue
+        doc.hidden = 1
+        doc.save(ignore_permissions=True)
+        updated.append(f"Lead.{fieldname}")
+    return updated
+
+
+def validate_runtime_state() -> int:
+    _init_frappe()
+    import frappe
+
+    lead_meta = frappe.get_meta("Lead")
+    field_status = []
+    all_fields_visible = True
+    for fieldname in VISIBLE_LEAD_FIELD_CHECKS:
+        custom_field_name = f"Lead-{fieldname}"
+        custom_field = (
+            frappe.get_doc("Custom Field", custom_field_name)
+            if frappe.db.exists("Custom Field", custom_field_name)
+            else None
+        )
+        meta_field = lead_meta.get_field(fieldname)
+        exists = bool(custom_field and meta_field)
+        hidden = int(getattr(custom_field, "hidden", 1)) if custom_field else None
+        meta_hidden = int(getattr(meta_field, "hidden", 1)) if meta_field else None
+        if not exists or hidden != 0 or meta_hidden != 0:
+            all_fields_visible = False
+        field_status.append(
+            {
+                "fieldname": fieldname,
+                "exists": exists,
+                "hidden": hidden,
+                "meta_hidden": meta_hidden,
+                "insert_after": getattr(custom_field, "insert_after", None)
+                if custom_field
+                else None,
+            }
+        )
+
+    client_script = (
+        frappe.get_doc("Client Script", "Alpstein Lead Conversation History")
+        if frappe.db.exists("Client Script", "Alpstein Lead Conversation History")
+        else None
+    )
+    client_script_ok = bool(
+        client_script
+        and client_script.enabled
+        and "alpstein-chat-scroll" in client_script.script
+        and "scrollTop = scrollEl.scrollHeight" in client_script.script
+    )
+
+    latest_lead = None
+    leads = frappe.get_all(
+        "Lead",
+        fields=LATEST_LEAD_DIAGNOSTIC_FIELDS,
+        order_by="creation desc",
+        limit=1,
+    )
+    if leads:
+        latest_lead = dict(leads[0])
+
+    lead_with_communications = None
+    communication_rows = []
+    for row in frappe.get_all("Lead", fields=["name"], order_by="creation desc", limit=50):
+        if frappe.db.count(
+            "Communication",
+            {"reference_doctype": "Lead", "reference_name": row.name},
+        ):
+            lead_with_communications = row.name
+            communication_rows = frappe.get_all(
+                "Communication",
+                filters={"reference_doctype": "Lead", "reference_name": row.name},
+                fields=[
+                    "name",
+                    "communication_date",
+                    "creation",
+                    "communication_medium",
+                    "sent_or_received",
+                    "alpstein_channel",
+                    "alpstein_direction",
+                    "alpstein_sender_type",
+                    "content",
+                ],
+                order_by="communication_date asc, creation asc",
+                limit=20,
+            )
+            break
+
+    communication_dates = [
+        row.communication_date for row in communication_rows if row.communication_date
+    ]
+    communication_order_ok = communication_dates == sorted(communication_dates)
+
+    summary = {
+        "site": SITE,
+        "lead_fields_visible": all_fields_visible,
+        "field_status": field_status,
+        "client_script_ok": client_script_ok,
+        "latest_lead": latest_lead,
+        "lead_with_communications": lead_with_communications,
+        "communication_order_ok": communication_order_ok,
+        "communication_order_sample": communication_rows,
+    }
+    print(json.dumps(summary, indent=2, ensure_ascii=False, default=str))
+    return 0 if all_fields_visible and client_script_ok and communication_order_ok else 1
+
+
 def main() -> int:
     _init_frappe()
     import frappe
@@ -493,6 +684,9 @@ def main() -> int:
             else:
                 skipped.append(f"Lead.{fieldname}")
 
+        for fieldname in hide_legacy_lead_layout_fields():
+            updated.append(fieldname)
+
         script_result = ensure_lead_history_client_script()
         if script_result == "created":
             created.append("Client Script.Alpstein Lead Conversation History")
@@ -530,6 +724,8 @@ def main() -> int:
 
 if __name__ == "__main__":
     try:
+        if "--validate" in sys.argv:
+            raise SystemExit(validate_runtime_state())
         raise SystemExit(main())
     except Exception as exc:
         print(json.dumps({"error": str(exc)}), file=sys.stderr)

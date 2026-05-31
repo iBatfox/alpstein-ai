@@ -24,17 +24,31 @@ docker compose -p alpstein-erpnext exec -T backend \
 
 Safe to re-run: existing Custom Field records are skipped.
 
+## Validate migration state
+
+```bash
+cd /opt/alpstein-ai
+docker cp scripts/erpnext/create_alpstein_lead_fields.py \
+  alpstein-erpnext-backend-1:/tmp/create_alpstein_lead_fields.py
+docker exec -i alpstein-erpnext-backend-1 \
+  /home/frappe/frappe-bench/env/bin/python \
+  /tmp/create_alpstein_lead_fields.py --validate
+```
+
+The validation checks that important Alpstein Lead fields are present and visible,
+the Lead conversation Client Script is installed with the scrollable renderer, and
+linked `Communication` rows can be queried oldest-to-newest by `communication_date`.
+
 ## Fields created
 
 | Group | Fieldnames |
 |-------|------------|
 | Identity | `alpstein_channel`, `alpstein_business_id`, `alpstein_tenant_id`, `alpstein_external_user_id`, `alpstein_chat_id` |
+| Social profiles | `telegram_username`, `telegram_language_code`, `instagram_username`, `instagram_display_name` |
+| Operations | `first_message_at`, `last_message_at`, `conversation_count`, `last_message_channel` |
 | First touch | `first_touch_source`, `first_touch_medium`, `first_touch_campaign`, `first_touch_content`, `first_touch_term` |
 | Last touch | `last_touch_source`, `last_touch_medium`, `last_touch_campaign`, `last_touch_content`, `last_touch_term` |
 | URLs / click IDs | `landing_page`, `referrer_url`, `gclid`, `fbclid` |
-| Telegram | `telegram_username`, `telegram_language_code` |
-| Instagram | `instagram_username`, `instagram_display_name` |
-| Operations | `first_message_at`, `last_message_at`, `conversation_count`, `last_message_channel` |
 
 Indexed (`search_index=1`) for API filters: `alpstein_channel`, `alpstein_business_id`, `alpstein_external_user_id`, `alpstein_chat_id`.
 
