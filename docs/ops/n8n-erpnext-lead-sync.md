@@ -76,7 +76,7 @@ Custom fields migration (one-time): [`scripts/erpnext/create_alpstein_lead_field
 
 ## Operator setup
 
-1. ERPNext: create integration user (e.g. `n8n.integration@alpstein-ai.ch`) with API key + secret; role with Lead create/read/write.
+1. ERPNext: create integration user (e.g. `n8n.integration@alpstein-ai.ch`) with API key + secret; roles with Lead create/read/write and Communication create/read. In ERPNext v15, `Inbox User` grants Communication create permission.
 2. n8n UI → Credentials → Header Auth → name **`erpnext_crm_api`**.
 3. Set in `n8n/.env` (or compose env):
 

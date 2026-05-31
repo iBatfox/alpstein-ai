@@ -1056,6 +1056,17 @@ const body = {
   last_touch_term: touch.term ?? existing.last_touch_term,
 };
 
+for (const field of [
+  'instagram_username',
+  'instagram_display_name',
+  'telegram_username',
+  'telegram_language_code',
+]) {
+  if (body[field] == null && existing[field] != null) {
+    body[field] = existing[field];
+  }
+}
+
 if (touch.landing_page) body.landing_page = touch.landing_page;
 if (touch.referrer_url) body.referrer_url = touch.referrer_url;
 if (touch.gclid) body.gclid = touch.gclid;
@@ -1332,12 +1343,14 @@ return docs.map((doc) => {
 PARSE_ERPNEXT_COMMUNICATION_SEARCH = (
     ERPNEXT_HTTP_HELPERS
     + r"""// T-f2.3 — interpret ERPNext Communication search response
-const prep = $('Prepare ERPNext Communications').all()[$itemIndex].json;
-const item = $input.first().json;
+const prepItems = $('Prepare ERPNext Communications').all();
 
-if (isHttpFailure(item)) {
-  return [
-    {
+return $input.all().map((inputItem, index) => {
+  const prep = prepItems[index]?.json || {};
+  const item = inputItem.json;
+
+  if (isHttpFailure(item)) {
+    return {
       json: {
         ...prep,
         erpnext_communication_search_ok: false,
@@ -1346,15 +1359,13 @@ if (isHttpFailure(item)) {
         erpnext_communication_search_error: getHttpError(item) || 'ERPNext Communication search failed',
         erpnext_http_status: getHttpStatus(item),
       },
-    },
-  ];
-}
+    };
+  }
 
-const rows = getErpnextListRows(item);
-const existing = rows.length > 0 ? rows[0] : null;
+  const rows = getErpnextListRows(item);
+  const existing = rows.length > 0 ? rows[0] : null;
 
-return [
-  {
+  return {
     json: {
       ...prep,
       erpnext_communication_search_ok: true,
@@ -1363,16 +1374,14 @@ return [
       erpnext_communication_search_error: null,
       erpnext_http_status: getHttpStatus(item),
     },
-  },
-];
+  };
+});
 """
 )
 
 ERPNEXT_COMMUNICATION_RESULT_LOGGER = (
     ERPNEXT_HTTP_HELPERS
     + r"""// T-f2.3 — Communication sync result logger
-const item = $input.first().json;
-
 function truncate(value, max) {
   const text = String(value ?? '').trim();
   if (text.length <= max) return text;
@@ -1381,56 +1390,60 @@ function truncate(value, max) {
 
 function logAndReturn(log) {
   console.log(JSON.stringify(log));
-  return [{ json: log }];
+  return { json: log };
 }
 
-if (item.erpnext_communication_log_base) {
-  const base = item.erpnext_communication_log_base;
-  if (item.erpnext_communication_search_ok === false) {
-    return logAndReturn({
-      ...base,
-      outcome: 'search_failed',
-      erpnext_communication_id: null,
-      http_status: item.erpnext_http_status ?? getHttpStatus(item),
-      error_message: truncate(
-        item.erpnext_communication_search_error || 'ERPNext Communication search failed',
-        200
-      ),
-    });
-  }
-  if (item.erpnext_communication_exists === true) {
-    return logAndReturn({
-      ...base,
-      outcome: 'skipped_duplicate',
-      erpnext_communication_id: item.erpnext_communication_id || null,
-      http_status: item.erpnext_http_status ?? getHttpStatus(item),
-      error_message: null,
-    });
-  }
-}
+return $input.all().map((inputItem) => {
+  const item = inputItem.json;
 
-const body = unwrapHttpBody(item);
-const data = body?.data && typeof body.data === 'object' ? body.data : {};
-const communicationId = data.name || getErpnextDocName(item);
-const failed = isHttpFailure(item) || !communicationId;
-const log = {
-  component: 'erpnext_communication_sync',
-  channel: data.alpstein_channel || null,
-  correlation_id: null,
-  business_id: data.alpstein_business_id || null,
-  erpnext_lead_id: data.reference_name || null,
-  external_message_id: data.alpstein_external_message_id || null,
-  sender_type: data.alpstein_sender_type || null,
-  execution_id: $execution.id,
-  outcome: failed ? 'failed' : 'created',
-  erpnext_communication_id: communicationId || null,
-  http_status: getHttpStatus(item),
-  error_message: failed
-    ? truncate(getHttpError(item) || 'ERPNext response missing Communication name', 200)
-    : null,
-};
+  if (item.erpnext_communication_log_base) {
+    const base = item.erpnext_communication_log_base;
+    if (item.erpnext_communication_search_ok === false) {
+      return logAndReturn({
+        ...base,
+        outcome: 'search_failed',
+        erpnext_communication_id: null,
+        http_status: item.erpnext_http_status ?? getHttpStatus(item),
+        error_message: truncate(
+          item.erpnext_communication_search_error || 'ERPNext Communication search failed',
+          200
+        ),
+      });
+    }
+    if (item.erpnext_communication_exists === true) {
+      return logAndReturn({
+        ...base,
+        outcome: 'skipped_duplicate',
+        erpnext_communication_id: item.erpnext_communication_id || null,
+        http_status: item.erpnext_http_status ?? getHttpStatus(item),
+        error_message: null,
+      });
+    }
+  }
 
-return logAndReturn(log);
+  const body = unwrapHttpBody(item);
+  const data = body?.data && typeof body.data === 'object' ? body.data : {};
+  const communicationId = data.name || getErpnextDocName(item);
+  const failed = isHttpFailure(item) || !communicationId;
+  const log = {
+    component: 'erpnext_communication_sync',
+    channel: data.alpstein_channel || null,
+    correlation_id: null,
+    business_id: data.alpstein_business_id || null,
+    erpnext_lead_id: data.reference_name || null,
+    external_message_id: data.alpstein_external_message_id || null,
+    sender_type: data.alpstein_sender_type || null,
+    execution_id: $execution.id,
+    outcome: failed ? 'failed' : 'created',
+    erpnext_communication_id: communicationId || null,
+    http_status: getHttpStatus(item),
+    error_message: failed
+      ? truncate(getHttpError(item) || 'ERPNext response missing Communication name', 200)
+      : null,
+  };
+
+  return logAndReturn(log);
+});
 """
 )
 
