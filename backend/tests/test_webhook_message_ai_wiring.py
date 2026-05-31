@@ -170,6 +170,7 @@ def _base_service_mocks(
         )
     )
     message_service.find_last_outgoing_ai_message = AsyncMock(return_value=None)
+    message_service.find_outgoing_ai_for_inbound = AsyncMock(return_value=None)
 
     async def _create_lead(session, **kwargs) -> Lead:
         return Lead(

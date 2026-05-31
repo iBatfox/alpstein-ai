@@ -31,6 +31,23 @@ When AI produces `reply_to_customer` for Instagram, n8n calls backend
 - n8n skeleton: `IF Instagram Should Send Reply` uses `instagram_outbound_allowed` (not `is_duplicate`)
 - versionId: `f2.5-instagram-duplicate-outbound-v1` in builder (import to runtime required)
 
+## AI alignment (2026-05-31, pending review)
+
+**Root cause of generic Instagram reply:** duplicate re-ingress after Meta persist set `is_duplicate=true`; old `_ai_duplicate_for_incoming_replay` used `find_last_outgoing_ai_message()` (any prior turn) → AI skipped → `_duplicate_reply_to_customer()` returned stale text or `DUPLICATE_SAFE_ACKNOWLEDGMENT`.
+
+**Fix:**
+- `MessageService.find_outgoing_ai_for_inbound()` — per-inbound outbound via `message_traces`
+- Instagram duplicate re-ingress runs AI once unless outbound already linked to **this** inbound id
+- `mark_completed` on message trace when AI runs on duplicate re-ingress
+- Logs: `webhook_ai_reingress_decision`, `ai_reply_generation_started`
+
+**Tests:**
+- `tests/test_instagram_ai_reingress.py`
+- `tests/test_channel_ai_prompt_parity.py`
+- `scripts/n8n/test_instagram_reply_context.py`
+
+**Deploy:** backend image rebuilt/restarted (`alpstein_backend`).
+
 ## Out of scope
 
 - Commits (human review first)

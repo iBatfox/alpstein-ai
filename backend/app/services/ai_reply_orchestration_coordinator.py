@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime
 from typing import Any
@@ -11,6 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.schemas.ai_reply_orchestration import AiReplyOrchestrationOutcome
 from app.schemas.observability import ObservabilityContext
 from app.services.ai_reply_orchestration_service import AiReplyOrchestrationService
+
+logger = logging.getLogger(__name__)
+
+LOG_AI_GENERATION_STARTED = "ai_reply_generation_started"
+LOG_AI_GENERATION_SKIPPED_DUPLICATE = "ai_reply_generation_skipped_duplicate"
 
 REASON_DUPLICATE_INCOMING_MESSAGE = "duplicate_incoming_message"
 REASON_AI_CHAIN_EXECUTED = "ai_chain_executed"
@@ -43,6 +49,14 @@ class AiReplyOrchestrationCoordinator:
         observability: ObservabilityContext | None = None,
     ) -> AiReplyOrchestrationOutcome:
         if is_duplicate:
+            logger.info(
+                LOG_AI_GENERATION_SKIPPED_DUPLICATE,
+                extra={
+                    "channel": channel,
+                    "template_key": template_key,
+                    "reason": REASON_DUPLICATE_INCOMING_MESSAGE,
+                },
+            )
             return AiReplyOrchestrationOutcome(
                 is_duplicate=True,
                 ai_executed=False,
@@ -50,6 +64,14 @@ class AiReplyOrchestrationCoordinator:
                 ai_reply=None,
             )
 
+        logger.info(
+            LOG_AI_GENERATION_STARTED,
+            extra={
+                "channel": channel,
+                "template_key": template_key,
+                "reason": REASON_AI_CHAIN_EXECUTED,
+            },
+        )
         ai_reply, langfuse_trace_id = await self.orchestration_service.generate_reply(
             session,
             tenant_id=tenant_id,

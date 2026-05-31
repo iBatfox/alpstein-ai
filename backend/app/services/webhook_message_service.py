@@ -1,3 +1,4 @@
+import logging
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
@@ -59,6 +60,10 @@ from app.services.message_trace_service import (
 )
 from app.services.notification_policy_service import NotificationPolicyService
 from app.services.tenant_context_validator import validate_tenant_context
+
+logger = logging.getLogger(__name__)
+
+LOG_AI_REINGRESS_DECISION = "webhook_ai_reingress_decision"
 
 DUPLICATE_SAFE_ACKNOWLEDGMENT = (
     "Thanks for your message. Our team will get back to you shortly."
@@ -350,9 +355,19 @@ class WebhookMessageService:
                 session,
                 tenant_id=tenant_id,
                 business_id=business.id,
-                conversation_id=conversation.id,
                 channel=channel,
                 persisted_duplicate=save_result.is_duplicate,
+                incoming_message=save_result.message,
+            )
+            logger.info(
+                LOG_AI_REINGRESS_DECISION,
+                extra={
+                    "channel": channel,
+                    "persisted_duplicate": save_result.is_duplicate,
+                    "ai_is_duplicate": ai_is_duplicate,
+                    "inbound_message_id": str(save_result.message.id),
+                    "external_message_id": save_result.message.external_message_id,
+                },
             )
             reply_resolution = await self._resolve_reply_to_customer(
                 session,
@@ -370,6 +385,19 @@ class WebhookMessageService:
                 observability=observability,
                 flow_id=flow.id,
             )
+            if not ai_is_duplicate and reply_resolution.outbound_message_id is not None:
+                await self.message_trace_service.mark_completed(
+                    session,
+                    message_trace,
+                    outbound_message_id=reply_resolution.outbound_message_id,
+                    external_trace_id=str(observability.correlation_id),
+                    langfuse_trace_id=reply_resolution.langfuse_trace_id,
+                    trace_metadata=build_trace_metadata(
+                        correlation_id=observability.correlation_id,
+                        n8n_execution_id=observability.n8n_execution_id,
+                        prompt_run_id=reply_resolution.prompt_run_id,
+                    ),
+                )
             trace_id, trace_status, trace_correlation = _trace_fields_for_response(
                 message_trace,
                 observability=observability,
@@ -718,6 +746,7 @@ class WebhookMessageService:
                 tenant_id=tenant_id,
                 business_id=business.id,
                 conversation_id=conversation.id,
+                inbound_message_id=incoming_message.id,
             )
             return _ReplyResolution(
                 reply_to_customer=reply_text,
@@ -1010,7 +1039,18 @@ class WebhookMessageService:
         tenant_id: uuid.UUID,
         business_id: uuid.UUID,
         conversation_id: uuid.UUID,
+        inbound_message_id: uuid.UUID | None = None,
     ) -> str:
+        if inbound_message_id is not None:
+            inbound_reply = await self.message_service.find_outgoing_ai_for_inbound(
+                session,
+                tenant_id=tenant_id,
+                business_id=business_id,
+                inbound_message_id=inbound_message_id,
+            )
+            if inbound_reply is not None and inbound_reply.message_text.strip():
+                return inbound_reply.message_text.strip()
+
         last_ai_message = await self.message_service.find_last_outgoing_ai_message(
             session,
             tenant_id=tenant_id,
@@ -1027,24 +1067,23 @@ class WebhookMessageService:
         *,
         tenant_id: uuid.UUID,
         business_id: uuid.UUID,
-        conversation_id: uuid.UUID,
         channel: str,
         persisted_duplicate: bool,
+        incoming_message: Message,
     ) -> bool:
         """Skip AI on true duplicates; allow first AI pass after Meta persist + n8n re-ingress."""
         if not persisted_duplicate:
             return False
         if channel != "instagram":
             return True
-        last_ai_message = await self.message_service.find_last_outgoing_ai_message(
+
+        inbound_reply = await self.message_service.find_outgoing_ai_for_inbound(
             session,
             tenant_id=tenant_id,
             business_id=business_id,
-            conversation_id=conversation_id,
+            inbound_message_id=incoming_message.id,
         )
-        if last_ai_message is None:
-            return False
-        return True
+        return inbound_reply is not None
 
 
 def _ai_reply_text_is_usable(ai_reply: AiReplyResult) -> bool:

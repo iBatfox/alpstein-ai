@@ -246,6 +246,42 @@ class MessageService:
         )
         return result.scalar_one_or_none()
 
+    async def find_outgoing_ai_for_inbound(
+        self,
+        session: AsyncSession,
+        *,
+        tenant_id: uuid.UUID,
+        business_id: uuid.UUID,
+        inbound_message_id: uuid.UUID,
+    ) -> Message | None:
+        """Return the AI outbound message linked to a specific inbound message, if any."""
+        from app.models.message_trace import MessageTrace
+
+        trace_result = await session.execute(
+            select(MessageTrace.outbound_message_id)
+            .where(
+                MessageTrace.tenant_id == tenant_id,
+                MessageTrace.business_id == business_id,
+                MessageTrace.inbound_message_id == inbound_message_id,
+                MessageTrace.outbound_message_id.is_not(None),
+            )
+            .limit(1)
+        )
+        outbound_id = trace_result.scalar_one_or_none()
+        if outbound_id is None:
+            return None
+
+        message_result = await session.execute(
+            select(Message).where(
+                Message.tenant_id == tenant_id,
+                Message.business_id == business_id,
+                Message.id == outbound_id,
+                Message.sender_type == "ai",
+                Message.direction == "outgoing",
+            )
+        )
+        return message_result.scalar_one_or_none()
+
     async def load_recent_conversation_history(
         self,
         session: AsyncSession,
