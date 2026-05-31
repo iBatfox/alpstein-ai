@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -10,6 +10,7 @@ from httpx import ASGITransport, AsyncClient
 from app.main import app
 from app.services.instagram_client import InstagramApiError
 from app.services.instagram_outbound_service import (
+    INSTAGRAM_OUTBOUND_DUPLICATE_SKIPPED,
     InstagramOutboundDisabledError,
     InstagramOutboundSendResult,
     InstagramOutboundService,
@@ -58,7 +59,9 @@ def mock_outbound_service(monkeypatch):
 
 @pytest.mark.anyio
 async def test_instagram_send_message_disabled(mock_outbound_service) -> None:
-    mock_outbound_service.send_customer_reply.side_effect = InstagramOutboundDisabledError()
+    mock_outbound_service.send_customer_reply = AsyncMock(
+        side_effect=InstagramOutboundDisabledError(),
+    )
 
     async with AsyncClient(
         transport=ASGITransport(app=app),
@@ -125,10 +128,30 @@ async def test_instagram_send_message_validation_message_too_long() -> None:
 
 
 @pytest.mark.anyio
+async def test_instagram_send_message_validation_missing_external_inbound_id() -> None:
+    body = _valid_body()
+    del body["external_inbound_message_id"]
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        response = await client.post(
+            "/api/v1/channels/instagram/send-message",
+            json=body,
+            headers=_auth_headers(),
+        )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.anyio
 async def test_instagram_send_message_success(mock_outbound_service) -> None:
-    mock_outbound_service.send_customer_reply.return_value = InstagramOutboundSendResult(
-        provider_message_id="mid.sent.123",
-        status="sent",
+    mock_outbound_service.send_customer_reply = AsyncMock(
+        return_value=InstagramOutboundSendResult(
+            provider_message_id="mid.sent.123",
+            status="sent",
+        ),
     )
 
     async with AsyncClient(
@@ -151,9 +174,36 @@ async def test_instagram_send_message_success(mock_outbound_service) -> None:
 
 
 @pytest.mark.anyio
+async def test_instagram_send_message_skips_duplicate_outbound(mock_outbound_service) -> None:
+    mock_outbound_service.send_customer_reply = AsyncMock(
+        return_value=InstagramOutboundSendResult(
+            provider_message_id=None,
+            status="skipped",
+            skip_code=INSTAGRAM_OUTBOUND_DUPLICATE_SKIPPED,
+        ),
+    )
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        response = await client.post(
+            "/api/v1/channels/instagram/send-message",
+            json=_valid_body(),
+            headers=_auth_headers(),
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["success"] is True
+    assert body["data"]["status"] == "skipped"
+    assert body["data"]["skip_code"] == INSTAGRAM_OUTBOUND_DUPLICATE_SKIPPED
+
+
+@pytest.mark.anyio
 async def test_instagram_send_message_meta_error(mock_outbound_service) -> None:
-    mock_outbound_service.send_customer_reply.side_effect = InstagramApiError(
-        "Unsupported post request.",
+    mock_outbound_service.send_customer_reply = AsyncMock(
+        side_effect=InstagramApiError("Unsupported post request."),
     )
 
     async with AsyncClient(

@@ -102,6 +102,7 @@ class WebhookMessageResponseData(BaseModel):
     flow: WebhookFlowSummary
     trace: WebhookTraceSummary | None = None
     delivery: WebhookDeliverySummary | None = None
+    instagram_outbound_allowed: bool | None = None
     lead: WebhookLeadSummary | None = None
     notification: WebhookNotificationPayload | None = None
 
@@ -130,6 +131,7 @@ def build_webhook_message_success_envelope(
     delivery_id: str | None = None,
     delivery_status: str | None = None,
     outbound_message_id: str | None = None,
+    instagram_outbound_allowed: bool | None = None,
     lead_updated: bool = False,
     lead: WebhookLeadSummary | None = None,
     notification: WebhookNotificationPayload | None = None,
@@ -164,6 +166,7 @@ def build_webhook_message_success_envelope(
                 delivery_status=delivery_status,
                 outbound_message_id=outbound_message_id,
             ),
+            instagram_outbound_allowed=instagram_outbound_allowed,
             lead=lead,
             notification=notification,
         ),
@@ -217,6 +220,7 @@ def serialize_webhook_message_success(
     delivery_id: str | None = None,
     delivery_status: str | None = None,
     outbound_message_id: str | None = None,
+    instagram_outbound_allowed: bool | None = None,
     lead_updated: bool = False,
     lead: WebhookLeadSummary | None = None,
     notification: WebhookNotificationPayload | None = None,
@@ -239,6 +243,7 @@ def serialize_webhook_message_success(
         delivery_id=delivery_id,
         delivery_status=delivery_status,
         outbound_message_id=outbound_message_id,
+        instagram_outbound_allowed=instagram_outbound_allowed,
         lead=lead,
         notification=notification,
     ).model_dump(mode="json", exclude_none=True)

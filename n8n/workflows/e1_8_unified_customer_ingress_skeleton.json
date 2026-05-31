@@ -237,7 +237,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// T-IG-OUTBOUND-REPLY — shape Instagram outbound context after POST Backend\nconst backend = $('POST Backend').first().json;\nconst normalized = $('Add Business Context').first().json;\nconst ctx = normalized.instagram_context || {};\nconst reply =\n  backend.success === true && backend.data\n    ? (backend.data.reply_to_customer || '').trim()\n    : '';\nconst isDuplicate =\n  backend.success === true &&\n  backend.data &&\n  backend.data.message &&\n  backend.data.message.is_duplicate === true;\n\nreturn [\n  {\n    json: {\n      channel: 'instagram',\n      reply_to_customer: reply,\n      is_duplicate: isDuplicate,\n      correlation_id: normalized.correlation_id,\n      business_id: normalized.business_id,\n      external_message_id: normalized.message?.external_message_id || null,\n      instagram_user_id:\n        ctx.instagram_user_id || normalized.customer?.external_customer_id || null,\n    },\n  },\n];"
+        "jsCode": "// T-IG-OUTBOUND-REPLY — shape Instagram outbound context after POST Backend\nconst backend = $('POST Backend').first().json;\nconst normalized = $('Add Business Context').first().json;\nconst ctx = normalized.instagram_context || {};\nconst reply =\n  backend.success === true && backend.data\n    ? (backend.data.reply_to_customer || '').trim()\n    : '';\nconst isDuplicate =\n  backend.success === true &&\n  backend.data &&\n  backend.data.message &&\n  backend.data.message.is_duplicate === true;\nconst instagramOutboundAllowed =\n  backend.success === true &&\n  backend.data &&\n  backend.data.instagram_outbound_allowed === true;\n\nreturn [\n  {\n    json: {\n      channel: 'instagram',\n      reply_to_customer: reply,\n      is_duplicate: isDuplicate,\n      instagram_outbound_allowed: instagramOutboundAllowed,\n      correlation_id: normalized.correlation_id,\n      business_id: normalized.business_id,\n      external_message_id: normalized.message?.external_message_id || null,\n      instagram_user_id:\n        ctx.instagram_user_id || normalized.customer?.external_customer_id || null,\n    },\n  },\n];"
       },
       "id": "ig180011-0000-4000-8000-000000000001",
       "name": "Prepare Instagram Reply Context",
@@ -301,12 +301,21 @@
               }
             },
             {
-              "id": "cond-ig-not-duplicate",
-              "leftValue": "={{ $json.is_duplicate }}",
+              "id": "cond-ig-outbound-allowed",
+              "leftValue": "={{ $json.instagram_outbound_allowed }}",
               "rightValue": true,
               "operator": {
                 "type": "boolean",
-                "operation": "notEquals"
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "cond-ig-has-external-message-id",
+              "leftValue": "={{ $json.external_message_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
               }
             }
           ],
@@ -374,7 +383,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// T-IG-OUTBOUND-REPLY — unified Instagram outbound result log\nconst normalized = $('Add Business Context').first().json;\nconst ctxItem = $('Prepare Instagram Reply Context').first().json;\nconst sendItem = $input.first()?.json || {};\n\nlet outcome = 'instagram_reply_failed';\nif ($env.ALPSTEIN_INSTAGRAM_OUTBOUND_ENABLED !== 'true') {\n  outcome = 'instagram_reply_disabled';\n} else if (ctxItem.is_duplicate === true) {\n  outcome = 'instagram_reply_skipped_duplicate';\n} else if (!(ctxItem.reply_to_customer || '').trim()) {\n  outcome = 'instagram_reply_skipped_no_reply';\n} else if (sendItem.success === true && sendItem.data) {\n  outcome = 'instagram_reply_sent';\n} else if (sendItem.error?.code === 'INSTAGRAM_OUTBOUND_DISABLED') {\n  outcome = 'instagram_reply_disabled';\n}\n\nconst log = {\n  component: 'instagram_reply',\n  outcome,\n  correlation_id: ctxItem.correlation_id || normalized.correlation_id,\n  business_id: ctxItem.business_id || normalized.business_id,\n  external_message_id: ctxItem.external_message_id || normalized.message?.external_message_id || null,\n  provider_message_id: sendItem.data?.provider_message_id || null,\n  error_code: sendItem.error?.code || null,\n  error_message: sendItem.error?.message\n    ? String(sendItem.error.message).slice(0, 200)\n    : null,\n  execution_id: $execution.id,\n};\n\nconsole.log(JSON.stringify(log));\nreturn [{ json: log }];"
+        "jsCode": "// T-IG-OUTBOUND-REPLY — unified Instagram outbound result log\nconst normalized = $('Add Business Context').first().json;\nconst ctxItem = $('Prepare Instagram Reply Context').first().json;\nconst sendItem = $input.first()?.json || {};\n\nlet outcome = 'instagram_reply_failed';\nif ($env.ALPSTEIN_INSTAGRAM_OUTBOUND_ENABLED !== 'true') {\n  outcome = 'instagram_reply_disabled';\n} else if (sendItem.data?.status === 'skipped') {\n  outcome = 'instagram_reply_skipped_already_sent';\n} else if (!(ctxItem.reply_to_customer || '').trim()) {\n  outcome = 'instagram_reply_skipped_no_reply';\n} else if (sendItem.success === true && sendItem.data) {\n  outcome = 'instagram_reply_sent';\n} else if (sendItem.error?.code === 'INSTAGRAM_OUTBOUND_DISABLED') {\n  outcome = 'instagram_reply_disabled';\n}\n\nconst log = {\n  component: 'instagram_reply',\n  outcome,\n  correlation_id: ctxItem.correlation_id || normalized.correlation_id,\n  business_id: ctxItem.business_id || normalized.business_id,\n  external_message_id: ctxItem.external_message_id || normalized.message?.external_message_id || null,\n  provider_message_id: sendItem.data?.provider_message_id || null,\n  error_code: sendItem.error?.code || null,\n  error_message: sendItem.error?.message\n    ? String(sendItem.error.message).slice(0, 200)\n    : null,\n  execution_id: $execution.id,\n};\n\nconsole.log(JSON.stringify(log));\nreturn [{ json: log }];"
       },
       "id": "ig180012-0000-4000-8000-000000000001",
       "name": "Instagram Reply Result Logger",
@@ -1201,7 +1210,7 @@
   "settings": {
     "executionOrder": "v1"
   },
-  "versionId": "f2.4-instagram-outbound-v2",
+  "versionId": "f2.5-instagram-duplicate-outbound-v1",
   "meta": {
     "templateCredsSetupCompleted": false
   },

@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.config import Settings, settings
 from app.schemas.instagram_outbound import (
     InstagramSendMessageData,
@@ -15,6 +17,7 @@ from app.services.instagram_client import (
     InstagramGraphClient,
     InstagramSendResult,
 )
+from app.services.instagram_outbound_dedup_service import InstagramOutboundDedupService
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +25,11 @@ LOG_STARTED = "instagram_outbound_send_started"
 LOG_SUCCEEDED = "instagram_outbound_send_succeeded"
 LOG_FAILED = "instagram_outbound_send_failed"
 LOG_SKIPPED_DISABLED = "instagram_outbound_send_skipped_disabled"
+LOG_SKIPPED_DUPLICATE = "instagram_outbound_send_skipped_duplicate"
+
+INSTAGRAM_OUTBOUND_DUPLICATE_SKIPPED = "INSTAGRAM_OUTBOUND_DUPLICATE_SKIPPED"
+OUTBOUND_STATUS_SENT = "sent"
+OUTBOUND_STATUS_SKIPPED = "skipped"
 
 
 class InstagramOutboundDisabledError(Exception):
@@ -33,8 +41,9 @@ class InstagramOutboundDisabledError(Exception):
 
 @dataclass(frozen=True)
 class InstagramOutboundSendResult:
-    provider_message_id: str
-    status: str = "sent"
+    provider_message_id: str | None
+    status: str = OUTBOUND_STATUS_SENT
+    skip_code: str | None = None
 
 
 class InstagramOutboundService:
@@ -43,17 +52,20 @@ class InstagramOutboundService:
         *,
         app_settings: Settings | None = None,
         graph_client: InstagramGraphClient | None = None,
+        dedup_service: InstagramOutboundDedupService | None = None,
     ) -> None:
         self._settings = app_settings or settings
         self._graph_client = graph_client or InstagramGraphClient(
             app_settings=self._settings,
         )
+        self._dedup_service = dedup_service or InstagramOutboundDedupService()
 
     def is_enabled(self) -> bool:
         return self._settings.instagram_outbound_enabled
 
-    def send_customer_reply(
+    async def send_customer_reply(
         self,
+        session: AsyncSession,
         request: InstagramSendMessageRequest,
     ) -> InstagramOutboundSendResult:
         log_extra = _log_extra(request)
@@ -61,6 +73,19 @@ class InstagramOutboundService:
         if not self.is_enabled():
             logger.info(LOG_SKIPPED_DISABLED, extra=log_extra)
             raise InstagramOutboundDisabledError()
+
+        acquired = await self._dedup_service.try_acquire_send_slot(
+            session,
+            business_external_id=request.business_id,
+            external_inbound_message_id=request.external_inbound_message_id,
+        )
+        if not acquired:
+            logger.info(LOG_SKIPPED_DUPLICATE, extra=log_extra)
+            return InstagramOutboundSendResult(
+                provider_message_id=None,
+                status=OUTBOUND_STATUS_SKIPPED,
+                skip_code=INSTAGRAM_OUTBOUND_DUPLICATE_SKIPPED,
+            )
 
         logger.info(LOG_STARTED, extra=log_extra)
 
@@ -71,6 +96,11 @@ class InstagramOutboundService:
                 messaging_type="RESPONSE",
             )
         except InstagramClientError as exc:
+            await self._dedup_service.release_send_slot(
+                session,
+                business_external_id=request.business_id,
+                external_inbound_message_id=request.external_inbound_message_id,
+            )
             logger.warning(
                 LOG_FAILED,
                 extra={
@@ -81,20 +111,29 @@ class InstagramOutboundService:
             )
             raise
 
+        mapped = _map_send_result(send_result)
+        await self._dedup_service.record_provider_message_id(
+            session,
+            business_external_id=request.business_id,
+            external_inbound_message_id=request.external_inbound_message_id,
+            provider_message_id=mapped.provider_message_id or "",
+        )
+        await session.commit()
+
         logger.info(
             LOG_SUCCEEDED,
             extra={
                 **log_extra,
-                "provider_message_id": send_result.message_id,
+                "provider_message_id": mapped.provider_message_id,
             },
         )
-        return _map_send_result(send_result)
+        return mapped
 
 
 def _map_send_result(result: InstagramSendResult) -> InstagramOutboundSendResult:
     return InstagramOutboundSendResult(
         provider_message_id=result.message_id,
-        status="sent",
+        status=OUTBOUND_STATUS_SENT,
     )
 
 
@@ -102,6 +141,7 @@ def to_response_data(result: InstagramOutboundSendResult) -> InstagramSendMessag
     return InstagramSendMessageData(
         provider_message_id=result.provider_message_id,
         status=result.status,
+        skip_code=result.skip_code,
     )
 
 

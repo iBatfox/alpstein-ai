@@ -12,9 +12,9 @@ class InstagramSendMessageRequest(BaseModel):
     recipient_id: str = Field(min_length=1)
     message_text: str = Field(min_length=1, max_length=INSTAGRAM_OUTBOUND_MESSAGE_MAX_LENGTH)
     correlation_id: str | None = None
-    external_inbound_message_id: str | None = None
+    external_inbound_message_id: str = Field(min_length=1)
 
-    @field_validator("business_id", "recipient_id", "message_text")
+    @field_validator("business_id", "recipient_id", "message_text", "external_inbound_message_id")
     @classmethod
     def strip_non_empty(cls, value: str) -> str:
         cleaned = value.strip()
@@ -24,8 +24,9 @@ class InstagramSendMessageRequest(BaseModel):
 
 
 class InstagramSendMessageData(BaseModel):
-    provider_message_id: str
+    provider_message_id: str | None = None
     status: str = "sent"
+    skip_code: str | None = None
 
 
 class InstagramSendMessageResponse(BaseModel):

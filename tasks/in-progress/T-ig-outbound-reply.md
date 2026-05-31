@@ -23,6 +23,13 @@ When AI produces `reply_to_customer` for Instagram, n8n calls backend
 ## Tests
 
 - `pytest tests/test_instagram_client.py tests/test_instagram_outbound*.py`
+- `pytest tests/test_instagram_webhook_outbound_reingress.py` (duplicate re-ingress + dedup)
+
+## Done (2026-05-31, pending review)
+
+- Backend: `instagram_outbound_allowed` on webhook response; `instagram_outbound_sends` dedup table (migration `0022`)
+- n8n skeleton: `IF Instagram Should Send Reply` uses `instagram_outbound_allowed` (not `is_duplicate`)
+- versionId: `f2.5-instagram-duplicate-outbound-v1` in builder (import to runtime required)
 
 ## Out of scope
 

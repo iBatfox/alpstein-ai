@@ -219,6 +219,7 @@ async def post_webhook_message(
             if isinstance(getattr(result, "outbound_message_id", None), uuid.UUID)
             else None
         ),
+        instagram_outbound_allowed=getattr(result, "instagram_outbound_allowed", None),
         lead=result.lead,
         notification=result.notification,
     )

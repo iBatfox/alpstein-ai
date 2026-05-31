@@ -237,8 +237,8 @@ const sendItem = $input.first()?.json || {};
 let outcome = 'instagram_reply_failed';
 if ($env.ALPSTEIN_INSTAGRAM_OUTBOUND_ENABLED !== 'true') {
   outcome = 'instagram_reply_disabled';
-} else if (ctxItem.is_duplicate === true) {
-  outcome = 'instagram_reply_skipped_duplicate';
+} else if (sendItem.data?.status === 'skipped') {
+  outcome = 'instagram_reply_skipped_already_sent';
 } else if (!(ctxItem.reply_to_customer || '').trim()) {
   outcome = 'instagram_reply_skipped_no_reply';
 } else if (sendItem.success === true && sendItem.data) {
@@ -277,6 +277,10 @@ const isDuplicate =
   backend.data &&
   backend.data.message &&
   backend.data.message.is_duplicate === true;
+const instagramOutboundAllowed =
+  backend.success === true &&
+  backend.data &&
+  backend.data.instagram_outbound_allowed === true;
 
 return [
   {
@@ -284,6 +288,7 @@ return [
       channel: 'instagram',
       reply_to_customer: reply,
       is_duplicate: isDuplicate,
+      instagram_outbound_allowed: instagramOutboundAllowed,
       correlation_id: normalized.correlation_id,
       business_id: normalized.business_id,
       external_message_id: normalized.message?.external_message_id || null,
@@ -1418,10 +1423,16 @@ def main() -> None:
                             "operator": {"type": "string", "operation": "notEmpty"},
                         },
                         {
-                            "id": "cond-ig-not-duplicate",
-                            "leftValue": "={{ $json.is_duplicate }}",
+                            "id": "cond-ig-outbound-allowed",
+                            "leftValue": "={{ $json.instagram_outbound_allowed }}",
                             "rightValue": True,
-                            "operator": {"type": "boolean", "operation": "notEquals"},
+                            "operator": {"type": "boolean", "operation": "equals"},
+                        },
+                        {
+                            "id": "cond-ig-has-external-message-id",
+                            "leftValue": "={{ $json.external_message_id }}",
+                            "rightValue": "",
+                            "operator": {"type": "string", "operation": "notEmpty"},
                         },
                     ],
                     "combinator": "and",
@@ -1917,7 +1928,7 @@ def main() -> None:
         "connections": connections,
         "active": True,
         "settings": {"executionOrder": "v1"},
-        "versionId": "f2.4-instagram-outbound-v2",
+        "versionId": "f2.5-instagram-duplicate-outbound-v1",
         "meta": {"templateCredsSetupCompleted": False},
         "tags": [
             {

@@ -33,7 +33,9 @@ from app.services.customer_service import CustomerService
 from app.services.lead_service import LeadService
 from app.services.lead_signal_detection_service import LeadSignalDetectionService
 from app.services.message_service import MessageService
+from app.core.config import settings
 from app.services.delivery_visibility_service import DeliveryVisibilityService
+from app.services.instagram_outbound_dedup_service import InstagramOutboundDedupService
 from app.services.inbound_processing_lock_service import InboundProcessingLockService
 from app.services.message_idempotency import build_inbound_idempotency_key
 from app.models.replay_event import (
@@ -86,6 +88,7 @@ class WebhookMessageProcessResult:
     delivery_id: uuid.UUID | None = None
     delivery_status: str | None = None
     outbound_message_id: uuid.UUID | None = None
+    instagram_outbound_allowed: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -127,6 +130,7 @@ class WebhookMessageService:
         adapter_monitoring_service: AdapterMonitoringService | None = None,
         rate_limit_service: RateLimitService | None = None,
         spam_protection_service: SpamProtectionService | None = None,
+        instagram_outbound_dedup_service: InstagramOutboundDedupService | None = None,
     ) -> None:
         self.business_service = business_service or BusinessService()
         self.customer_service = customer_service or CustomerService()
@@ -162,6 +166,33 @@ class WebhookMessageService:
         )
         self.rate_limit_service = rate_limit_service or RateLimitService()
         self.spam_protection_service = spam_protection_service or SpamProtectionService()
+        self.instagram_outbound_dedup_service = (
+            instagram_outbound_dedup_service or InstagramOutboundDedupService()
+        )
+
+    async def _instagram_outbound_allowed_for_response(
+        self,
+        session: AsyncSession,
+        *,
+        channel: str,
+        business_external_id: str,
+        external_message_id: str | None,
+        reply_to_customer: str,
+    ) -> bool | None:
+        if channel != "instagram":
+            return None
+        if not settings.instagram_outbound_enabled:
+            return False
+        reply = (reply_to_customer or "").strip()
+        inbound_id = (external_message_id or "").strip()
+        if not reply or not inbound_id:
+            return False
+        already_sent = await self.instagram_outbound_dedup_service.is_already_sent(
+            session,
+            business_external_id=business_external_id,
+            external_inbound_message_id=inbound_id,
+        )
+        return not already_sent
 
     async def _should_reject_ingress(
         self,
@@ -343,6 +374,13 @@ class WebhookMessageService:
                 message_trace,
                 observability=observability,
             )
+            instagram_outbound_allowed = await self._instagram_outbound_allowed_for_response(
+                session,
+                channel=channel,
+                business_external_id=business.external_id,
+                external_message_id=request.message.external_message_id,
+                reply_to_customer=reply_resolution.reply_to_customer,
+            )
             return WebhookMessageProcessResult(
                 conversation=conversation,
                 message=save_result.message,
@@ -357,6 +395,7 @@ class WebhookMessageService:
                 message_trace_id=trace_id,
                 processing_status=trace_status,
                 correlation_id=trace_correlation,
+                instagram_outbound_allowed=instagram_outbound_allowed,
             )
 
         await self.rate_limit_service.consume_ingress_request(
@@ -539,6 +578,13 @@ class WebhookMessageService:
         delivery_id, delivery_status, outbound_id = _delivery_fields_for_response(
             delivery_event,
         )
+        instagram_outbound_allowed = await self._instagram_outbound_allowed_for_response(
+            session,
+            channel=channel,
+            business_external_id=business.external_id,
+            external_message_id=request.message.external_message_id,
+            reply_to_customer=reply_resolution.reply_to_customer,
+        )
         return WebhookMessageProcessResult(
             conversation=conversation,
             message=save_result.message,
@@ -556,6 +602,7 @@ class WebhookMessageService:
             delivery_id=delivery_id,
             delivery_status=delivery_status,
             outbound_message_id=outbound_id,
+            instagram_outbound_allowed=instagram_outbound_allowed,
         )
 
     async def _process_lead_for_incoming_message(
@@ -907,6 +954,13 @@ class WebhookMessageService:
             message_trace,
             observability=observability,
         )
+        instagram_outbound_allowed = await self._instagram_outbound_allowed_for_response(
+            session,
+            channel=channel,
+            business_external_id=business.external_id,
+            external_message_id=message.external_message_id,
+            reply_to_customer=reply_resolution.reply_to_customer,
+        )
         return WebhookMessageProcessResult(
             conversation=conversation,
             message=message,
@@ -921,6 +975,7 @@ class WebhookMessageService:
             message_trace_id=trace_id,
             processing_status=trace_status,
             correlation_id=trace_correlation,
+            instagram_outbound_allowed=instagram_outbound_allowed,
         )
 
     async def _create_pending_delivery_if_outbound(
