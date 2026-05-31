@@ -204,7 +204,23 @@ class MessageTraceService:
                 inbound_message_id=inbound_message_id,
             )
             if existing is None:
-                return None
+                # Meta-first Instagram persist may leave message without a trace;
+                # create one so re-ingress can link outbound and complete safely.
+                return await self.get_or_create_for_inbound(
+                    session,
+                    tenant_id=tenant_id,
+                    business_id=business_id,
+                    flow_id=flow_id,
+                    conversation_id=conversation_id,
+                    inbound_message_id=inbound_message_id,
+                    channel=channel,
+                    flow_key=flow_key,
+                    external_conversation_id=external_conversation_id,
+                    external_message_id=external_message_id,
+                    idempotency_key=idempotency_key,
+                    trace_metadata=trace_metadata,
+                    external_trace_id=external_trace_id,
+                )
             return await self.record_duplicate_retry(session, existing)
 
         trace = await self.get_or_create_for_inbound(
@@ -238,13 +254,15 @@ class MessageTraceService:
     async def mark_completed(
         self,
         session: AsyncSession,
-        trace: MessageTrace,
+        trace: MessageTrace | None,
         *,
         outbound_message_id: uuid.UUID | None = None,
         external_trace_id: str | None = None,
         langfuse_trace_id: str | None = None,
         trace_metadata: dict[str, Any] | None = None,
-    ) -> MessageTrace:
+    ) -> MessageTrace | None:
+        if trace is None:
+            return None
         trace.status = TRACE_STATUS_COMPLETED
         if outbound_message_id is not None:
             trace.outbound_message_id = outbound_message_id

@@ -99,6 +99,62 @@ async def test_record_inbound_turn_duplicate_marks_skipped_without_create():
 
 
 @pytest.mark.anyio
+async def test_record_inbound_turn_duplicate_creates_trace_when_missing():
+    service = MessageTraceService()
+    session = MagicMock()
+    nested = AsyncMock()
+    nested.__aenter__ = AsyncMock(return_value=None)
+    nested.__aexit__ = AsyncMock(return_value=None)
+    session.begin_nested.return_value = nested
+    session.flush = AsyncMock()
+
+    tenant_id = uuid.uuid4()
+    business_id = uuid.uuid4()
+    flow_id = uuid.uuid4()
+    conversation_id = uuid.uuid4()
+    inbound_message_id = uuid.uuid4()
+
+    with patch.object(
+        service,
+        "find_by_inbound_message_id",
+        new_callable=AsyncMock,
+        return_value=None,
+    ):
+        result = await service.record_inbound_turn(
+            session,
+            tenant_id=tenant_id,
+            business_id=business_id,
+            flow_id=flow_id,
+            conversation_id=conversation_id,
+            inbound_message_id=inbound_message_id,
+            channel="instagram",
+            is_duplicate=True,
+            external_message_id="mid.ig.no-trace",
+        )
+
+    assert isinstance(result, MessageTrace)
+    assert result.status == TRACE_STATUS_ACCEPTED
+    assert result.inbound_message_id == inbound_message_id
+    session.add.assert_called_once()
+
+
+@pytest.mark.anyio
+async def test_mark_completed_no_op_when_trace_is_none():
+    service = MessageTraceService()
+    session = MagicMock()
+    session.flush = AsyncMock()
+
+    result = await service.mark_completed(
+        session,
+        None,
+        outbound_message_id=uuid.uuid4(),
+    )
+
+    assert result is None
+    session.flush.assert_not_awaited()
+
+
+@pytest.mark.anyio
 async def test_mark_completed_links_outbound_and_observability_ids():
     service = MessageTraceService()
     trace = MessageTrace(

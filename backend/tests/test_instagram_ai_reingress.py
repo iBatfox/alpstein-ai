@@ -273,3 +273,85 @@ async def test_telegram_duplicate_still_skips_ai_chain(
     )
     assert coordinator_kwargs["is_duplicate"] is True
     assert coordinator_kwargs["channel"] == "telegram"
+
+
+@pytest.mark.anyio
+async def test_instagram_reingress_succeeds_when_no_message_trace_exists(
+    business: Business,
+    conversation: Conversation,
+) -> None:
+    """Meta-first persist + n8n re-ingress may have no trace; must not crash mark_completed."""
+    tenant_id = business.tenant_id
+    incoming = Message(
+        id=uuid.uuid4(),
+        tenant_id=tenant_id,
+        business_id=business.id,
+        conversation_id=conversation.id,
+        sender_type="customer",
+        direction="incoming",
+        channel="instagram",
+        message_text="Сколько стоит бот для Instagram?",
+        external_message_id="mid.ig.reingress.no-trace",
+    )
+    outbound = Message(
+        id=uuid.uuid4(),
+        tenant_id=tenant_id,
+        business_id=business.id,
+        conversation_id=conversation.id,
+        sender_type="ai",
+        direction="outgoing",
+        channel="instagram",
+        message_text="Instagram bot pricing starts from a scoped discovery call.",
+    )
+
+    mocks = _base_service_mocks(
+        business=business,
+        customer=MagicMock(id=uuid.uuid4()),
+        conversation=conversation,
+        incoming_message=incoming,
+        is_duplicate=True,
+    )
+    mocks["message_service"].find_outgoing_ai_for_inbound = AsyncMock(return_value=None)
+    mocks["message_service"].find_last_outgoing_ai_message = AsyncMock(return_value=None)
+    mocks["message_trace_service"].record_inbound_turn = AsyncMock(return_value=None)
+    from app.services.message_trace_service import MessageTraceService
+
+    real_trace_service = MessageTraceService()
+
+    async def _safe_mark_completed(session, trace, **kwargs):
+        return await real_trace_service.mark_completed(session, trace, **kwargs)
+
+    mocks["message_trace_service"].mark_completed = AsyncMock(
+        side_effect=_safe_mark_completed
+    )
+    mocks["ai_reply_coordinator"] = MagicMock(
+        execute_for_incoming_message=AsyncMock(
+            return_value=AiReplyOrchestrationOutcome(
+                is_duplicate=False,
+                ai_executed=True,
+                reason=REASON_AI_CHAIN_EXECUTED,
+                ai_reply=AiReplyResult(
+                    text="Instagram bot pricing starts from a scoped discovery call.",
+                    is_success=True,
+                    prompt_run_id=uuid.uuid4(),
+                    model="gpt-4o-mini",
+                    provider="openai",
+                    error=None,
+                ),
+            )
+        )
+    )
+    mocks["message_service"].save_outgoing_ai_message = AsyncMock(return_value=outbound)
+
+    service = WebhookMessageService(**mocks)
+    session = MagicMock()
+    session.flush = AsyncMock()
+
+    result = await service.process_incoming_message(session, _instagram_request())
+
+    assert result.reply_to_customer == (
+        "Instagram bot pricing starts from a scoped discovery call."
+    )
+    assert result.is_duplicate is True
+    mocks["message_trace_service"].mark_completed.assert_awaited_once()
+    assert mocks["message_trace_service"].mark_completed.await_args.args[1] is None
