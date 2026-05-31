@@ -212,10 +212,10 @@ def test_get_user_profile_api_error(ig_settings: Settings) -> None:
 def test_send_text_message_success(ig_settings: Settings) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.method == "POST"
-        assert request.url.host == "graph.facebook.com"
-        assert request.url.path == f"/{META_GRAPH_API_VERSION}/12345/messages"
-        assert request.headers["authorization"] == "Bearer test-token"
-        assert request.url.query == b""
+        assert request.url.host == "graph.instagram.com"
+        assert request.url.path == f"/{INSTAGRAM_GRAPH_API_VERSION}/12345/messages"
+        assert b"access_token=test-token" in request.url.query
+        assert "authorization" not in request.headers
         assert json.loads(request.content) == {
             "recipient": {"id": "17841400000000000"},
             "message": {"text": "Manual test"},

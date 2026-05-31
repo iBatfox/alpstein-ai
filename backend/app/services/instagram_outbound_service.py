@@ -102,11 +102,14 @@ class InstagramOutboundService:
                 external_inbound_message_id=request.external_inbound_message_id,
             )
             logger.warning(
+                "%s error_code=%s error_message=%s",
                 LOG_FAILED,
+                exc.code,
+                str(exc)[:300],
                 extra={
                     **log_extra,
                     "error_code": exc.code,
-                    "error_message": str(exc)[:200],
+                    "error_message": str(exc)[:300],
                 },
             )
             raise

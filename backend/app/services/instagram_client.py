@@ -176,8 +176,10 @@ class InstagramGraphClient:
         if timeout is None:
             timeout = float(self._settings.ai_request_timeout_seconds)
 
-        url = META_INSTAGRAM_MESSAGES_URL_TEMPLATE.format(
-            api_version=META_GRAPH_API_VERSION,
+        # Instagram Login tokens use graph.instagram.com with access_token query param
+        # (graph.facebook.com + Bearer rejects them as "Cannot parse access token").
+        url = INSTAGRAM_MESSAGES_URL_TEMPLATE.format(
+            api_version=INSTAGRAM_GRAPH_API_VERSION,
             ig_user_id=ig_user_id,
         )
         payload = {
@@ -185,18 +187,18 @@ class InstagramGraphClient:
             "message": {"text": clean_text},
             "messaging_type": clean_messaging_type,
         }
-        headers = {"Authorization": f"Bearer {access_token}"}
+        params = {"access_token": access_token}
 
         try:
             if self._http_client is not None:
                 response = self._http_client.post(
                     url,
+                    params=params,
                     json=payload,
-                    headers=headers,
                 )
             else:
                 with httpx.Client(timeout=httpx.Timeout(timeout)) as client:
-                    response = client.post(url, json=payload, headers=headers)
+                    response = client.post(url, params=params, json=payload)
         except httpx.TimeoutException as exc:
             raise InstagramNetworkError(
                 f"Instagram Messaging API request timed out: {exc}",
@@ -348,7 +350,10 @@ def _parse_send_response(response: httpx.Response) -> InstagramSendResult:
         ) from exc
 
     if response.is_error or "error" in payload:
-        raise _classify_graph_error(payload.get("error", payload))
+        raise _classify_graph_error_from_response(
+            response,
+            payload.get("error", payload),
+        )
 
     recipient_id = str(payload.get("recipient_id", "")).strip()
     message_id = str(payload.get("message_id", "")).strip()
@@ -405,6 +410,22 @@ def _optional_string(value: Any) -> str | None:
     return text or None
 
 
+def _meta_error_log_suffix(*, http_status: int, error: Any) -> str:
+    if not isinstance(error, dict):
+        return f"http_status={http_status}"
+    parts = [f"http_status={http_status}"]
+    if error.get("type") is not None:
+        parts.append(f"meta_type={error.get('type')}")
+    if error.get("code") is not None:
+        parts.append(f"meta_code={error.get('code')}")
+    if error.get("error_subcode") is not None:
+        parts.append(f"meta_subcode={error.get('error_subcode')}")
+    message = str(error.get("message") or "").strip()
+    if message:
+        parts.append(f"meta_message={message[:200]}")
+    return "; ".join(parts)
+
+
 def _classify_graph_error(error: Any) -> InstagramClientError:
     if not isinstance(error, dict):
         return InstagramApiError("Instagram Graph API returned an error")
@@ -423,3 +444,12 @@ def _classify_graph_error(error: Any) -> InstagramClientError:
         return InstagramExpiredTokenError(message)
 
     return InstagramApiError(message)
+
+
+def _classify_graph_error_from_response(
+    response: httpx.Response,
+    error: Any,
+) -> InstagramClientError:
+    base = _classify_graph_error(error)
+    suffix = _meta_error_log_suffix(http_status=response.status_code, error=error)
+    return type(base)(f"{base}; {suffix}")
