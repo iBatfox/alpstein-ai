@@ -22,6 +22,11 @@ from app.models import (
     TenantChannelSetting,
     TenantKnowledgeSource,
 )
+from app.models.business_context_builder import (
+    SESSION_STATUS_ACTIVE,
+    SESSION_STATUS_CANCELLED,
+    SESSION_STATUS_COMPLETED,
+)
 from app.models.lead import (
     LEAD_PRIORITY_HIGH,
     LEAD_PRIORITY_LOW,
@@ -101,6 +106,8 @@ def test_business_context_builder_models_use_isolated_schema():
     assert isinstance(result_table.c.structured_context.type, JSONB)
     assert session_table.c.tenant_id.nullable is False
     assert session_table.c.business_id.nullable is False
+    assert session_table.c.status.default.arg == SESSION_STATUS_ACTIVE
+    assert session_table.c.status.server_default.arg == SESSION_STATUS_ACTIVE
     assert message_table.c.tenant_id.nullable is False
     assert message_table.c.business_id.nullable is False
     assert result_table.c.tenant_id.nullable is False
@@ -135,6 +142,15 @@ def test_business_context_builder_models_use_isolated_schema():
     assert session_fk_targets == set()
     assert message_fk_targets == {"business_context_builder.sessions.id"}
     assert result_fk_targets == {"business_context_builder.sessions.id"}
+    status_checks = {
+        str(constraint.sqltext)
+        for constraint in session_table.constraints
+        if getattr(constraint, "name", "") == "business_context_builder_sessions_status_check"
+    }
+    assert status_checks == {
+        f"status IN ('{SESSION_STATUS_ACTIVE}', '{SESSION_STATUS_COMPLETED}', "
+        f"'{SESSION_STATUS_CANCELLED}')"
+    }
 
 
 def test_lead_status_and_priority_constants_match_schema():

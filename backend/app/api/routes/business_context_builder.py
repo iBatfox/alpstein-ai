@@ -31,8 +31,13 @@ from app.schemas.business_context_builder import (
     SendMessageResponse,
 )
 from app.services.business_context_builder_service import (
+    DEFAULT_CONTEXT_LIMIT,
+    MAX_CONTEXT_LIMIT,
     BusinessContextBuilderService,
-    BusinessContextBuilderSessionCompletedError,
+    BusinessContextBuilderInvalidStatusError,
+    BusinessContextBuilderInvalidStatusTransitionError,
+    BusinessContextBuilderScopeMismatchError,
+    BusinessContextBuilderSessionClosedError,
     BusinessContextBuilderSessionNotFoundError,
     BusinessContextBuilderValidationError,
 )
@@ -88,17 +93,26 @@ async def send_message(
         await session.commit()
     except BusinessContextBuilderSessionNotFoundError:
         await session.rollback()
-        return _error(
-            404,
-            "CONTEXT_BUILDER_SESSION_NOT_FOUND",
-            "Business Context Builder session not found",
-        )
-    except BusinessContextBuilderSessionCompletedError:
+        return _not_found_error()
+    except BusinessContextBuilderScopeMismatchError:
+        await session.rollback()
+        return _scope_mismatch_error()
+    except BusinessContextBuilderSessionClosedError:
         await session.rollback()
         return _error(
             400,
-            "CONTEXT_BUILDER_SESSION_COMPLETED",
-            "Business Context Builder session is not active",
+            "CONTEXT_BUILDER_SESSION_CLOSED",
+            "Business Context Builder session is completed or cancelled",
+        )
+    except BusinessContextBuilderInvalidStatusError as exc:
+        await session.rollback()
+        return _error(409, "CONTEXT_BUILDER_INVALID_STATUS", str(exc))
+    except BusinessContextBuilderInvalidStatusTransitionError as exc:
+        await session.rollback()
+        return _error(
+            409,
+            "CONTEXT_BUILDER_INVALID_STATUS_TRANSITION",
+            str(exc),
         )
     except BusinessContextBuilderValidationError as exc:
         await session.rollback()
@@ -128,11 +142,13 @@ async def get_session(
             business_id=business_id,
         )
     except BusinessContextBuilderSessionNotFoundError:
-        return _error(
-            404,
-            "CONTEXT_BUILDER_SESSION_NOT_FOUND",
-            "Business Context Builder session not found",
-        )
+        return _not_found_error()
+    except BusinessContextBuilderScopeMismatchError:
+        return _scope_mismatch_error()
+    except BusinessContextBuilderInvalidStatusError as exc:
+        return _error(409, "CONTEXT_BUILDER_INVALID_STATUS", str(exc))
+    except BusinessContextBuilderValidationError as exc:
+        return _error(400, "VALIDATION_ERROR", str(exc))
 
     return GetSessionResponse(
         data=GetSessionData(
@@ -166,17 +182,19 @@ async def complete_session(
         await session.commit()
     except BusinessContextBuilderSessionNotFoundError:
         await session.rollback()
-        return _error(
-            404,
-            "CONTEXT_BUILDER_SESSION_NOT_FOUND",
-            "Business Context Builder session not found",
-        )
-    except BusinessContextBuilderSessionCompletedError:
+        return _not_found_error()
+    except BusinessContextBuilderScopeMismatchError:
+        await session.rollback()
+        return _scope_mismatch_error()
+    except BusinessContextBuilderInvalidStatusError as exc:
+        await session.rollback()
+        return _error(409, "CONTEXT_BUILDER_INVALID_STATUS", str(exc))
+    except BusinessContextBuilderInvalidStatusTransitionError as exc:
         await session.rollback()
         return _error(
-            400,
-            "CONTEXT_BUILDER_SESSION_COMPLETED",
-            "Business Context Builder session is not active",
+            409,
+            "CONTEXT_BUILDER_INVALID_STATUS_TRANSITION",
+            str(exc),
         )
     except BusinessContextBuilderValidationError as exc:
         await session.rollback()
@@ -194,17 +212,20 @@ async def complete_session(
 async def list_contexts(
     tenant_id: uuid.UUID = Query(...),
     business_id: uuid.UUID = Query(...),
-    limit: int = Query(default=50, ge=1, le=100),
+    limit: int = Query(default=DEFAULT_CONTEXT_LIMIT, ge=1, le=MAX_CONTEXT_LIMIT),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_db_session),
 ) -> dict:
-    results = await business_context_builder_service.list_contexts(
-        session,
-        tenant_id=tenant_id,
-        business_id=business_id,
-        limit=limit,
-        offset=offset,
-    )
+    try:
+        results = await business_context_builder_service.list_contexts(
+            session,
+            tenant_id=tenant_id,
+            business_id=business_id,
+            limit=limit,
+            offset=offset,
+        )
+    except BusinessContextBuilderValidationError as exc:
+        return _error(400, "VALIDATION_ERROR", str(exc))
 
     return ContextListResponse(
         data=ContextListData(
@@ -285,4 +306,20 @@ def _error(status_code: int, code: str, message: str) -> JSONResponse:
                 "message": message,
             },
         },
+    )
+
+
+def _not_found_error() -> JSONResponse:
+    return _error(
+        404,
+        "CONTEXT_BUILDER_SESSION_NOT_FOUND",
+        "Business Context Builder session not found",
+    )
+
+
+def _scope_mismatch_error() -> JSONResponse:
+    return _error(
+        403,
+        "CONTEXT_BUILDER_SCOPE_MISMATCH",
+        "Business Context Builder session is outside the requested tenant or business",
     )

@@ -335,6 +335,48 @@ def test_business_context_builder_migration_creates_isolated_schema_tables_only(
     assert "prompt_runs" not in downgrade_source
 
 
+def test_business_context_builder_status_hardening_migration_is_bcb_only():
+    migration_path = (
+        Path(__file__).resolve().parents[1]
+        / "alembic"
+        / "versions"
+        / "0024_harden_business_context_builder_status.py"
+    )
+    spec = importlib.util.spec_from_file_location("migration_0024", migration_path)
+    assert spec is not None
+    assert spec.loader is not None
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    assert module.revision == "0024"
+    assert module.down_revision == "0023"
+    assert callable(module.upgrade)
+    assert callable(module.downgrade)
+
+    migration_source = migration_path.read_text()
+    assert "business_context_builder.sessions" in migration_source
+    assert "status IN ('active', 'completed', 'cancelled')" in migration_source
+    assert "server_default=\"active\"" in migration_source
+    assert "WHEN status IN ('created', 'in_progress') THEN 'active'" in migration_source
+    assert "WHEN status = 'archived' THEN 'cancelled'" in migration_source
+    assert "op.create_table" not in migration_source
+    assert "op.drop_table" not in migration_source
+    assert '["tenants.id"]' not in migration_source
+    assert '["businesses.id"]' not in migration_source
+    assert "public.tenants" not in migration_source
+    assert "public.businesses" not in migration_source
+    assert "tenant_business_profiles" not in migration_source
+    assert "tenant_ai_profiles" not in migration_source
+    assert "tenant_knowledge_sources" not in migration_source
+    assert "prompt_templates" not in migration_source
+    assert "prompt_runs" not in migration_source
+
+    downgrade_source = migration_source.split("def downgrade")[1]
+    assert "status IN ('created', 'in_progress', 'completed', 'archived')" in downgrade_source
+    assert "server_default=\"in_progress\"" in downgrade_source
+
+
 def test_flows_migration_is_flows_only():
     migration_path = (
         Path(__file__).resolve().parents[1]

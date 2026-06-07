@@ -19,10 +19,9 @@ from app.db.base import Base
 
 BUSINESS_CONTEXT_BUILDER_SCHEMA = "business_context_builder"
 
-SESSION_STATUS_CREATED = "created"
-SESSION_STATUS_IN_PROGRESS = "in_progress"
+SESSION_STATUS_ACTIVE = "active"
 SESSION_STATUS_COMPLETED = "completed"
-SESSION_STATUS_ARCHIVED = "archived"
+SESSION_STATUS_CANCELLED = "cancelled"
 
 MESSAGE_ROLE_ASSISTANT = "assistant"
 MESSAGE_ROLE_USER = "user"
@@ -33,7 +32,7 @@ class BusinessContextBuilderSession(Base):
     __tablename__ = "sessions"
     __table_args__ = (
         CheckConstraint(
-            "status IN ('created', 'in_progress', 'completed', 'archived')",
+            "status IN ('active', 'completed', 'cancelled')",
             name="business_context_builder_sessions_status_check",
         ),
         Index(
@@ -70,8 +69,8 @@ class BusinessContextBuilderSession(Base):
     status: Mapped[str] = mapped_column(
         String(50),
         nullable=False,
-        default=SESSION_STATUS_IN_PROGRESS,
-        server_default=SESSION_STATUS_IN_PROGRESS,
+        default=SESSION_STATUS_ACTIVE,
+        server_default=SESSION_STATUS_ACTIVE,
     )
     current_step: Mapped[str | None] = mapped_column(String(100))
     created_at: Mapped[datetime] = mapped_column(

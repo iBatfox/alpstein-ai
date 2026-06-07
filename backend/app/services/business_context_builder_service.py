@@ -9,7 +9,8 @@ from app.models.business_context_builder import (
     MESSAGE_ROLE_ASSISTANT,
     MESSAGE_ROLE_USER,
     SESSION_STATUS_COMPLETED,
-    SESSION_STATUS_IN_PROGRESS,
+    SESSION_STATUS_ACTIVE,
+    SESSION_STATUS_CANCELLED,
     BusinessContextBuilderMessage,
     BusinessContextBuilderResult,
     BusinessContextBuilderSession,
@@ -17,26 +18,36 @@ from app.models.business_context_builder import (
 
 STEP_COMPANY_INFORMATION = "company_information"
 STEP_BUSINESS_DESCRIPTION = "business_description"
-STEP_ASSISTANT_GOALS = "assistant_goals"
-STEP_SERVICES = "services"
 STEP_TARGET_CUSTOMERS = "target_customers"
-STEP_COMMON_QUESTIONS = "common_questions"
-STEP_LEAD_QUALIFICATION = "lead_qualification"
+STEP_PRODUCTS_SERVICES = "products_services"
+STEP_SALES_PROCESS = "sales_process"
 STEP_COMMUNICATION_STYLE = "communication_style"
-STEP_RESTRICTIONS_HANDOFF = "restrictions_handoff"
 STEP_COMPLETED = "completed"
 
 INTERVIEW_STEPS = [
     STEP_COMPANY_INFORMATION,
     STEP_BUSINESS_DESCRIPTION,
-    STEP_ASSISTANT_GOALS,
-    STEP_SERVICES,
     STEP_TARGET_CUSTOMERS,
-    STEP_COMMON_QUESTIONS,
-    STEP_LEAD_QUALIFICATION,
+    STEP_PRODUCTS_SERVICES,
+    STEP_SALES_PROCESS,
     STEP_COMMUNICATION_STYLE,
-    STEP_RESTRICTIONS_HANDOFF,
 ]
+ALLOWED_STEPS = frozenset([*INTERVIEW_STEPS, STEP_COMPLETED])
+ALLOWED_STATUSES = frozenset(
+    {
+        SESSION_STATUS_ACTIVE,
+        SESSION_STATUS_COMPLETED,
+        SESSION_STATUS_CANCELLED,
+    }
+)
+TERMINAL_STATUSES = frozenset(
+    {
+        SESSION_STATUS_COMPLETED,
+        SESSION_STATUS_CANCELLED,
+    }
+)
+DEFAULT_CONTEXT_LIMIT = 20
+MAX_CONTEXT_LIMIT = 100
 
 STATIC_QUESTIONS = {
     STEP_COMPANY_INFORMATION: (
@@ -44,24 +55,31 @@ STATIC_QUESTIONS = {
         "What is the name of your company?"
     ),
     STEP_BUSINESS_DESCRIPTION: "What does your company do?",
-    STEP_ASSISTANT_GOALS: "What should the AI assistant help with?",
-    STEP_SERVICES: "What are your main services?",
     STEP_TARGET_CUSTOMERS: "Who are your target customers?",
-    STEP_COMMON_QUESTIONS: "What questions do customers ask most often?",
-    STEP_LEAD_QUALIFICATION: "What information should be collected to qualify a lead?",
+    STEP_PRODUCTS_SERVICES: "What are your main products or services?",
+    STEP_SALES_PROCESS: "How does your sales or booking process work?",
     STEP_COMMUNICATION_STYLE: "What communication style should the assistant use?",
-    STEP_RESTRICTIONS_HANDOFF: (
-        "What restrictions, forbidden actions, or handoff rules should apply?"
-    ),
 }
 
 
 class BusinessContextBuilderSessionNotFoundError(Exception):
-    """Raised when no session exists in the requested tenant/business scope."""
+    """Raised when no session exists for the requested id."""
 
 
-class BusinessContextBuilderSessionCompletedError(Exception):
-    """Raised when a completed or archived session receives a write."""
+class BusinessContextBuilderScopeMismatchError(Exception):
+    """Raised when a session exists outside the requested tenant/business scope."""
+
+
+class BusinessContextBuilderInvalidStatusError(Exception):
+    """Raised when persisted session status is outside the allowed lifecycle."""
+
+
+class BusinessContextBuilderInvalidStatusTransitionError(Exception):
+    """Raised when a requested lifecycle transition is not allowed."""
+
+
+class BusinessContextBuilderSessionClosedError(Exception):
+    """Raised when a completed or cancelled session receives a write."""
 
 
 class BusinessContextBuilderValidationError(Exception):
@@ -92,7 +110,7 @@ class BusinessContextBuilderService:
             business_id=business_id,
             telegram_user_id=telegram_user_id,
             customer_id=customer_id,
-            status=SESSION_STATUS_IN_PROGRESS,
+            status=SESSION_STATUS_ACTIVE,
             current_step=STEP_COMPANY_INFORMATION,
             created_at=now,
             updated_at=now,
@@ -149,6 +167,7 @@ class BusinessContextBuilderService:
         session.add(user_message)
 
         next_step = _next_step(builder_session.current_step)
+        _validate_step(next_step)
         builder_session.current_step = next_step
         builder_session.updated_at = _now()
         assistant_message = BusinessContextBuilderMessage(
@@ -217,6 +236,15 @@ class BusinessContextBuilderService:
             business_id=business_id,
             session_id=session_id,
         )
+        self._validate_status(builder_session.status)
+        if builder_session.status in TERMINAL_STATUSES:
+            raise BusinessContextBuilderInvalidStatusTransitionError(
+                f"cannot complete session with status {builder_session.status}"
+            )
+        if builder_session.status != SESSION_STATUS_ACTIVE:
+            raise BusinessContextBuilderInvalidStatusTransitionError(
+                f"cannot complete session with status {builder_session.status}"
+            )
         existing_result = await self._get_result(
             session,
             tenant_id=tenant_id,
@@ -224,9 +252,9 @@ class BusinessContextBuilderService:
             session_id=session_id,
         )
         if existing_result is not None:
-            return builder_session, existing_result
-        if builder_session.status != SESSION_STATUS_IN_PROGRESS:
-            raise BusinessContextBuilderSessionCompletedError()
+            raise BusinessContextBuilderInvalidStatusTransitionError(
+                "cannot complete a session that already has a result"
+            )
 
         user_messages = await self._list_user_messages(
             session,
@@ -267,9 +295,17 @@ class BusinessContextBuilderService:
         *,
         tenant_id: uuid.UUID,
         business_id: uuid.UUID,
-        limit: int = 50,
+        limit: int = DEFAULT_CONTEXT_LIMIT,
         offset: int = 0,
     ) -> list[BusinessContextBuilderResult]:
+        if limit < 1 or limit > MAX_CONTEXT_LIMIT:
+            raise BusinessContextBuilderValidationError(
+                f"limit must be between 1 and {MAX_CONTEXT_LIMIT}"
+            )
+        if offset < 0:
+            raise BusinessContextBuilderValidationError(
+                "offset must be greater than or equal to 0"
+            )
         result = await session.execute(
             select(BusinessContextBuilderResult)
             .where(
@@ -296,8 +332,15 @@ class BusinessContextBuilderService:
             business_id=business_id,
             session_id=session_id,
         )
-        if builder_session.status != SESSION_STATUS_IN_PROGRESS:
-            raise BusinessContextBuilderSessionCompletedError()
+        self._validate_status(builder_session.status)
+        if builder_session.status in TERMINAL_STATUSES:
+            raise BusinessContextBuilderSessionClosedError(
+                f"cannot modify session with status {builder_session.status}"
+            )
+        if builder_session.status != SESSION_STATUS_ACTIVE:
+            raise BusinessContextBuilderInvalidStatusTransitionError(
+                f"cannot modify session with status {builder_session.status}"
+            )
         return builder_session
 
     async def _get_scoped_session(
@@ -308,7 +351,7 @@ class BusinessContextBuilderService:
         business_id: uuid.UUID,
         session_id: uuid.UUID,
     ) -> BusinessContextBuilderSession:
-        result = await session.execute(
+        scoped_result = await session.execute(
             select(BusinessContextBuilderSession)
             .where(
                 BusinessContextBuilderSession.id == session_id,
@@ -317,10 +360,20 @@ class BusinessContextBuilderService:
             )
             .limit(1)
         )
-        builder_session = result.scalar_one_or_none()
-        if builder_session is None:
+        builder_session = scoped_result.scalar_one_or_none()
+        if builder_session is not None:
+            self._validate_status(builder_session.status)
+            _validate_step(builder_session.current_step)
+            return builder_session
+
+        unscoped_result = await session.execute(
+            select(BusinessContextBuilderSession)
+            .where(BusinessContextBuilderSession.id == session_id)
+            .limit(1)
+        )
+        if unscoped_result.scalar_one_or_none() is None:
             raise BusinessContextBuilderSessionNotFoundError()
-        return builder_session
+        raise BusinessContextBuilderScopeMismatchError()
 
     async def _list_messages(
         self,
@@ -380,6 +433,12 @@ class BusinessContextBuilderService:
         )
         return result.scalar_one_or_none()
 
+    def _validate_status(self, status: str) -> None:
+        if status not in ALLOWED_STATUSES:
+            raise BusinessContextBuilderInvalidStatusError(
+                f"invalid session status: {status}"
+            )
+
 
 def _next_step(current_step: str | None) -> str:
     if current_step not in INTERVIEW_STEPS:
@@ -387,6 +446,13 @@ def _next_step(current_step: str | None) -> str:
     current_index = INTERVIEW_STEPS.index(current_step)
     next_index = min(current_index + 1, len(INTERVIEW_STEPS) - 1)
     return INTERVIEW_STEPS[next_index]
+
+
+def _validate_step(current_step: str | None) -> None:
+    if current_step is not None and current_step not in ALLOWED_STEPS:
+        raise BusinessContextBuilderValidationError(
+            f"invalid session current_step: {current_step}"
+        )
 
 
 def _placeholder_structured_context() -> dict[str, object]:
