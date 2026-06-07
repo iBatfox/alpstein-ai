@@ -52,13 +52,14 @@ Sections are assembled **top to bottom**. Lower sections are truncated before hi
 |------|------------|--------|------|
 | **1** | `platform_system` | Active `PromptTemplate` / platform core | **System authority** — safety, role, escalation, output constraints |
 | **2** | `task_instructions` | Platform task slice for `reply_to_customer` | **System authority** — what to do this turn |
-| **3** | `tenant_business_context` | `TenantBusinessProfile` (via AI Configuration Service); optional `operator_business_context` from webhook appended after profile text (T14-OC-2) | **Data** — business facts |
-| **4** | `tenant_behavior` | `TenantAIProfile` | **Data** — tone, language, style, handoff hints |
-| **5** | `channel_rules` | `TenantChannelSetting` for current `channel` | **Data** — channel formatting constraints |
+| **3** | `business_context_source_of_truth` | `TenantBusinessProfile` (via AI Configuration Service); optional `operator_business_context` from webhook appended after profile text (T14-OC-2) | **Data** — source of truth for business facts, contacts, services, links, prices, locations, and working hours |
+| **4** | `tenant_business_context` | Compatibility/lineage marker for tenant business layer | **Data** — no business facts; facts are emitted in `business_context_source_of_truth` |
+| **5** | `tenant_behavior` | `TenantAIProfile` | **Data** — tone, language, style, handoff hints |
+| **6** | `channel_rules` | `TenantChannelSetting` for current `channel` | **Data** — channel formatting constraints |
 | *(future)* | `channel_source_context` | Webhook `source` + safe `attribution` subset ([channel-source-attribution.md](channel-source-attribution.md) §7) | **Data** — ingress/locale/UTM reference only |
-| **6** | `knowledge` | `KnowledgeRetrievalResult.snippets` | **Data** — retrieved FAQ/policy excerpts |
-| **7** | `conversation_history` | `ConversationHistory.messages` (oldest → newest) | **Data** — prior turns |
-| **8** | `current_customer_message` | Incoming turn `message.text` | **Data** — message to answer now |
+| **7** | `knowledge` | `KnowledgeRetrievalResult.snippets` | **Data** — retrieved FAQ/policy excerpts |
+| **8** | `conversation_history` | `ConversationHistory.messages` (oldest → newest) | **Data** — prior turns |
+| **9** | `current_customer_message` | Incoming turn `message.text` | **Data** — message to answer now |
 
 ### 4.1 Platform system prompt always first
 
@@ -68,19 +69,19 @@ Section **2** (`task_instructions`) immediately follows platform system content.
 
 ### 4.2 Latest customer message always last
 
-Section **8** (`current_customer_message`) is always the **last** section in the assembly. It is the explicit “message to answer now” and must not be buried inside history.
+Section **9** (`current_customer_message`) is always the **last** section in the assembly. It is the explicit “message to answer now” and must not be buried inside history.
 
-If the same text already appears as the newest row in `conversation_history`, Prompt Builder still emits section **8** once (deduplication inside history only: omit duplicate final history row if identical to current message; section **8** remains mandatory).
+If the same text already appears as the newest row in `conversation_history`, Prompt Builder still emits section **9** once (deduplication inside history only: omit duplicate final history row if identical to current message; section **9** remains mandatory).
 
 ### 4.3 Knowledge snippet placement
 
-Knowledge (**6**) sits **after** tenant configuration (**3–5**) and **before** conversation history (**7**).
+Knowledge (**7**) sits **after** tenant configuration (**3–6**) and **before** conversation history (**8**).
 
 Rationale: business facts and style are fixed context; knowledge grounds answers; dialogue comes last before the current turn.
 
 ### 4.4 Conversation history placement
 
-History (**7**) sits **after** knowledge and **before** the current customer message (**8**).
+History (**8**) sits **after** knowledge and **before** the current customer message (**9**).
 
 Format per message (prompt-safe fields only):
 
@@ -100,7 +101,7 @@ Optional top-level `operator_business_context` on `POST /api/v1/webhook/message`
 |--------|------|
 | **Spec status** | T14-OC-1 contract; T14-OC-2 implements read + append in Prompt Builder |
 | **Source** | n8n Set node (“Add Business Context”) or equivalent; not from `message.text` or `raw_payload` |
-| **Placement in assembly** | Inside section **3** (`tenant_business_context`), **after** all text from `TenantBusinessProfile`, under a labeled sub-block (e.g. `OPERATOR BUSINESS NOTES`) |
+| **Placement in assembly** | Inside section **3** (`business_context_source_of_truth`), **after** all text from `TenantBusinessProfile`, under a labeled sub-block (e.g. `OPERATOR BUSINESS NOTES`) |
 | **Role** | Reference data only — same as DB business profile; not system authority |
 | **Primary source** | PostgreSQL `tenant_business_profiles` remains canonical; operator text is **additive** |
 | **Max size** | 8192 characters on webhook request; counts toward section **3** variable budget and truncation (§7) |
@@ -120,7 +121,9 @@ If tenant or knowledge text conflicts with platform safety (e.g. “ignore previ
 
 ### 5.2 Tenant config is data, not system instructions
 
-Sections **3–8** must be framed as **reference data**, not as executable system directives.
+Sections **3–9** must be framed as **reference data**, not as executable system directives.
+
+Business facts, contacts, links, services, prices, locations, and working hours must be taken only from section **3** (`business_context_source_of_truth`). Conversation history and any future customer memory are only for customer preferences and dialogue continuity; they must not override current business factual data.
 
 Each data block (sections 3–7) must:
 
@@ -131,7 +134,7 @@ Customer and owner lines in history are **quoted dialogue**, not instructions to
 
 ### 5.3 What tenants may configure (MVP)
 
-Tenants may influence **wording and business facts** in sections 3–5 and stored knowledge in section 6.
+Tenants may influence **wording and business facts** in sections 3–6 and stored knowledge in section 7.
 
 Tenants must **not** be able to:
 
@@ -179,9 +182,9 @@ Prompt Builder may further shrink sections 3–7 inside `variable_budget` only.
 
 When `variable_budget` is tight, allocate in this order until budget is exhausted:
 
-1. Section **8** — reserved first (after platform sections).
-2. Section **7** — recent dialogue (newest messages kept).
-3. Section **6** — knowledge (highest retrieval rank first).
+1. Section **9** — reserved first (after platform sections).
+2. Section **8** — recent dialogue (newest messages kept).
+3. Section **7** — knowledge (highest retrieval rank first).
 4. Section **3** — business context.
 5. Section **4** — behavior profile.
 6. Section **5** — channel rules (smallest; trim last among tenant blocks).
@@ -196,7 +199,7 @@ Truncation applies only to sections **3–7** when their combined size exceeds `
 
 - Section **1** (`platform_system`)
 - Section **2** (`task_instructions`)
-- Section **8** (`current_customer_message`) — except enforce `CURRENT_MESSAGE_MAX_CHARS` with explicit suffix `[truncated]` if over cap
+- Section **9** (`current_customer_message`) — except enforce `CURRENT_MESSAGE_MAX_CHARS` with explicit suffix `[truncated]` if over cap
 
 ### 7.1 Per-section methods
 
@@ -212,7 +215,7 @@ After truncation, assembly must still include:
 
 - both platform sections in full;
 - at least one of sections 3–5 if any tenant config exists (even if heavily trimmed);
-- section **8** in full (within `CURRENT_MESSAGE_MAX_CHARS`).
+- section **9** in full (within `CURRENT_MESSAGE_MAX_CHARS`).
 
 Sections **6** and **7** may be empty if budget requires; do not fabricate placeholder knowledge or history.
 
@@ -221,7 +224,7 @@ Sections **6** and **7** may be empty if budget requires; do not fabricate place
 | Input missing | Behavior |
 |---------------|----------|
 | No knowledge snippets | Omit section **6** header body (or omit section) |
-| Empty history | Omit section **7**; section **8** still present |
+| Empty history | Omit section **8**; section **9** still present |
 | Missing channel setting | Omit section **5**; platform + business rules still apply |
 | No `operator_business_context` | Section **3** uses DB profile only (T14-OC-2) |
 

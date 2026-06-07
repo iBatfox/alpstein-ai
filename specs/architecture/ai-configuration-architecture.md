@@ -113,7 +113,7 @@ Contains:
 - contact information;
 - business limitations.
 
-**Operator overlay (T14-OC-2):** Optional per-request notes from n8n (`operator_business_context` on `POST /api/v1/webhook/message`) are **not** loaded by AI Configuration Service from PostgreSQL. Prompt Builder appends them after DB profile text inside section `tenant_business_context` as labeled reference notes only. See [webhooks.md](../api/webhooks.md) §7 and [prompt-builder-rules.md](prompt-builder-rules.md) §4.5.
+**Operator overlay (T14-OC-2):** Optional per-request notes from n8n (`operator_business_context` on `POST /api/v1/webhook/message`) are **not** loaded by AI Configuration Service from PostgreSQL. Prompt Builder appends them after DB profile text inside section `business_context_source_of_truth` as labeled reference notes only. See [webhooks.md](../api/webhooks.md) §7 and [prompt-builder-rules.md](prompt-builder-rules.md) §4.5.
 
 ---
 
@@ -218,6 +218,7 @@ It draws on these **configuration layers** (see §4):
 ```text
 Core system prompt
 Task instructions
+Business context source of truth
 Tenant business context
 Tenant behavior config
 Channel rules
@@ -233,12 +234,13 @@ The list above describes **what** contributes to a turn, not the order sections 
 ```text
 1. platform_system          ← PromptTemplate.system_prompt (platform)
 2. task_instructions        ← platform task instruction registry (platform)
-3. tenant_business_context
-4. tenant_behavior
-5. channel_rules
-6. knowledge
-7. conversation_history
-8. current_customer_message
+3. business_context_source_of_truth
+4. tenant_business_context
+5. tenant_behavior
+6. channel_rules
+7. knowledge
+8. conversation_history
+9. current_customer_message
 ```
 
 Section **1** source: active `PromptTemplate` loaded by AI Configuration Service (`system_prompt` field).
