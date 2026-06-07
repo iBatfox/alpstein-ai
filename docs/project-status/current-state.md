@@ -26,6 +26,8 @@ Specification-driven MVP with **backend AI orchestration complete**, **n8n test 
 
 **Primary open engineering:** E2.8+ / ops gate; **n8n delivery PATCH (repo wired — operator import pending)** — [`delivery-outcome-patching.md`](../n8n/delivery-outcome-patching.md); `messages.flow_id` denorm optional; Live Telegram DM confirmation post E1.9; Langfuse on compose backend; **CIP-D**, ATTR-3.
 
+**ERPNext Lead conversation history (T-f2.3):** Lead form now has `История переписки` tab backed by linked ERPNext `Communication` rows. Runtime ERPNext custom fields/client script are installed; `alpstein-customer-ingress` export/runtime includes the non-blocking Communication read-model sync after Lead sync; existing Ivan Instagram/Telegram source messages were backfilled from PostgreSQL into linked Communications.
+
 ---
 
 ## Specifications

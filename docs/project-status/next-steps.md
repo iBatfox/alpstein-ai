@@ -38,6 +38,8 @@
 
 **Phase F.2.1 (implemented, review):** ERPNext Lead sync in unified n8n ingress — [`n8n-erpnext-lead-sync.md`](../ops/n8n-erpnext-lead-sync.md) · audit [`f2-1-erpnext-lead-n8n-sync.md`](../audits/f2-1-erpnext-lead-n8n-sync.md) · task [`T-f2.1-erpnext-lead-n8n-workflow.md`](../../tasks/in-progress/T-f2.1-erpnext-lead-n8n-workflow.md) — **keep `ALPSTEIN_ERPNEXT_LEAD_SYNC_ENABLED=false` until staging smoke**
 
+**Phase F.2.3 (implemented, review):** ERPNext Lead conversation history — linked `Communication` read model + Lead chat tab installed; next review item is live Instagram/Telegram message smoke through n8n to confirm future rows are created without relying on backfill.
+
 **Phase F.1 (design done):** ERPNext install architecture — [`f1-erpnext-installation-operational-architecture.md`](../architecture/f1-erpnext-installation-operational-architecture.md) · operator runbook [`erpnext-production-deployment-runbook.md`](../ops/erpnext-production-deployment-runbook.md) · task [`T-f1-erpnext-installation-operational-architecture.md`](../../tasks/todo/T-f1-erpnext-installation-operational-architecture.md) — **Option A Docker + host nginx** · `https://crm.alpstein-ai.ch` · **no Alpstein integration** · operator deploy pending.
 
 **n8n update notify (O3):** Install timer per [`n8n-update-notification-runbook.md`](../ops/n8n-update-notification-runbook.md) §4; record first evidence §7.

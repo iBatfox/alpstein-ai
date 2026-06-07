@@ -3,6 +3,7 @@
 
 # Completed
 
+- T-f2.3 ERPNext Lead conversation history: added `Communication` custom fields, Lead tab/HTML field `История переписки`, Lead client script chat renderer, n8n Communication read-model sync after ERPNext Lead sync, and runtime backfill for existing Ivan Instagram/Telegram messages from PostgreSQL source rows.
 - Implemented minimal `GET /api/v1/health` backend endpoint.
 - Implemented PostgreSQL foundation slice with async SQLAlchemy config/session/base, Tenant and Business models, Alembic init, and initial tenants/businesses migration.
 - Implemented customers persistence slice with Customer model, customers Alembic migration, and focused model/migration tests.
