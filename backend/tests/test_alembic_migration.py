@@ -271,6 +271,70 @@ def test_leads_migration_is_leads_only():
     assert "op.drop_table(\"leads\")" in downgrade_source or 'op.drop_table("leads")' in downgrade_source
 
 
+def test_business_context_builder_migration_creates_isolated_schema_tables_only():
+    migration_path = (
+        Path(__file__).resolve().parents[1]
+        / "alembic"
+        / "versions"
+        / "0023_create_business_context_builder_tables.py"
+    )
+    spec = importlib.util.spec_from_file_location("migration_0023", migration_path)
+    assert spec is not None
+    assert spec.loader is not None
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    assert module.revision == "0023"
+    assert module.down_revision == "0022"
+    assert callable(module.upgrade)
+    assert callable(module.downgrade)
+
+    migration_source = migration_path.read_text()
+    assert "CREATE SCHEMA IF NOT EXISTS business_context_builder" in migration_source
+    assert migration_source.count("op.create_table") == 3
+    assert '"sessions"' in migration_source
+    assert '"messages"' in migration_source
+    assert '"results"' in migration_source
+    assert "schema=SCHEMA" in migration_source
+    assert '"tenant_id"' in migration_source
+    assert '"business_id"' in migration_source
+    assert "bcb_sessions_tenant_id_idx" in migration_source
+    assert "bcb_sessions_business_id_idx" in migration_source
+    assert "bcb_messages_tenant_id_idx" in migration_source
+    assert "bcb_messages_business_id_idx" in migration_source
+    assert "bcb_results_tenant_id_idx" in migration_source
+    assert "bcb_results_business_id_idx" in migration_source
+    assert "structured_context" in migration_source
+    assert "generated_prompt" in migration_source
+    assert migration_source.count("sa.ForeignKeyConstraint") == 2
+    assert 'sa.ForeignKeyConstraint(["session_id"], [f"{SCHEMA}.sessions.id"])' in migration_source
+    assert '["tenants.id"]' not in migration_source
+    assert '["businesses.id"]' not in migration_source
+    assert "public.tenants" not in migration_source
+    assert "public.businesses" not in migration_source
+    assert "business_context_builder.results" not in migration_source
+    assert "tenant_business_profiles" not in migration_source
+    assert "tenant_ai_profiles" not in migration_source
+    assert "tenant_knowledge_sources" not in migration_source
+    assert "prompt_templates" not in migration_source
+    assert "prompt_runs" not in migration_source
+    assert '"database_connections"' not in migration_source
+    assert '"api_key"' not in migration_source
+    assert '"password"' not in migration_source
+
+    downgrade_source = migration_source.split("def downgrade")[1]
+    assert 'op.drop_table("results", schema=SCHEMA)' in downgrade_source
+    assert 'op.drop_table("messages", schema=SCHEMA)' in downgrade_source
+    assert 'op.drop_table("sessions", schema=SCHEMA)' in downgrade_source
+    assert "DROP SCHEMA IF EXISTS business_context_builder" in downgrade_source
+    assert "tenant_business_profiles" not in downgrade_source
+    assert "tenant_ai_profiles" not in downgrade_source
+    assert "tenant_knowledge_sources" not in downgrade_source
+    assert "prompt_templates" not in downgrade_source
+    assert "prompt_runs" not in downgrade_source
+
+
 def test_flows_migration_is_flows_only():
     migration_path = (
         Path(__file__).resolve().parents[1]

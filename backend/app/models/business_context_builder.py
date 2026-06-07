@@ -1,0 +1,214 @@
+import uuid
+from datetime import datetime
+from typing import Any
+
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.db.base import Base
+
+BUSINESS_CONTEXT_BUILDER_SCHEMA = "business_context_builder"
+
+SESSION_STATUS_CREATED = "created"
+SESSION_STATUS_IN_PROGRESS = "in_progress"
+SESSION_STATUS_COMPLETED = "completed"
+SESSION_STATUS_ARCHIVED = "archived"
+
+MESSAGE_ROLE_ASSISTANT = "assistant"
+MESSAGE_ROLE_USER = "user"
+MESSAGE_ROLE_SYSTEM = "system"
+
+
+class BusinessContextBuilderSession(Base):
+    __tablename__ = "sessions"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('created', 'in_progress', 'completed', 'archived')",
+            name="business_context_builder_sessions_status_check",
+        ),
+        Index(
+            "bcb_sessions_tenant_id_idx",
+            "tenant_id",
+        ),
+        Index(
+            "bcb_sessions_business_id_idx",
+            "business_id",
+        ),
+        Index(
+            "bcb_sessions_tenant_business_idx",
+            "tenant_id",
+            "business_id",
+        ),
+        Index(
+            "bcb_sessions_tenant_business_status_idx",
+            "tenant_id",
+            "business_id",
+            "status",
+        ),
+        {"schema": BUSINESS_CONTEXT_BUILDER_SCHEMA},
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    business_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    telegram_user_id: Mapped[str | None] = mapped_column(Text)
+    customer_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    status: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default=SESSION_STATUS_IN_PROGRESS,
+        server_default=SESSION_STATUS_IN_PROGRESS,
+    )
+    current_step: Mapped[str | None] = mapped_column(String(100))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=False),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=False),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False))
+
+    messages: Mapped[list["BusinessContextBuilderMessage"]] = relationship(
+        back_populates="session",
+        cascade="all, delete-orphan",
+    )
+    result: Mapped["BusinessContextBuilderResult | None"] = relationship(
+        back_populates="session",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+
+
+class BusinessContextBuilderMessage(Base):
+    __tablename__ = "messages"
+    __table_args__ = (
+        CheckConstraint(
+            "role IN ('assistant', 'user', 'system')",
+            name="business_context_builder_messages_role_check",
+        ),
+        Index(
+            "bcb_messages_tenant_id_idx",
+            "tenant_id",
+        ),
+        Index(
+            "bcb_messages_business_id_idx",
+            "business_id",
+        ),
+        Index(
+            "bcb_messages_tenant_business_session_idx",
+            "tenant_id",
+            "business_id",
+            "session_id",
+        ),
+        Index(
+            "bcb_messages_session_created_at_idx",
+            "session_id",
+            "created_at",
+        ),
+        {"schema": BUSINESS_CONTEXT_BUILDER_SCHEMA},
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    business_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(f"{BUSINESS_CONTEXT_BUILDER_SCHEMA}.sessions.id"),
+        nullable=False,
+    )
+    role: Mapped[str] = mapped_column(String(50), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=False),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    session: Mapped[BusinessContextBuilderSession] = relationship(
+        back_populates="messages",
+    )
+
+
+class BusinessContextBuilderResult(Base):
+    __tablename__ = "results"
+    __table_args__ = (
+        UniqueConstraint(
+            "session_id",
+            name="business_context_builder_results_session_id_unique",
+        ),
+        Index(
+            "bcb_results_tenant_id_idx",
+            "tenant_id",
+        ),
+        Index(
+            "bcb_results_business_id_idx",
+            "business_id",
+        ),
+        Index(
+            "bcb_results_tenant_business_idx",
+            "tenant_id",
+            "business_id",
+        ),
+        Index(
+            "bcb_results_tenant_business_created_at_idx",
+            "tenant_id",
+            "business_id",
+            "created_at",
+        ),
+        {"schema": BUSINESS_CONTEXT_BUILDER_SCHEMA},
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    business_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey(f"{BUSINESS_CONTEXT_BUILDER_SCHEMA}.sessions.id"),
+        nullable=False,
+    )
+    structured_context: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    generated_prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    context_file_path: Mapped[str | None] = mapped_column(Text)
+    context_file_url: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=False),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=False),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    session: Mapped[BusinessContextBuilderSession] = relationship(
+        back_populates="result",
+    )

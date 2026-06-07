@@ -1,6 +1,9 @@
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
+from app.api.routes.business_context_builder import (
+    router as business_context_builder_router,
+)
 from app.api.routes.health import router as health_router
 from app.api.routes.instagram_channel import router as instagram_channel_router
 from app.api.routes.meta_webhook import router as meta_webhook_router
@@ -32,4 +35,5 @@ app.include_router(health_router, prefix="/api/v1")
 app.include_router(webhook_router, prefix="/api/v1")
 app.include_router(instagram_channel_router, prefix="/api/v1")
 app.include_router(observability_router, prefix="/api/v1")
+app.include_router(business_context_builder_router, prefix="/api/v1")
 app.include_router(meta_webhook_router, prefix="/webhooks")

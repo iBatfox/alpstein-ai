@@ -4,6 +4,9 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from app.db.base import Base
 from app.models import (
     Business,
+    BusinessContextBuilderMessage,
+    BusinessContextBuilderResult,
+    BusinessContextBuilderSession,
     Conversation,
     Customer,
     DeliveryEvent,
@@ -58,6 +61,9 @@ def test_metadata_contains_persistence_slice_tables():
         "spam_indicator_buckets",
         "spam_containments",
         "spam_decisions",
+        "business_context_builder.sessions",
+        "business_context_builder.messages",
+        "business_context_builder.results",
     }
     assert Tenant.__tablename__ == "tenants"
     assert Business.__tablename__ == "businesses"
@@ -73,6 +79,62 @@ def test_metadata_contains_persistence_slice_tables():
     assert PromptTemplate.__tablename__ == "prompt_templates"
     assert PromptRun.__tablename__ == "prompt_runs"
     assert Lead.__tablename__ == "leads"
+    assert BusinessContextBuilderSession.__tablename__ == "sessions"
+    assert BusinessContextBuilderMessage.__tablename__ == "messages"
+    assert BusinessContextBuilderResult.__tablename__ == "results"
+
+
+def test_business_context_builder_models_use_isolated_schema():
+    session_table = BusinessContextBuilderSession.__table__
+    message_table = BusinessContextBuilderMessage.__table__
+    result_table = BusinessContextBuilderResult.__table__
+
+    assert session_table.schema == "business_context_builder"
+    assert message_table.schema == "business_context_builder"
+    assert result_table.schema == "business_context_builder"
+    assert session_table.fullname == "business_context_builder.sessions"
+    assert message_table.fullname == "business_context_builder.messages"
+    assert result_table.fullname == "business_context_builder.results"
+    assert isinstance(session_table.c.id.type, UUID)
+    assert isinstance(message_table.c.id.type, UUID)
+    assert isinstance(result_table.c.id.type, UUID)
+    assert isinstance(result_table.c.structured_context.type, JSONB)
+    assert session_table.c.tenant_id.nullable is False
+    assert session_table.c.business_id.nullable is False
+    assert message_table.c.tenant_id.nullable is False
+    assert message_table.c.business_id.nullable is False
+    assert result_table.c.tenant_id.nullable is False
+    assert result_table.c.business_id.nullable is False
+    assert "bcb_sessions_tenant_business_idx" in {
+        index.name for index in session_table.indexes
+    }
+    assert "bcb_messages_tenant_business_session_idx" in {
+        index.name for index in message_table.indexes
+    }
+    assert "bcb_results_tenant_business_idx" in {
+        index.name for index in result_table.indexes
+    }
+    session_fk_targets = {
+        element.target_fullname
+        for constraint in session_table.constraints
+        if isinstance(constraint, ForeignKeyConstraint)
+        for element in constraint.elements
+    }
+    message_fk_targets = {
+        element.target_fullname
+        for constraint in message_table.constraints
+        if isinstance(constraint, ForeignKeyConstraint)
+        for element in constraint.elements
+    }
+    result_fk_targets = {
+        element.target_fullname
+        for constraint in result_table.constraints
+        if isinstance(constraint, ForeignKeyConstraint)
+        for element in constraint.elements
+    }
+    assert session_fk_targets == set()
+    assert message_fk_targets == {"business_context_builder.sessions.id"}
+    assert result_fk_targets == {"business_context_builder.sessions.id"}
 
 
 def test_lead_status_and_priority_constants_match_schema():
