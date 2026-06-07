@@ -85,6 +85,17 @@ Main documents:
 
 ---
 
+## Business Context Builder Safety Rules
+
+- Business Context Builder data is draft-only.
+- Never modify active AI assistant business contexts from this module.
+- Never write Business Context Builder data into production assistant tables.
+- Always use the `business_context_builder` PostgreSQL schema.
+- Publishing to production assistants requires a separate explicit workflow.
+- No n8n, CRM, Telegram Mini App, or OpenAI integration in the backend MVP unless a later task explicitly requests it.
+
+---
+
 ## n8n Rules
 
 - n8n receives external webhooks.
