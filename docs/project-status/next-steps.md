@@ -4,7 +4,11 @@
 
 # Next Steps
 
-## Recommended next task: **E3.6 staging validation** → enable rate-limit in staging
+## Recommended next task: **BCB Phase 3.2** — final business context AI generation (optional) or continue **E3.6 staging validation**
+
+**BCB Phase 3.1 (done, review):** AI next-question generation in `save_user_message` — reuses `AiGatewayService`; static fallback when disabled/unconfigured; complete session still placeholder draft. Task: [`T-bcb-phase-3.1-ai-next-question.md`](../../tasks/done/T-bcb-phase-3.1-ai-next-question.md).
+
+**E3.6 staging validation** → enable rate-limit in staging
 
 **E3.5d (done):** Postgres rate-limit concurrency — [`e3-5d-postgres-concurrency-validation.md`](../audits/e3-5d-postgres-concurrency-validation.md) · **staging enablement allowed** for `ALPSTEIN_AI_RATE_LIMIT_ENABLED`
 

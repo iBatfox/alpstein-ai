@@ -8,6 +8,7 @@ from httpx import ASGITransport, AsyncClient
 from app.main import app
 from app.models.business_context_builder import (
     MESSAGE_ROLE_ASSISTANT,
+    MESSAGE_ROLE_USER,
     SESSION_STATUS_ACTIVE,
     SESSION_STATUS_COMPLETED,
     BusinessContextBuilderResult,
@@ -119,6 +120,70 @@ async def test_business_context_builder_requires_auth(db_session: MagicMock):
         )
 
     assert response.status_code == 401
+
+
+@pytest.mark.anyio
+async def test_send_message_route_returns_ai_generated_assistant_reply(
+    db_session: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    tenant_id = uuid.uuid4()
+    business_id = uuid.uuid4()
+    session_id = uuid.uuid4()
+    now = datetime(2026, 6, 8, 12, 0, 0)
+    builder_session = BusinessContextBuilderSession(
+        id=session_id,
+        tenant_id=tenant_id,
+        business_id=business_id,
+        status=SESSION_STATUS_ACTIVE,
+        current_step="business_description",
+        created_at=now,
+        updated_at=now,
+    )
+    user_message = BusinessContextBuilderMessage(
+        id=uuid.uuid4(),
+        tenant_id=tenant_id,
+        business_id=business_id,
+        session_id=session_id,
+        role=MESSAGE_ROLE_USER,
+        content="Alpstein Services GmbH",
+        created_at=now,
+    )
+    assistant_message = BusinessContextBuilderMessage(
+        id=uuid.uuid4(),
+        tenant_id=tenant_id,
+        business_id=business_id,
+        session_id=session_id,
+        role=MESSAGE_ROLE_ASSISTANT,
+        content="What industry is your company in?",
+        created_at=now,
+    )
+
+    from app.api.routes import business_context_builder as bcb_routes
+
+    service = MagicMock()
+    service.save_user_message = AsyncMock(
+        return_value=(builder_session, user_message, assistant_message)
+    )
+    monkeypatch.setattr(bcb_routes, "business_context_builder_service", service)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            f"/api/v1/business-context-builder/sessions/{session_id}/messages",
+            json={
+                "tenant_id": str(tenant_id),
+                "business_id": str(business_id),
+                "content": "Alpstein Services GmbH",
+            },
+            headers=_auth_headers(),
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["data"]["assistant_message"]["content"] == "What industry is your company in?"
+    assert body["data"]["user_message"]["content"] == "Alpstein Services GmbH"
+    db_session.commit.assert_awaited_once()
 
 
 @pytest.mark.anyio

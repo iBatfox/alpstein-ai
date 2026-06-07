@@ -247,6 +247,10 @@ class Settings(BaseSettings):
         default=False,
         validation_alias="ALPSTEIN_INSTAGRAM_OUTBOUND_ENABLED",
     )
+    bcb_ai_enabled: bool = Field(
+        default=True,
+        validation_alias="BCB_AI_ENABLED",
+    )
 
     model_config = SettingsConfigDict(
         env_prefix="ALPSTEIN_AI_",

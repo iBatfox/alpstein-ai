@@ -15,24 +15,23 @@ from app.models.business_context_builder import (
     BusinessContextBuilderResult,
     BusinessContextBuilderSession,
 )
+from app.services.business_context_builder_ai_service import (
+    BusinessContextBuilderAiService,
+)
 
-STEP_COMPANY_INFORMATION = "company_information"
-STEP_BUSINESS_DESCRIPTION = "business_description"
-STEP_TARGET_CUSTOMERS = "target_customers"
-STEP_PRODUCTS_SERVICES = "products_services"
-STEP_SALES_PROCESS = "sales_process"
-STEP_COMMUNICATION_STYLE = "communication_style"
-STEP_COMPLETED = "completed"
-
-INTERVIEW_STEPS = [
-    STEP_COMPANY_INFORMATION,
+from app.services.business_context_builder_constants import (
+    ALLOWED_STEPS,
+    INTERVIEW_STEPS,
+    STATIC_QUESTIONS,
     STEP_BUSINESS_DESCRIPTION,
-    STEP_TARGET_CUSTOMERS,
+    STEP_COMMUNICATION_STYLE,
+    STEP_COMPANY_INFORMATION,
+    STEP_COMPLETED,
     STEP_PRODUCTS_SERVICES,
     STEP_SALES_PROCESS,
-    STEP_COMMUNICATION_STYLE,
-]
-ALLOWED_STEPS = frozenset([*INTERVIEW_STEPS, STEP_COMPLETED])
+    STEP_TARGET_CUSTOMERS,
+)
+
 ALLOWED_STATUSES = frozenset(
     {
         SESSION_STATUS_ACTIVE,
@@ -48,18 +47,6 @@ TERMINAL_STATUSES = frozenset(
 )
 DEFAULT_CONTEXT_LIMIT = 20
 MAX_CONTEXT_LIMIT = 100
-
-STATIC_QUESTIONS = {
-    STEP_COMPANY_INFORMATION: (
-        "Hello. I will help you create a draft Business Context. "
-        "What is the name of your company?"
-    ),
-    STEP_BUSINESS_DESCRIPTION: "What does your company do?",
-    STEP_TARGET_CUSTOMERS: "Who are your target customers?",
-    STEP_PRODUCTS_SERVICES: "What are your main products or services?",
-    STEP_SALES_PROCESS: "How does your sales or booking process work?",
-    STEP_COMMUNICATION_STYLE: "What communication style should the assistant use?",
-}
 
 
 class BusinessContextBuilderSessionNotFoundError(Exception):
@@ -94,6 +81,12 @@ class BusinessContextBuilderSessionSnapshot:
 
 
 class BusinessContextBuilderService:
+    def __init__(
+        self,
+        ai_service: BusinessContextBuilderAiService | None = None,
+    ) -> None:
+        self._ai_service = ai_service or BusinessContextBuilderAiService()
+
     async def create_session(
         self,
         session: AsyncSession,
@@ -170,13 +163,31 @@ class BusinessContextBuilderService:
         _validate_step(next_step)
         builder_session.current_step = next_step
         builder_session.updated_at = _now()
+
+        prior_messages = await self._list_messages(
+            session,
+            tenant_id=tenant_id,
+            business_id=business_id,
+            session_id=builder_session.id,
+        )
+        conversation_messages = [*prior_messages, user_message]
+        fallback_question = self.generate_static_next_question(next_step)
+        assistant_content = await self._ai_service.generate_next_question(
+            session_id=builder_session.id,
+            tenant_id=tenant_id,
+            business_id=business_id,
+            next_step=next_step,
+            messages=conversation_messages,
+            fallback_question=fallback_question,
+        )
+
         assistant_message = BusinessContextBuilderMessage(
             id=uuid.uuid4(),
             tenant_id=tenant_id,
             business_id=business_id,
             session_id=builder_session.id,
             role=MESSAGE_ROLE_ASSISTANT,
-            content=self.generate_static_next_question(next_step),
+            content=assistant_content,
             created_at=_now(),
         )
         session.add(assistant_message)

@@ -83,9 +83,7 @@ async def test_create_session_saves_session_and_first_assistant_message(
 
 
 @pytest.mark.anyio
-async def test_save_user_message_saves_user_and_assistant_placeholder_reply(
-    service: BusinessContextBuilderService,
-):
+async def test_save_user_message_saves_user_and_assistant_placeholder_reply():
     tenant_id = uuid.uuid4()
     business_id = uuid.uuid4()
     session_id = uuid.uuid4()
@@ -97,8 +95,18 @@ async def test_save_user_message_saves_user_and_assistant_placeholder_reply(
         current_step=STEP_COMPANY_INFORMATION,
     )
     db_session = MagicMock()
-    db_session.execute = AsyncMock(return_value=_result(scalar=builder_session))
+    db_session.execute = AsyncMock(
+        side_effect=[
+            _result(scalar=builder_session),
+            _result(scalars=[]),
+        ]
+    )
     db_session.flush = AsyncMock()
+    ai_service = AsyncMock()
+    ai_service.generate_next_question = AsyncMock(
+        return_value="What does your company do?"
+    )
+    service = BusinessContextBuilderService(ai_service=ai_service)
 
     (
         updated_session,
@@ -119,11 +127,54 @@ async def test_save_user_message_saves_user_and_assistant_placeholder_reply(
     assert assistant_message.content == "What does your company do?"
     assert db_session.add.call_count == 2
     assert db_session.flush.await_count == 1
+    ai_service.generate_next_question.assert_awaited_once()
 
-    filters = _select_filters(db_session.execute.await_args.args[0])
+    filters = _select_filters(db_session.execute.await_args_list[0].args[0])
     assert filters["id"] == session_id
     assert filters["tenant_id"] == tenant_id
     assert filters["business_id"] == business_id
+
+
+@pytest.mark.anyio
+async def test_save_user_message_uses_static_fallback_when_ai_fails():
+    tenant_id = uuid.uuid4()
+    business_id = uuid.uuid4()
+    session_id = uuid.uuid4()
+    builder_session = BusinessContextBuilderSession(
+        id=session_id,
+        tenant_id=tenant_id,
+        business_id=business_id,
+        status=SESSION_STATUS_ACTIVE,
+        current_step=STEP_COMPANY_INFORMATION,
+    )
+    db_session = MagicMock()
+    db_session.execute = AsyncMock(
+        side_effect=[
+            _result(scalar=builder_session),
+            _result(scalars=[]),
+        ]
+    )
+    db_session.flush = AsyncMock()
+    ai_service = AsyncMock()
+    ai_service.generate_next_question = AsyncMock(
+        return_value="What does your company do?"
+    )
+    service = BusinessContextBuilderService(ai_service=ai_service)
+
+    _, _, assistant_message = await service.save_user_message(
+        db_session,
+        session_id=session_id,
+        tenant_id=tenant_id,
+        business_id=business_id,
+        content="Alpstein Services GmbH",
+    )
+
+    assert assistant_message.content == "What does your company do?"
+    ai_service.generate_next_question.assert_awaited_once()
+    assert (
+        ai_service.generate_next_question.await_args.kwargs["fallback_question"]
+        == "What does your company do?"
+    )
 
 
 @pytest.mark.anyio
@@ -141,8 +192,18 @@ async def test_save_user_message_persists_next_step_after_each_assistant_reply(
         current_step=STEP_BUSINESS_DESCRIPTION,
     )
     db_session = MagicMock()
-    db_session.execute = AsyncMock(return_value=_result(scalar=builder_session))
+    db_session.execute = AsyncMock(
+        side_effect=[
+            _result(scalar=builder_session),
+            _result(scalars=[]),
+        ]
+    )
     db_session.flush = AsyncMock()
+    ai_service = AsyncMock()
+    ai_service.generate_next_question = AsyncMock(
+        return_value="Who are your target customers?"
+    )
+    service = BusinessContextBuilderService(ai_service=ai_service)
 
     updated_session, _, assistant_message = await service.save_user_message(
         db_session,
@@ -229,9 +290,15 @@ async def test_unfinished_session_can_be_retrieved_and_continued(
             _result(scalars=[]),
             _result(scalar=None),
             _result(scalar=builder_session),
+            _result(scalars=[]),
         ]
     )
     db_session.flush = AsyncMock()
+    ai_service = AsyncMock()
+    ai_service.generate_next_question = AsyncMock(
+        return_value="Who are your target customers?"
+    )
+    service = BusinessContextBuilderService(ai_service=ai_service)
 
     snapshot = await service.get_session(
         db_session,
@@ -306,13 +373,59 @@ async def test_complete_session_creates_result_in_business_context_builder_schem
     db_session.flush.assert_awaited_once()
 
 
+@pytest.mark.anyio
+async def test_complete_session_does_not_generate_final_context_with_ai(
+    service: BusinessContextBuilderService,
+):
+    tenant_id = uuid.uuid4()
+    business_id = uuid.uuid4()
+    session_id = uuid.uuid4()
+    builder_session = BusinessContextBuilderSession(
+        id=session_id,
+        tenant_id=tenant_id,
+        business_id=business_id,
+        status=SESSION_STATUS_ACTIVE,
+        current_step=STEP_BUSINESS_DESCRIPTION,
+    )
+    user_messages = [
+        BusinessContextBuilderMessage(
+            id=uuid.uuid4(),
+            tenant_id=tenant_id,
+            business_id=business_id,
+            session_id=session_id,
+            role=MESSAGE_ROLE_USER,
+            content="Local services.",
+        )
+    ]
+    db_session = MagicMock()
+    db_session.execute = AsyncMock(
+        side_effect=[
+            _result(scalar=builder_session),
+            _result(scalar=None),
+            _result(scalars=user_messages),
+        ]
+    )
+    db_session.flush = AsyncMock()
+    ai_service = AsyncMock()
+    wrapped_service = BusinessContextBuilderService(ai_service=ai_service)
+
+    _, result = await wrapped_service.complete_session(
+        db_session,
+        session_id=session_id,
+        tenant_id=tenant_id,
+        business_id=business_id,
+    )
+
+    assert result.generated_prompt == "Draft placeholder prompt text."
+    ai_service.generate_next_question.assert_not_awaited()
+
+
 @pytest.mark.parametrize(
     "status",
     [SESSION_STATUS_COMPLETED, SESSION_STATUS_CANCELLED],
 )
 @pytest.mark.anyio
 async def test_terminal_session_cannot_receive_new_messages(
-    service: BusinessContextBuilderService,
     status: str,
 ):
     tenant_id = uuid.uuid4()
@@ -327,6 +440,8 @@ async def test_terminal_session_cannot_receive_new_messages(
     )
     db_session = MagicMock()
     db_session.execute = AsyncMock(return_value=_result(scalar=builder_session))
+    ai_service = AsyncMock()
+    service = BusinessContextBuilderService(ai_service=ai_service)
 
     with pytest.raises(BusinessContextBuilderSessionClosedError):
         await service.save_user_message(
@@ -338,6 +453,7 @@ async def test_terminal_session_cannot_receive_new_messages(
         )
 
     db_session.add.assert_not_called()
+    ai_service.generate_next_question.assert_not_awaited()
 
 
 @pytest.mark.parametrize(
