@@ -225,6 +225,7 @@ These names are used **exactly as shown** — no `ALPSTEIN_AI_` prefix.
 | `LANGFUSE_PUBLIC_KEY` | No | Backend only | |
 | `LANGFUSE_SECRET_KEY` | No | Backend only | |
 | `LANGFUSE_HOST` | No | Backend only | Default `https://cloud.langfuse.com` |
+| `LANGFUSE_BASE_URL` | No | Compose compatibility only | Legacy alias; compose maps to `LANGFUSE_HOST` when `LANGFUSE_HOST` is unset |
 | `LANGFUSE_TRACING_ENABLED` | No | Backend only | `true` forces tracing even in production |
 
 #### C — n8n-only (not loaded by backend `Settings`)

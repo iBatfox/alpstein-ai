@@ -54,7 +54,7 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
-      LANGFUSE_HOST: ${LANGFUSE_HOST:-https://cloud.langfuse.com}
+      LANGFUSE_HOST: ${LANGFUSE_HOST:-${LANGFUSE_BASE_URL:-https://cloud.langfuse.com}}
       LANGFUSE_TRACING_ENABLED: ${LANGFUSE_TRACING_ENABLED:-false}
       META_VERIFY_TOKEN: ${META_VERIFY_TOKEN:-}
       WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-}
@@ -116,6 +116,8 @@ services:
     environment:
       # Portable path — overrides legacy host-gateway value in n8n/.env when present.
       BACKEND_BASE_URL: http://backend:8000
+      # n8n behind nginx: trust exactly one reverse proxy hop for X-Forwarded-* headers.
+      N8N_PROXY_HOPS: "1"
       # n8n 2.x blocks $env in Code/expressions by default; unified ingress workflows require it.
       N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
       # F.2 ERPNext Lead tail (non-blocking); set in n8n/.env — default off in repo.

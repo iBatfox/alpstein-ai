@@ -58,6 +58,7 @@ Canonical env templates: [`backend/.env.example`](../../backend/.env.example), [
 | `N8N_BACKEND_API_TOKEN` | HTTP Request header | n8n **Generic Credential** (Header Auth) **or** environment variable referenced in node — **not** literal in workflow JSON | Must match backend `.env` |
 | `N8N_BASIC_AUTH_USER` | n8n admin UI | Docker `.env` / compose | Protects n8n admin (port 5678) |
 | `N8N_BASIC_AUTH_PASSWORD` | n8n admin UI | Docker `.env` / compose | Never in workflow export |
+| `N8N_PROXY_HOPS` | n8n reverse proxy handling | Docker compose / n8n environment variable | Set to `1` when nginx is the only reverse proxy in front of n8n |
 
 ### Setup steps (no values)
 
