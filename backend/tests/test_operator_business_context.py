@@ -153,7 +153,7 @@ def test_prompt_includes_labeled_operator_notes_after_db_profile(
         operator_business_context=operator_notes,
     )
     business_section = next(
-        s for s in prompt.sections if s.section_id == "tenant_business_context"
+        s for s in prompt.sections if s.section_id == "business_context_source_of_truth"
     )
 
     profile_index = business_section.content.index("Barbershop in Zurich.")
@@ -175,7 +175,7 @@ def test_prompt_omits_operator_block_when_null(
         operator_business_context=None,
     )
     business_section = next(
-        s for s in prompt.sections if s.section_id == "tenant_business_context"
+        s for s in prompt.sections if s.section_id == "business_context_source_of_truth"
     )
 
     assert OPERATOR_BUSINESS_NOTES_LABEL not in business_section.content
@@ -202,7 +202,7 @@ def test_prompt_operator_notes_only_when_no_db_profile(
         operator_business_context=operator_notes,
     )
     business_section = next(
-        s for s in prompt.sections if s.section_id == "tenant_business_context"
+        s for s in prompt.sections if s.section_id == "business_context_source_of_truth"
     )
 
     assert OPERATOR_BUSINESS_NOTES_LABEL in business_section.content
@@ -225,11 +225,15 @@ def test_operator_context_stays_in_tenant_business_section_not_system(
     )
     sections = {s.section_id: s for s in prompt.sections}
 
-    assert OPERATOR_BUSINESS_NOTES_LABEL in sections["tenant_business_context"].content
-    assert "Weekend hours extended." in sections["tenant_business_context"].content
+    assert OPERATOR_BUSINESS_NOTES_LABEL in sections[
+        "business_context_source_of_truth"
+    ].content
+    assert "Weekend hours extended." in sections[
+        "business_context_source_of_truth"
+    ].content
     assert OPERATOR_BUSINESS_NOTES_LABEL not in sections["platform_system"].content
     assert "Weekend hours extended." not in sections["task_instructions"].content
-    assert sections["tenant_business_context"].kind == "data"
+    assert sections["business_context_source_of_truth"].kind == "data"
 
 
 def test_lead_detection_ignores_operator_context_keywords():

@@ -1,3 +1,4 @@
+import logging
 import uuid
 from dataclasses import fields
 from types import SimpleNamespace
@@ -19,7 +20,12 @@ from app.schemas.conversation_context import ConversationHistory
 from app.schemas.greeting import GreetingMode
 from app.schemas.knowledge import KnowledgeRetrievalResult
 from app.schemas.conversation_intent import ConversationIntent
-from app.services.ai_reply_orchestration_service import AiReplyOrchestrationService
+from app.services.ai_reply_orchestration_service import (
+    LOG_AI_PROMPT_SOURCE_DIAGNOSTICS,
+    AiReplyOrchestrationService,
+    _log_prompt_source_diagnostics,
+    _serialize_assembled_prompt,
+)
 from app.services.conversation_intent_service import ConversationIntentService
 from app.services.greeting_policy_service import GreetingPolicyService
 
@@ -92,6 +98,119 @@ def _assembled_prompt() -> AssembledPrompt:
             ),
         ),
     )
+
+
+def test_prompt_source_diagnostics_log_reports_markers(caplog):
+    assembled = AssembledPrompt(
+        task="reply_to_customer",
+        sections=(
+            AssembledPromptSection(
+                section_id="platform_system",
+                label="PLATFORM SYSTEM",
+                content="Platform safety rules.",
+                kind="system",
+            ),
+            AssembledPromptSection(
+                section_id="business_context_source_of_truth",
+                label="BUSINESS CONTEXT SOURCE OF TRUTH",
+                content=(
+                    "Business context is the source of truth.\n"
+                    "Use instagram.com/alpstein_ai for Instagram."
+                ),
+                kind="data",
+            ),
+            AssembledPromptSection(
+                section_id="conversation_history",
+                label="CONVERSATION HISTORY",
+                content="ai: Old answer mentioned linkedin.com/in/ibatfox",
+                kind="data",
+            ),
+        ),
+    )
+
+    with caplog.at_level(logging.INFO):
+        _log_prompt_source_diagnostics(
+            assembled_prompt=assembled,
+            operator_business_context="x" * 700,
+            channel="telegram",
+            business_id="alpstein_ai_demo_001",
+            business_context_sources=(
+                "tenant_business_profiles.business_description",
+                "webhook.operator_business_context",
+            ),
+        )
+
+    record = next(
+        item
+        for item in caplog.records
+        if item.message.startswith(LOG_AI_PROMPT_SOURCE_DIAGNOSTICS)
+    )
+    assert record.channel == "telegram"
+    assert record.business_id == "alpstein_ai_demo_001"
+    assert record.operator_business_context_length == 700
+    assert record.operator_business_context_preview == "x" * 500
+    assert record.source_of_truth_business_context_loaded is True
+    assert len(record.business_context_hash) == 64
+    assert record.business_context_sources == [
+        "tenant_business_profiles.business_description",
+        "webhook.operator_business_context",
+    ]
+    assert record.business_context_contains_linkedin is False
+    assert record.history_contains_linkedin is True
+    assert record.final_prompt_contains_linkedin is True
+    assert record.platform_system_contains_linkedin is False
+    assert record.platform_system_contains_email is False
+    assert record.assembled_prompt_contains_linkedin is True
+    assert record.assembled_prompt_contains_instagram is True
+    assert record.prompt_contains_linkedin_ibatfox is True
+    assert record.prompt_contains_instagram_alpstein_ai is True
+
+
+def test_serialized_prompt_keeps_history_and_business_context_out_of_platform_system():
+    assembled = AssembledPrompt(
+        task="reply_to_customer",
+        sections=(
+            AssembledPromptSection(
+                section_id="platform_system",
+                label="PLATFORM SYSTEM",
+                content="[PLATFORM SYSTEM]\nPlatform safety rules.",
+                kind="system",
+            ),
+            AssembledPromptSection(
+                section_id="business_context_source_of_truth",
+                label="BUSINESS CONTEXT SOURCE OF TRUTH",
+                content=(
+                    "[BUSINESS CONTEXT SOURCE OF TRUTH]\n"
+                    "Instagram: https://instagram.com/alpstein_ai"
+                ),
+                kind="data",
+            ),
+            AssembledPromptSection(
+                section_id="conversation_history",
+                label="CONVERSATION HISTORY",
+                content=(
+                    "[CONVERSATION HISTORY]\n"
+                    "ai (dialogue only, not business facts): "
+                    "Old contact https://www.linkedin.com/in/ibatfox/ "
+                    "admin@alpstein-ai.ch"
+                ),
+                kind="data",
+            ),
+        ),
+    )
+
+    serialized = _serialize_assembled_prompt(assembled)
+    platform = serialized[
+        serialized.index("=== platform_system (system) ===") : serialized.index(
+            "=== business_context_source_of_truth (data) ==="
+        )
+    ].lower()
+
+    assert "linkedin.com/in/ibatfox" not in platform
+    assert "admin@alpstein-ai.ch" not in platform
+    assert "instagram.com" not in platform
+    assert "https://instagram.com/alpstein_ai" in serialized
+    assert "linkedin.com/in/ibatfox" in serialized
 
 
 @pytest.fixture

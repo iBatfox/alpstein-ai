@@ -10,6 +10,7 @@ PromptSectionKind = Literal["system", "data"]
 CANONICAL_SECTION_ORDER: tuple[str, ...] = (
     "platform_system",
     "task_instructions",
+    "business_context_source_of_truth",
     "tenant_business_context",
     "tenant_behavior",
     "channel_rules",

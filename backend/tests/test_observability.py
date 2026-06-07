@@ -30,7 +30,10 @@ def _webhook_request(**overrides) -> NormalizedWebhookMessageRequest:
     payload = {
         "business_id": "alpstein_ai_demo_001",
         "channel": WebhookChannel.TELEGRAM,
-        "customer": WebhookCustomer(phone="+41790000001"),
+        "customer": WebhookCustomer(
+            phone="+41790000001",
+            external_customer_id="user-123",
+        ),
         "message": WebhookMessage(
             text="Hello",
             external_message_id="ext-1",
@@ -75,6 +78,7 @@ def test_observability_context_from_webhook_ingress_fields():
     assert context.correlation_id == correlation_id
     assert context.channel == "telegram"
     assert context.external_message_id == "ext-1"
+    assert context.user_external_id == "user-123"
     assert context.n8n_execution_id == "exec-123"
     assert context.operator_business_context_present is True
     assert context.attribution_summary == "utm_source=google; utm_campaign=spring"
@@ -129,7 +133,7 @@ def test_production_langfuse_metadata_excludes_sensitive_text_previews():
     assert metadata["operator_business_context_present"] == "true"
 
 
-def test_dev_langfuse_metadata_includes_sensitive_text_previews_when_tracing_active():
+def test_dev_langfuse_metadata_excludes_sensitive_text_payloads():
     from app.core.config import Settings
 
     settings = Settings(
@@ -148,9 +152,9 @@ def test_dev_langfuse_metadata_includes_sensitive_text_previews_when_tracing_act
         assembled_prompt_dump="=== platform_system ===\nSafety rules.",
     )
 
-    assert metadata["operator_business_context"] == "Reply in Russian when appropriate"
-    assert "assembled_prompt" in metadata
-    assert "Safety rules." in metadata["assembled_prompt"]
+    assert metadata["operator_business_context_present"] == "true"
+    assert "operator_business_context" not in metadata
+    assert "assembled_prompt" not in metadata
 
 
 def test_langfuse_metadata_demo_tag_value_is_external_id():

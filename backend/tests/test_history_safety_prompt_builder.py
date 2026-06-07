@@ -109,16 +109,19 @@ def test_stale_assistant_contact_does_not_override_operator_context(configuratio
         current_customer_message="What is your email?",
         operator_business_context=operator_notes,
     )
-    business = _section_map(prompt)["tenant_business_context"].content
+    business = _section_map(prompt)["business_context_source_of_truth"].content
     history = _history_content(prompt)
 
     assert "new@example.com" in business
     assert "OPERATOR BUSINESS NOTES" in business
-    assert "old@example.com" in history
+    assert "old@example.com" not in history
+    assert "historical assistant reply omitted" in history
     assert f"{AI_HISTORY_SENDER_LABEL}:" in history
     assert "current context wins" in history
     assert "Do not reuse contacts" in history
-    assert business.index("new@example.com") < history.index("old@example.com")
+    assert prompt.section_ids().index(
+        "business_context_source_of_truth"
+    ) < prompt.section_ids().index("conversation_history")
 
 
 def test_stale_assistant_pricing_does_not_override_current_context(configuration):
@@ -151,15 +154,16 @@ def test_stale_assistant_pricing_does_not_override_current_context(configuration
         current_customer_message="How much?",
         operator_business_context="Do not quote fixed prices in chat.",
     )
-    business = _section_map(prompt)["tenant_business_context"].content
+    business = _section_map(prompt)["business_context_source_of_truth"].content
     history_content = _history_content(prompt)
 
-    assert "35 CHF" in history_content
+    assert "35 CHF" not in history_content
     assert "Do not reuse" in history_content and "prices" in history_content
+    assert "historical assistant reply omitted" in history_content
     assert "quoted per project" in business
-    assert prompt.section_ids().index("tenant_business_context") < prompt.section_ids().index(
-        "conversation_history"
-    )
+    assert prompt.section_ids().index(
+        "business_context_source_of_truth"
+    ) < prompt.section_ids().index("conversation_history")
 
 
 def test_customer_message_dedupe_still_works(configuration):

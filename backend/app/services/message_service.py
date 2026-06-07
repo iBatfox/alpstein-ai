@@ -307,6 +307,7 @@ class MessageService:
         if not rows:
             return ConversationHistory.empty()
 
+        rows = [row for row in rows if not _is_excluded_from_prompt_history(row)]
         rows.reverse()
         return ConversationHistory(
             messages=tuple(_map_history_message(row) for row in rows)
@@ -328,3 +329,8 @@ def _map_history_message(message: Message) -> ConversationHistoryMessage:
         message_text=message.message_text,
         created_at=message.created_at,
     )
+
+
+def _is_excluded_from_prompt_history(message: Message) -> bool:
+    metadata = message.metadata_ or {}
+    return metadata.get("excluded_from_prompt_history") is True

@@ -30,6 +30,7 @@ def _settings(**overrides) -> Settings:
 
 
 def _assembled_prompt() -> AssembledPrompt:
+    long_context = "Full OpenAI payload marker. " * 40
     return AssembledPrompt(
         task="reply_to_customer",
         sections=(
@@ -42,7 +43,7 @@ def _assembled_prompt() -> AssembledPrompt:
             AssembledPromptSection(
                 section_id="current_customer_message",
                 label="CURRENT CUSTOMER MESSAGE (reference data)",
-                content="[CURRENT CUSTOMER MESSAGE (reference data)]\nHello",
+                content=f"[CURRENT CUSTOMER MESSAGE (reference data)]\nHello\n{long_context}",
                 kind="data",
             ),
         ),
@@ -75,6 +76,7 @@ def _observability(**overrides) -> ObservabilityContext:
             "operator_business_context_preview",
             "Russian supported",
         ),
+        user_external_id=overrides.pop("user_external_id", "user-123"),
         **overrides,
     )
 
@@ -207,6 +209,11 @@ async def test_trace_ai_reply_records_openai_generation_when_enabled():
     assert gen_kwargs["output"] == "Здравствуйте"
     assert gen_kwargs["usage_details"] == {"input": 100, "output": 20}
     assert "messages" in gen_kwargs["input"]
+    assert "Full OpenAI payload marker." in str(gen_kwargs["input"])
+    assert gen_kwargs["metadata"]["business_id"] == ALPSTEIN_DEMO_BUSINESS_EXTERNAL_ID
+    assert gen_kwargs["metadata"]["channel"] == "telegram"
+    assert gen_kwargs["metadata"]["user_external_id"] == "user-123"
+    assert gen_kwargs["metadata"]["conversation_id"] == str(observability.conversation_id)
 
     metadata = None
     for call in mock_client.start_as_current_observation.call_args_list:
@@ -218,8 +225,8 @@ async def test_trace_ai_reply_records_openai_generation_when_enabled():
     assert metadata["greeting_mode"] == "first_contact"
     assert metadata["customer_language"] == "ru"
     assert metadata["correlation_id"] == str(observability.correlation_id)
-    assert "operator_business_context" in metadata
-    assert "assembled_prompt" in metadata
+    assert "operator_business_context" not in metadata
+    assert "assembled_prompt" not in metadata
     assert "sk-test" not in str(metadata)
     assert "pk-test" not in str(metadata)
 

@@ -67,8 +67,9 @@ class _NoOpTraceRecorder:
 
 
 class _LangfuseTraceRecorder:
-    def __init__(self, client: Langfuse) -> None:
+    def __init__(self, client: Langfuse, observability: ObservabilityContext) -> None:
         self._client = client
+        self._observability = observability
 
     @property
     def langfuse_trace_id(self) -> str | None:
@@ -104,7 +105,10 @@ class _LangfuseTraceRecorder:
         else:
             output = {"error": "unknown_failure"}
 
-        generation_metadata: dict[str, str] = {"latency_ms": str(gateway_result.latency_ms)}
+        generation_metadata = _build_generation_metadata(
+            observability=self._observability,
+            gateway_result=gateway_result,
+        )
         if gateway_result.model:
             generation_metadata["gateway_model"] = gateway_result.model
         if gateway_result.provider:
@@ -157,10 +161,8 @@ class LangfuseTracingService:
 
         client = self._client or self._build_client()
         tags = _build_tags(observability)
-        assembled_dump = _serialize_prompt_for_trace(assembled_prompt)
         metadata = observability.to_langfuse_metadata(
             settings=self._settings,
-            assembled_prompt_dump=assembled_dump,
         )
         span_input = {
             "business_id": observability.business_external_id,
@@ -187,7 +189,7 @@ class LangfuseTracingService:
                     metadata=metadata,
                 ) as span:
                     span_handle.span = span
-                    recorder = _LangfuseTraceRecorder(client)
+                    recorder = _LangfuseTraceRecorder(client, observability)
                     try:
                         yield _CompositeTraceRecorder(recorder, span_handle)
                     finally:
@@ -263,11 +265,23 @@ def _build_tags(observability: ObservabilityContext) -> list[str]:
     return tags
 
 
-def _serialize_prompt_for_trace(prompt: AssembledPrompt) -> str:
-    return "\n\n".join(
-        f"=== {section.section_id} ({section.kind}) ===\n{section.content}"
-        for section in prompt.sections
-    )
+def _build_generation_metadata(
+    *,
+    observability: ObservabilityContext,
+    gateway_result: AiGatewayResult,
+) -> dict[str, str]:
+    metadata = {
+        "business_id": observability.business_external_id or "",
+        "channel": observability.channel or "",
+        "conversation_id": str(observability.conversation_id)
+        if observability.conversation_id
+        else "",
+        "prompt_version": observability.prompt_version or "",
+        "latency_ms": str(gateway_result.latency_ms),
+    }
+    if observability.user_external_id:
+        metadata["user_external_id"] = observability.user_external_id
+    return {key: value for key, value in metadata.items() if value}
 
 
 def _truncate(text: str, max_chars: int) -> str:

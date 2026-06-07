@@ -7,7 +7,7 @@ import uuid
 from dataclasses import dataclass, field, fields, replace
 from typing import Any
 
-from app.core.config import LANGFUSE_DEV_ENVIRONMENTS, Settings, langfuse_tracing_active
+from app.core.config import Settings
 from app.schemas.langfuse_intent_trace import (
     LANGFUSE_METADATA_CONVERSATION_INTENT,
     LANGFUSE_METADATA_INTENT_MATCHED_RULE,
@@ -19,9 +19,6 @@ from app.schemas.webhook_attribution import WebhookAttribution
 OBS_SCHEMA_VERSION = "1.0"
 PROMPT_RUN_METADATA_MAX_BYTES = 4096
 ATTRIBUTION_SUMMARY_MAX_CHARS = 500
-OPERATOR_CONTEXT_TRACE_MAX_CHARS = 4000
-ASSEMBLED_PROMPT_TRACE_MAX_CHARS = 24_000
-
 ALPSTEIN_DEMO_BUSINESS_EXTERNAL_ID = "alpstein_ai_demo_001"
 
 X_CORRELATION_ID_HEADER = "X-Correlation-Id"
@@ -122,6 +119,7 @@ def observability_context_from_webhook(
         channel=request.channel.value,
         external_message_id=request.message.external_message_id,
         external_conversation_id=request.message.external_conversation_id,
+        user_external_id=request.customer.external_customer_id,
         source_platform=request.source.platform if request.source else None,
         source_account_id=request.source.account_id if request.source else None,
         attribution_summary=build_attribution_summary(request.attribution),
@@ -145,6 +143,7 @@ class ObservabilityContext:
     is_duplicate: bool | None = None
     external_message_id: str | None = None
     external_conversation_id: str | None = None
+    user_external_id: str | None = None
     prompt_run_id: uuid.UUID | None = None
     outbound_message_id: uuid.UUID | None = None
     template_key: str | None = None
@@ -276,7 +275,7 @@ class ObservabilityContext:
         present = bool(operator_business_context and operator_business_context.strip())
         preview = None
         if present and operator_business_context is not None:
-            preview = _truncate(operator_business_context, OPERATOR_CONTEXT_TRACE_MAX_CHARS)
+            preview = _truncate(operator_business_context, 500)
         return replace(
             self,
             operator_business_context_present=present,
@@ -293,6 +292,8 @@ class ObservabilityContext:
         settings: Settings,
         assembled_prompt_dump: str | None = None,
     ) -> dict[str, str]:
+        del settings
+        del assembled_prompt_dump
         metadata: dict[str, str] = {}
 
         def put(key: str, value: object | None) -> None:
@@ -320,6 +321,7 @@ class ObservabilityContext:
         put("is_duplicate", self.is_duplicate)
         put("external_message_id", self.external_message_id)
         put("external_conversation_id", self.external_conversation_id)
+        put("user_external_id", self.user_external_id)
         put("prompt_run_id", self.prompt_run_id)
         put("outbound_message_id", self.outbound_message_id)
         put("template_key", self.template_key)
@@ -347,21 +349,6 @@ class ObservabilityContext:
         put("attribution_summary", self.attribution_summary)
         put("error_code", self.error_code)
 
-        if (
-            _langfuse_allows_sensitive_text_metadata(settings)
-            and self.operator_business_context_preview
-        ):
-            metadata["operator_business_context"] = self.operator_business_context_preview
-
-        if (
-            _langfuse_allows_sensitive_text_metadata(settings)
-            and assembled_prompt_dump
-        ):
-            metadata["assembled_prompt"] = _truncate(
-                assembled_prompt_dump,
-                ASSEMBLED_PROMPT_TRACE_MAX_CHARS,
-            )
-
         return metadata
 
     def _scalar_dict(self) -> dict[str, Any]:
@@ -377,14 +364,6 @@ class ObservabilityContext:
             else:
                 result[item.name] = value
         return result
-
-
-def _langfuse_allows_sensitive_text_metadata(settings: Settings) -> bool:
-    """§16.2 — truncated operator context and assembled_prompt in Langfuse dev/test only."""
-    return (
-        langfuse_tracing_active(settings)
-        and settings.environment.lower() in LANGFUSE_DEV_ENVIRONMENTS
-    )
 
 
 def _fit_prompt_run_metadata(payload: dict[str, Any]) -> dict[str, Any]:

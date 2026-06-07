@@ -50,6 +50,7 @@ def _message(
     sender_type: str,
     text: str,
     created_at: datetime,
+    metadata: dict[str, object] | None = None,
 ) -> Message:
     return Message(
         tenant_id=tenant_id,
@@ -62,7 +63,7 @@ def _message(
         external_message_id="ext-1",
         raw_payload={"secret": "payload"},
         ai_metadata={"model": "gpt"},
-        metadata_={"internal": True},
+        metadata_=metadata if metadata is not None else {"internal": True},
         created_at=created_at,
     )
 
@@ -180,6 +181,44 @@ async def test_load_recent_conversation_history_returns_oldest_to_newest(
     assert _limit_value(statement) == CONVERSATION_HISTORY_MAX_LIMIT
     assert [item.message_text for item in history.messages] == ["First", "Second"]
     assert [item.sender_type for item in history.messages] == ["customer", "ai"]
+
+
+@pytest.mark.anyio
+async def test_load_recent_conversation_history_skips_archived_prompt_history_messages(
+    message_service: MessageService,
+    tenant_scope: tuple[uuid.UUID, uuid.UUID, uuid.UUID],
+):
+    tenant_id, business_id, conversation_id = tenant_scope
+    keep = _message(
+        tenant_id=tenant_id,
+        business_id=business_id,
+        conversation_id=conversation_id,
+        sender_type="customer",
+        text="Need contacts",
+        created_at=datetime(2026, 5, 21, 10, 0, 0),
+    )
+    archived = _message(
+        tenant_id=tenant_id,
+        business_id=business_id,
+        conversation_id=conversation_id,
+        sender_type="ai",
+        text="Old LinkedIn contact",
+        created_at=datetime(2026, 5, 21, 10, 1, 0),
+        metadata={"excluded_from_prompt_history": True},
+    )
+    session = AsyncMock()
+    session.execute.return_value = MagicMock(
+        scalars=MagicMock(return_value=MagicMock(all=lambda: [archived, keep]))
+    )
+
+    history = await message_service.load_recent_conversation_history(
+        session,
+        tenant_id=tenant_id,
+        business_id=business_id,
+        conversation_id=conversation_id,
+    )
+
+    assert [item.message_text for item in history.messages] == ["Need contacts"]
 
 
 @pytest.mark.anyio
