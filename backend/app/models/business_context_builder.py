@@ -110,7 +110,7 @@ class BusinessContextBuilderMiniAppAllowedUser(Base):
         ),
         UniqueConstraint(
             "telegram_user_id",
-            name="business_context_builder_mini_app_allowed_users_telegram_user_id_unique",
+            name="bcb_mini_app_allowed_users_telegram_user_id_unique",
         ),
         Index(
             "bcb_mini_app_allowed_users_telegram_user_id_idx",
