@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Business Context Builder</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  </head>
+  <body>
+    <main class="app-shell" aria-live="polite">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Alpstein AI</p>
+          <h1>Business Context Builder</h1>
+        </div>
+        <span class="status-pill" id="telegramStatus">Browser preview</span>
+      </header>
+
+      <section class="screen screen-active" id="screenStart" data-screen="start">
+        <div class="start-panel">
+          <h2>Business Context Builder</h2>
+          <p>
+            Create a draft business context from a guided interview before it is
+            reviewed and published through a separate workflow.
+          </p>
+          <div class="button-row">
+            <button class="primary-button" id="startInterviewButton" type="button">
+              Start interview
+            </button>
+            <button class="secondary-button" id="continueSessionButton" type="button">
+              Continue unfinished session
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen" id="screenInterview" data-screen="interview">
+        <div class="interview-toolbar">
+          <div>
+            <p class="eyebrow">Current step</p>
+            <h2 id="currentStepLabel">Company information</h2>
+          </div>
+          <button class="secondary-button compact" id="completeInterviewButton" type="button">
+            Complete interview
+          </button>
+        </div>
+
+        <div class="message-list" id="messageList" aria-label="Interview messages"></div>
+
+        <form class="composer" id="messageForm">
+          <label class="sr-only" for="messageInput">Message</label>
+          <textarea
+            id="messageInput"
+            name="message"
+            rows="2"
+            placeholder="Type an answer"
+          ></textarea>
+          <button class="primary-button send-button" type="submit">Send</button>
+        </form>
+      </section>
+
+      <section class="screen" id="screenResult" data-screen="result">
+        <div class="result-header">
+          <div>
+            <p class="eyebrow">Draft result</p>
+            <h2>Generated context</h2>
+          </div>
+          <button class="secondary-button compact" id="backToContextsButton" type="button">
+            Back to contexts
+          </button>
+        </div>
+        <pre class="result-output" id="resultOutput"></pre>
+        <dl class="metadata-grid" id="metadataGrid"></dl>
+      </section>
+
+      <section class="screen" id="screenContexts" data-screen="contexts">
+        <div class="contexts-header">
+          <div>
+            <p class="eyebrow">Draft contexts</p>
+            <h2>Contexts</h2>
+          </div>
+          <button class="primary-button compact" id="newContextButton" type="button">
+            New context
+          </button>
+        </div>
+        <div class="context-list" id="contextList"></div>
+        <div class="pagination-row">
+          <button class="secondary-button compact" id="previousPageButton" type="button">
+            Previous
+          </button>
+          <span id="pageIndicator">Page 1</span>
+          <button class="secondary-button compact" id="nextPageButton" type="button">
+            Next
+          </button>
+        </div>
+      </section>
+    </main>
+
+    <template id="messageTemplate">
+      <article class="message">
+        <span class="message-role"></span>
+        <p class="message-text"></p>
+      </article>
+    </template>
+
+    <template id="contextTemplate">
+      <article class="context-item">
+        <div>
+          <h3></h3>
+          <p></p>
+        </div>
+        <button class="secondary-button compact" type="button">Open</button>
+      </article>
+    </template>
+
+    <script type="module" src="./src/app.js"></script>
+  </body>
+</html>
