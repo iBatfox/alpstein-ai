@@ -1,6 +1,6 @@
-# Meta / WhatsApp Cloud API webhook setup
+# Meta webhook setup
 
-**Scope:** Backend verification + raw intake only (`GET/POST /webhooks/meta`). No AI, no outbound WhatsApp on this route yet.
+**Scope:** Backend verification + raw intake only (`GET/POST /webhooks/meta`) for Meta channels. Instagram DM events persist in the backend first, then dispatch to n8n unified customer ingress. No outbound WhatsApp on this route yet.
 
 **Meta App:** `app_alpstein_ai`
 
@@ -45,6 +45,53 @@ Restart backend after changing env.
 
 ---
 
+## Production nginx route
+
+Meta calls the public backend callback URL:
+
+```text
+https://api.alpstein-ai.ch/webhooks/meta
+```
+
+On the production host, nginx must proxy the exact path `/webhooks/meta` to the backend loopback upstream:
+
+```nginx
+location = /webhooks/meta {
+    proxy_pass http://127.0.0.1:18081;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+The backend loopback port comes from the Docker Compose host binding:
+
+```text
+127.0.0.1:18081:8000
+```
+
+A stale upstream such as `http://127.0.0.1:8000` for `api.alpstein-ai.ch/webhooks/meta` causes public Meta deliveries to fail with nginx `502 Bad Gateway` when nothing is listening on host port `8000`.
+
+The Instagram n8n ingress URL remains separate and unchanged:
+
+```text
+https://n8n.alpstein-ai.ch/webhook/alpstein/unified-customer-ingress/instagram/incoming
+```
+
+Flow:
+
+```text
+Meta -> https://api.alpstein-ai.ch/webhooks/meta
+     -> nginx exact /webhooks/meta -> http://127.0.0.1:18081
+     -> backend persists Instagram DM
+     -> backend dispatches normalized event to n8n Instagram ingress URL
+     -> n8n calls backend POST /api/v1/webhook/message
+```
+
+---
+
 ## Backend behaviour
 
 | Method | Path | Behaviour |
@@ -52,13 +99,51 @@ Restart backend after changing env.
 | `GET` | `/webhooks/meta` | Meta verification; `403` on mismatch |
 | `POST` | `/webhooks/meta` | Accept JSON event; log safe metadata; `200 {"status":"received"}` |
 
-Does **not** replace n8n normalized ingress (`POST /api/v1/webhook/message`). WhatsApp business processing will be wired in a later slice (normalization in n8n, SoT in PostgreSQL).
+Does **not** replace n8n normalized ingress (`POST /api/v1/webhook/message`). Instagram uses this route only for Meta delivery and backend persistence before backend-to-n8n dispatch. WhatsApp business processing will be wired in a later slice (normalization in n8n, SoT in PostgreSQL).
 
 ---
 
-## Local verification (curl)
+## Verification
 
-Replace `YOUR_VERIFY_TOKEN` and run while backend listens (default dev: port 8000):
+Validate nginx syntax before reload:
+
+```bash
+nginx -t
+```
+
+Safe public POST probe for the Meta callback route:
+
+```bash
+curl -sS -i --max-time 15 \
+  -X POST "https://api.alpstein-ai.ch/webhooks/meta" \
+  -H "Content-Type: application/json" \
+  -d '{"object":"instagram","entry":[]}'
+```
+
+Expected: HTTP 200 with `{"status":"received"}`. This validates public nginx routing without sending a real customer message.
+
+Check backend logs for Instagram processing:
+
+```bash
+docker logs --since 10m alpstein_backend 2>&1 \
+  | rg -i "instagram|channel=instagram|POST /api/v1/webhook/message|/webhooks/meta"
+```
+
+For a real Instagram DM, expect:
+
+- public nginx access log: `POST /webhooks/meta` returns 200;
+- backend log: Instagram ingress accepted or safe Instagram diagnostic;
+- public/internal n8n access: `POST /webhook/alpstein/unified-customer-ingress/instagram/incoming` returns 200;
+- backend log from n8n: `POST /api/v1/webhook/message` returns 200 and includes `channel=instagram` or equivalent Instagram prompt/flow diagnostics;
+- n8n execution starts in workflow `alpstein-customer-ingress`.
+
+Check n8n execution in the n8n UI or with the existing workflow/execution inspection procedure for `alpstein-customer-ingress` (`aYrRmAGKhP4TJbG9`).
+
+### Local curl
+
+Replace `YOUR_VERIFY_TOKEN` and run while backend listens. Inside the backend container the service listens on port `8000`; on the production host, use the compose loopback binding `127.0.0.1:18081`.
+
+Container-local example:
 
 ```bash
 curl -sS -G "http://127.0.0.1:8000/webhooks/meta" \
@@ -68,6 +153,15 @@ curl -sS -G "http://127.0.0.1:8000/webhooks/meta" \
 ```
 
 Expected: HTTP 200, body `1158201444` (plain text).
+
+Production-host example:
+
+```bash
+curl -sS -G "http://127.0.0.1:18081/webhooks/meta" \
+  --data-urlencode "hub.mode=subscribe" \
+  --data-urlencode "hub.verify_token=YOUR_VERIFY_TOKEN" \
+  --data-urlencode "hub.challenge=1158201444"
+```
 
 Sample POST intake:
 
@@ -100,6 +194,12 @@ curl -sS -X POST "http://127.0.0.1:8000/webhooks/meta" \
 ```
 
 Expected: HTTP 200, `{"status":"received"}`.
+
+---
+
+## Instagram outbound note
+
+If Instagram inbound reaches backend and n8n, but a customer reply fails, inspect backend Instagram outbound logs and Meta error codes without printing access tokens. Meta error code `100` with subcode `2534014` can be recipient-specific when other Instagram outbound sends succeed; treat that as evidence to investigate the specific recipient/account conversation or Meta permission state rather than a global nginx/n8n ingress failure.
 
 ---
 

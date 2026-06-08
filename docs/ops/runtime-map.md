@@ -19,6 +19,11 @@ Internet (443)
                 → alpstein_backend
                 → alpstein_postgres (DNS: postgres)
 
+Meta Instagram webhook (443)
+    → nginx api.alpstein-ai.ch exact /webhooks/meta
+    → 127.0.0.1:18081  alpstein_backend (container port 8000)
+           → backend dispatches to n8n Instagram ingress URL
+
 Production workflow: alpstein-customer-ingress (aYrRmAGKhP4TJbG9)
 ```
 
@@ -38,10 +43,12 @@ Production workflow: alpstein-customer-ingress (aYrRmAGKhP4TJbG9)
 | Public URL | Edge | Upstream | Workflow / path |
 |------------|------|----------|-----------------|
 | `https://n8n.alpstein-ai.ch/` | nginx TLS | `127.0.0.1:15679` | n8n UI + webhooks |
+| `https://api.alpstein-ai.ch/webhooks/meta` | Meta → nginx TLS | `127.0.0.1:18081` exact route | Backend Meta intake; Instagram then dispatches to n8n |
+| Instagram n8n ingress | backend → n8n | `https://n8n.alpstein-ai.ch` | `…/webhook/alpstein/unified-customer-ingress/instagram/incoming` |
 | Telegram customer bot | Telegram → n8n | same | `…/webhook/alpstein-telegram-customer-trigger-unified-inactive/webhook` |
 | Website Chat (production) | Browser → n8n | same | `…/webhook/alpstein/unified-customer-ingress/website-chat/incoming` |
 
-**Not public:** backend `8000`, postgres `15433` — loopback only via dev overlay.
+**Not public:** backend container port `8000`, backend host bind `18081`, postgres `15433` — loopback only.
 
 ---
 
@@ -50,7 +57,8 @@ Production workflow: alpstein-customer-ingress (aYrRmAGKhP4TJbG9)
 | Bind | Service | Notes |
 |------|---------|--------|
 | `127.0.0.1:15679` | `alpstein_n8n_compose` | **Production** n8n; nginx upstream |
-| `127.0.0.1:8000` | `alpstein_backend` | Dev overlay; `curl` from host |
+| `127.0.0.1:18081` | `alpstein_backend` | Host nginx upstream for `api.alpstein-ai.ch/webhooks/meta`; compose binding `127.0.0.1:18081:8000` |
+| `127.0.0.1:8000` | `alpstein_backend` | Legacy/dev overlay only; stale upstream here causes `502` if no host listener exists |
 | `127.0.0.1:15433` | `alpstein_postgres` | Dev overlay; **not** legacy `15432` |
 | `127.0.0.1:15678` | `integrationhubspot_n8n` | **HubSpot — do not modify** |
 
@@ -62,7 +70,8 @@ Production workflow: alpstein-customer-ingress (aYrRmAGKhP4TJbG9)
 |------|--------|------------------------|--------|
 | **443 / 80** | Production public | nginx | Active (TLS → n8n) |
 | **15679** | Production internal | `alpstein_n8n_compose` | **Canonical** |
-| **8000** | Production internal (dev bind) | `alpstein_backend` | Active |
+| **18081** | Production internal | `alpstein_backend` | Backend host loopback bind for nginx exact `/webhooks/meta` route |
+| **8000** | Container/internal or legacy dev bind | `alpstein_backend` container port | Do not use as nginx upstream unless a host listener is confirmed |
 | **15433** | Dev / ops only | `alpstein_postgres` | Active |
 | **15678** | Foreign (HubSpot) | `integrationhubspot_n8n` | Active — out of scope |
 | **15680** | Reserved (compose default) | — | Use **15679** via `N8N_HOST_PORT=15679` |
