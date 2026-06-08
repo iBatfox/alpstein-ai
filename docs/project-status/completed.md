@@ -3,6 +3,7 @@
 
 # Completed
 
+- BCB API documentation: added runtime-derived Business Context Builder API guide with auth, feature flags, fallback behavior, endpoint contracts, curl examples, happy path, error examples, and developer notes — [`docs/api/business-context-builder.md`](../api/business-context-builder.md).
 - T-f2.3 ERPNext Lead conversation history: added `Communication` custom fields, Lead tab/HTML field `История переписки`, Lead client script chat renderer, n8n Communication read-model sync after ERPNext Lead sync, and runtime backfill for existing Ivan Instagram/Telegram messages from PostgreSQL source rows.
 - BCB Phase 3.1: AI next-question generation for Business Context Builder — `BusinessContextBuilderPromptService` + `BusinessContextBuilderAiService` (reuses `AiGatewayService`); `save_user_message` stores user message then AI assistant reply with static fallback when `BCB_AI_ENABLED=false`, API key missing, or gateway failure; `BCB_AI_ENABLED` config; structured logs with `feature=business_context_builder`, `operation=next_question`; isolated `business_context_builder` schema only (no production assistant tables); complete session still uses placeholder draft result; tests in `test_business_context_builder_{prompt,ai,service,api}.py` (26 BCB-focused tests).
 - Implemented minimal `GET /api/v1/health` backend endpoint.

@@ -6,7 +6,7 @@
 
 ## Recommended next task: **BCB Phase 3.2** — final business context AI generation (optional) or continue **E3.6 staging validation**
 
-**BCB Phase 3.1 (done, review):** AI next-question generation in `save_user_message` — reuses `AiGatewayService`; static fallback when disabled/unconfigured; complete session still placeholder draft. Task: [`T-bcb-phase-3.1-ai-next-question.md`](../../tasks/done/T-bcb-phase-3.1-ai-next-question.md).
+**BCB Phase 3.1 (done, review):** AI next-question generation in `save_user_message` — reuses `AiGatewayService`; static fallback when disabled/unconfigured; complete session still placeholder draft. API usage guide: [`docs/api/business-context-builder.md`](../api/business-context-builder.md). Task: [`T-bcb-phase-3.1-ai-next-question.md`](../../tasks/done/T-bcb-phase-3.1-ai-next-question.md).
 
 **E3.6 staging validation** → enable rate-limit in staging
 
