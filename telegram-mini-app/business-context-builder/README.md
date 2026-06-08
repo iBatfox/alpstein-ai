@@ -30,6 +30,44 @@ Optional preview parameters:
 ?api_mode=bridge&api_base_url=https://backend.example
 ```
 
+## HTTPS Deployment
+
+Production Mini App URL:
+
+```text
+https://alpstein-ai.ch/telegram-context
+```
+
+The nginx route redirects this exact URL to the slash-normalized path so
+relative CSS and module imports resolve correctly:
+
+```text
+https://alpstein-ai.ch/telegram-context/
+```
+
+Static files are deployed on the host at:
+
+```text
+/var/www/alpstein-ai/telegram-context/
+```
+
+Required files:
+
+- `index.html`
+- `styles.css`
+- `src/app.js`
+- `src/apiClient.js`
+
+Deploy/update static files from this directory:
+
+```bash
+sudo install -d -m 0755 /var/www/alpstein-ai/telegram-context/src
+sudo install -m 0644 index.html /var/www/alpstein-ai/telegram-context/index.html
+sudo install -m 0644 styles.css /var/www/alpstein-ai/telegram-context/styles.css
+sudo install -m 0644 src/app.js /var/www/alpstein-ai/telegram-context/src/app.js
+sudo install -m 0644 src/apiClient.js /var/www/alpstein-ai/telegram-context/src/apiClient.js
+```
+
 ## Current Behavior
 
 - Uses the mock API adapter by default.
@@ -54,6 +92,15 @@ All bridge requests send Telegram `initData` to the backend. Operational
 requests use the `X-Telegram-Init-Data` header. The frontend does not send
 tenant or business identifiers in bridge mode.
 
+On production, bridge mode is same-origin through nginx:
+
+```text
+https://alpstein-ai.ch/telegram-context/?api_mode=bridge
+```
+
+If the backend is not on the same origin in another environment, use
+`api_base_url`.
+
 ## Backend Env
 
 Required for bridge mode:
@@ -73,6 +120,12 @@ be tested inside Telegram after the Mini App is served over HTTPS.
 
 BotFather Mini App URL setup should happen only after HTTPS deployment. Local
 browser development should use `api_mode=mock`.
+
+Use this URL in BotFather after HTTPS verification:
+
+```text
+https://alpstein-ai.ch/telegram-context/
+```
 
 ## Not Implemented
 
