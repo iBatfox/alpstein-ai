@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Alpstein AI Prototype</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="prototype-shell">
+      <section class="screen screen-active login-screen" data-screen="login">
+        <div class="brand-lockup">
+          <div class="logo-mark" aria-hidden="true">
+            <span></span>
+          </div>
+          <div>
+            <p class="eyebrow">Alpstein AI</p>
+            <h1>Business Context Builder</h1>
+          </div>
+        </div>
+
+        <form class="login-card" id="loginForm">
+          <label>
+            Email
+            <input type="email" value="owner@example.com" autocomplete="email" />
+          </label>
+          <label>
+            Password
+            <input type="password" value="prototype" autocomplete="current-password" />
+          </label>
+          <button class="primary-button" type="submit">Login</button>
+        </form>
+      </section>
+
+      <section class="screen" data-screen="bots">
+        <header class="page-header">
+          <div>
+            <p class="eyebrow">Channels</p>
+            <h2>Automation channels</h2>
+          </div>
+          <button class="secondary-button compact" type="button">Connect channel</button>
+        </header>
+
+        <article class="shared-context-note">
+          All channels use the same Business Context. Connect Instagram,
+          Telegram, WhatsApp or Website Chat to let the assistant answer
+          customers from one shared knowledge base.
+        </article>
+
+        <div class="bot-grid" id="botGrid"></div>
+      </section>
+
+      <section class="screen" data-screen="channel-detail">
+        <header class="page-header">
+          <div>
+            <p class="eyebrow">Communication channel</p>
+            <h2 id="channelTitle">Instagram Bot</h2>
+          </div>
+          <button class="secondary-button compact" id="channelBack" type="button">
+            Back
+          </button>
+        </header>
+
+        <article class="channel-summary-card">
+          <div>
+            <p class="eyebrow">Status</p>
+            <h3 id="channelStatus">Connected</h3>
+          </div>
+          <p>
+            This channel connects the same Business Context to a communication
+            platform. It monitors the connection and does not edit a separate
+            assistant brain.
+          </p>
+        </article>
+
+        <section class="channel-section">
+          <div class="section-heading">
+            <p class="eyebrow">Today</p>
+            <h3>Basic statistics</h3>
+          </div>
+          <div class="stats-grid" id="channelStats"></div>
+        </section>
+
+        <section class="channel-section">
+          <div class="section-heading">
+            <p class="eyebrow">Connection</p>
+            <h3>Connection info</h3>
+          </div>
+          <div class="connection-list" id="channelConnection"></div>
+        </section>
+
+        <section class="channel-section">
+          <div class="section-heading">
+            <p class="eyebrow">Actions</p>
+            <h3>Visual placeholders</h3>
+          </div>
+          <div class="channel-actions">
+            <button class="secondary-button" type="button">Open conversations</button>
+            <button class="secondary-button" type="button">View leads</button>
+            <button class="secondary-button" type="button">Test channel</button>
+            <button class="danger-button" type="button">Disconnect channel</button>
+          </div>
+        </section>
+      </section>
+
+      <section class="screen" data-screen="context">
+        <header class="page-header">
+          <div>
+            <p class="eyebrow">AI knowledge</p>
+            <h2>Business Context</h2>
+          </div>
+          <span class="status-pill">Draft</span>
+        </header>
+
+        <article class="knowledge-card">
+          <label>
+            Company Name
+            <input value="Alpstein Demo GmbH" />
+          </label>
+          <label>
+            Company Description
+            <textarea rows="3">A local service business using AI to answer customer questions and qualify new leads.</textarea>
+          </label>
+          <label>
+            Products
+            <textarea rows="3">Starter package, professional setup, monthly support.</textarea>
+          </label>
+          <label>
+            Services
+            <textarea rows="3">Consulting, implementation, customer support automation, appointment handoff.</textarea>
+          </label>
+          <label>
+            FAQ
+            <textarea rows="4">What does it cost? How quickly can we start? Can the assistant hand over to a human?</textarea>
+          </label>
+          <label>
+            Contact Information
+            <textarea rows="3">hello@example.com, +41 71 000 00 00, St. Gallen</textarea>
+          </label>
+          <label>
+            Working Hours
+            <input value="Monday to Friday, 08:00-18:00" />
+          </label>
+          <label>
+            Additional Instructions
+            <textarea rows="4">Be concise, polite, and direct. Ask for contact details before handoff.</textarea>
+          </label>
+        </article>
+      </section>
+
+      <section class="screen" data-screen="interview">
+        <header class="page-header">
+          <div>
+            <p class="eyebrow" id="stepLabel">Step 1 of 5</p>
+            <h2>Interview Wizard</h2>
+          </div>
+          <span class="status-pill">Prototype</span>
+        </header>
+
+        <div class="progress-track">
+          <span id="progressFill"></span>
+        </div>
+
+        <article class="wizard-card">
+          <p class="wizard-question" id="wizardQuestion">What is your company name?</p>
+          <textarea id="wizardAnswer" rows="5" placeholder="Type a short answer"></textarea>
+          <button class="primary-button" id="wizardContinue" type="button">Continue</button>
+        </article>
+
+        <div class="answer-stack" id="answerStack"></div>
+      </section>
+
+      <section class="screen" data-screen="settings">
+        <header class="page-header">
+          <div>
+            <p class="eyebrow">Bot Settings</p>
+            <h2>Telegram Bot</h2>
+          </div>
+          <span class="status-pill">Visual only</span>
+        </header>
+
+        <div class="settings-list">
+          <button class="setting-row" type="button">
+            <span>Language</span>
+            <strong>German</strong>
+          </button>
+          <button class="setting-row" type="button">
+            <span>Long memory</span>
+            <strong>On</strong>
+          </button>
+          <button class="setting-row" type="button">
+            <span>Personality</span>
+            <strong>Professional</strong>
+          </button>
+          <button class="setting-row" type="button">
+            <span>Images</span>
+            <strong>Allowed</strong>
+          </button>
+          <button class="setting-row" type="button">
+            <span>Buttons</span>
+            <strong>Enabled</strong>
+          </button>
+          <button class="setting-row" type="button">
+            <span>Advanced settings</span>
+            <strong>Placeholder</strong>
+          </button>
+        </div>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" id="bottomNav" aria-label="Prototype navigation" hidden>
+      <button type="button" data-nav="interview">💬 <span>Interview</span></button>
+      <button type="button" data-nav="context">📚 <span>Context</span></button>
+      <button type="button" data-nav="bots">🔌 <span>Channels</span></button>
+      <button type="button" data-nav="settings">⚙️ <span>Settings</span></button>
+    </nav>
+
+    <script src="./src/app.js"></script>
+  </body>
+</html>
