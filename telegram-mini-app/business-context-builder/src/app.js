@@ -21,89 +21,6 @@ const apiMode = getConfigValue("api_mode", "bridge");
 const apiBaseUrl = getConfigValue("api_base_url", "");
 const localMockAllowed = isLocalDevelopmentHost();
 
-const bots = [
-  {
-    id: "instagram",
-    name: "Instagram Bot",
-    icon: "IG",
-    source: "Instagram",
-    status: "Connected",
-    stats: {
-      messagesToday: "42",
-      leadsCreated: "6",
-      lastMessageTime: "14:32",
-      failedReplies: "1",
-      conversionRate: "14%"
-    },
-    connection: {
-      channelId: "ig_demo_channel_001",
-      webhookStatus: "Receiving events",
-      connectedBackend: "BCB bridge placeholder",
-      crmSyncStatus: "Not connected"
-    }
-  },
-  {
-    id: "telegram",
-    name: "Telegram Bot",
-    icon: "TG",
-    source: "Telegram",
-    status: "Draft setup",
-    stats: {
-      messagesToday: "18",
-      leadsCreated: "3",
-      lastMessageTime: "13:58",
-      failedReplies: "0",
-      conversionRate: "17%"
-    },
-    connection: {
-      channelId: "tg_demo_channel_001",
-      webhookStatus: "Setup pending",
-      connectedBackend: "BCB bridge placeholder",
-      crmSyncStatus: "Not connected"
-    }
-  },
-  {
-    id: "whatsapp",
-    name: "WhatsApp Bot",
-    icon: "WA",
-    source: "WhatsApp",
-    status: "Ready for review",
-    stats: {
-      messagesToday: "9",
-      leadsCreated: "2",
-      lastMessageTime: "11:20",
-      failedReplies: "0",
-      conversionRate: "22%"
-    },
-    connection: {
-      channelId: "wa_demo_channel_001",
-      webhookStatus: "Review required",
-      connectedBackend: "BCB bridge placeholder",
-      crmSyncStatus: "Not connected"
-    }
-  },
-  {
-    id: "website",
-    name: "Website Bot",
-    icon: "Web",
-    source: "Website Chat",
-    status: "Disabled",
-    stats: {
-      messagesToday: "0",
-      leadsCreated: "0",
-      lastMessageTime: "No messages today",
-      failedReplies: "0",
-      conversionRate: "0%"
-    },
-    connection: {
-      channelId: "web_demo_channel_001",
-      webhookStatus: "Disabled",
-      connectedBackend: "BCB bridge placeholder",
-      crmSyncStatus: "Not connected"
-    }
-  }
-];
-
 const wizardSteps = [
   "What is your company name?",
   "What do you sell?",
@@ -113,15 +30,18 @@ const wizardSteps = [
 ];
 
 const answers = [];
+let integrations = [];
 let currentStep = 0;
 
-renderBots();
+renderIntegrations();
 renderWizard();
 verifyStartupAccess();
 
 loginForm.addEventListener("submit", (event) => {
   event.preventDefault();
   if (apiMode !== "mock" || !localMockAllowed) return;
+  integrations = getMockIntegrations();
+  renderIntegrations();
   bottomNav.hidden = false;
   showScreen("bots");
 });
@@ -165,6 +85,8 @@ async function verifyStartupAccess() {
   bottomNav.hidden = true;
 
   if (apiMode === "mock" && localMockAllowed) {
+    integrations = getMockIntegrations();
+    renderIntegrations();
     showScreen("login");
     return;
   }
@@ -172,7 +94,9 @@ async function verifyStartupAccess() {
   showScreen("verifying");
 
   try {
-    await requestAccessVerification();
+    const access = await requestAccessVerification();
+    integrations = Array.isArray(access.integrations) ? access.integrations : [];
+    renderIntegrations();
     bottomNav.hidden = false;
     showScreen("bots");
   } catch (_error) {
@@ -235,43 +159,59 @@ function showAccessDenied() {
   showScreen("access-denied");
 }
 
-function renderBots() {
+function renderIntegrations() {
+  if (integrations.length === 0) {
+    const empty = document.createElement("article");
+    empty.className = "shared-context-note";
+    empty.textContent =
+      "No channels are connected for this business yet. Channels are connected by Alpstein AI after setup.";
+    botGrid.replaceChildren(empty);
+    return;
+  }
+
   botGrid.replaceChildren(
-    ...bots.map((bot) => {
+    ...integrations.map((integration) => {
       const card = document.createElement("article");
       const icon = document.createElement("div");
       const content = document.createElement("div");
       const title = document.createElement("h3");
       const status = document.createElement("p");
+      const workflow = document.createElement("p");
       const button = document.createElement("button");
       card.className = "bot-card";
       icon.className = "channel-icon";
       icon.setAttribute("aria-hidden", "true");
-      icon.textContent = bot.icon;
-      title.textContent = bot.name;
-      status.textContent = bot.status;
+      icon.textContent = integrationIcon(integration.channel_type);
+      title.textContent = integration.display_name;
+      status.textContent = [
+        formatStatus(integration.status),
+        integration.provider || null
+      ].filter(Boolean).join(" · ");
+      workflow.textContent = integration.workflow_name
+        ? `Workflow: ${integration.workflow_name}`
+        : "Managed by Alpstein AI";
       button.className = "secondary-button compact";
       button.type = "button";
       button.textContent = "Open channel";
-      button.addEventListener("click", () => openChannelDetail(bot.id));
-      content.append(title, status);
+      button.addEventListener("click", () => openChannelDetail(integration.id));
+      content.append(title, status, workflow);
       card.append(icon, content, button);
       card.addEventListener("click", (event) => {
         if (event.target.closest("button")) return;
-        openChannelDetail(bot.id);
+        openChannelDetail(integration.id);
       });
       return card;
     })
   );
 }
 
-function openChannelDetail(channelId) {
-  const channel = bots.find((bot) => bot.id === channelId);
-  if (!channel) return;
-  channelTitle.textContent = channel.name;
-  channelStatus.textContent = channel.status;
-  renderChannelStats(channel.stats);
-  renderChannelConnection(channel.connection);
+function openChannelDetail(integrationId) {
+  const integration = integrations.find((item) => item.id === integrationId);
+  if (!integration) return;
+  channelTitle.textContent = integration.display_name;
+  channelStatus.textContent = formatStatus(integration.status);
+  renderChannelStats(mockStatsForIntegration(integration));
+  renderChannelConnection(integration);
   showScreen("channel-detail");
 }
 
@@ -286,12 +226,15 @@ function renderChannelStats(stats) {
   channelStats.replaceChildren(...rows.map(([label, value]) => createMetricCard(label, value)));
 }
 
-function renderChannelConnection(connection) {
+function renderChannelConnection(integration) {
   const rows = [
-    ["Channel ID", connection.channelId],
-    ["Webhook status", connection.webhookStatus],
-    ["Connected backend", connection.connectedBackend],
-    ["CRM/ERP sync status", connection.crmSyncStatus]
+    ["Channel type", integration.channel_type],
+    ["External channel ID", integration.external_channel_id || "Not provided"],
+    ["Provider", integration.provider || "Not provided"],
+    ["Workflow name", integration.workflow_name || "Not provided"],
+    ["Workflow ID", integration.workflow_id || "Not provided"],
+    ["Backend route", integration.backend_route || "Not provided"],
+    ["Notes", integration.notes || "No notes"]
   ];
   channelConnection.replaceChildren(
     ...rows.map(([label, value]) => {
@@ -305,6 +248,98 @@ function renderChannelConnection(connection) {
       return row;
     })
   );
+}
+
+function integrationIcon(channelType) {
+  const icons = {
+    telegram: "TG",
+    instagram: "IG",
+    whatsapp: "WA",
+    website: "Web"
+  };
+  return icons[channelType] || "Ch";
+}
+
+function formatStatus(status) {
+  return (status || "unknown")
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function mockStatsForIntegration(integration) {
+  const base = {
+    messagesToday: "0",
+    leadsCreated: "0",
+    lastMessageTime: "No messages today",
+    failedReplies: "0",
+    conversionRate: "0%"
+  };
+  if (integration.channel_type === "telegram") {
+    return {
+      ...base,
+      messagesToday: "18",
+      leadsCreated: "3",
+      lastMessageTime: "13:58",
+      conversionRate: "17%"
+    };
+  }
+  if (integration.channel_type === "instagram") {
+    return {
+      ...base,
+      messagesToday: "42",
+      leadsCreated: "6",
+      lastMessageTime: "14:32",
+      failedReplies: "1",
+      conversionRate: "14%"
+    };
+  }
+  return base;
+}
+
+function getMockIntegrations() {
+  return [
+    {
+      id: "mock-telegram-1",
+      alpstein_business_id: "alpstein-ai",
+      channel_type: "telegram",
+      display_name: "Telegram Bot 1",
+      status: "connected",
+      external_channel_id: "telegram_bot_1",
+      provider: "telegram",
+      workflow_name: "Telegram customer ingress 1",
+      workflow_id: "placeholder",
+      backend_route: "/api/v1/webhook/telegram",
+      notes: "Local preview integration"
+    },
+    {
+      id: "mock-telegram-2",
+      alpstein_business_id: "alpstein-ai",
+      channel_type: "telegram",
+      display_name: "Telegram Bot 2",
+      status: "connected",
+      external_channel_id: "telegram_bot_2",
+      provider: "telegram",
+      workflow_name: "Telegram customer ingress 2",
+      workflow_id: "placeholder",
+      backend_route: "/api/v1/webhook/telegram",
+      notes: "Local preview integration"
+    },
+    {
+      id: "mock-instagram",
+      alpstein_business_id: "alpstein-ai",
+      channel_type: "instagram",
+      display_name: "Instagram",
+      status: "connected",
+      external_channel_id: "instagram_account",
+      provider: "meta",
+      workflow_name: "Instagram unified customer ingress",
+      workflow_id: "placeholder",
+      backend_route: "/api/v1/webhook/meta",
+      notes: "Local preview integration"
+    }
+  ];
 }
 
 function createMetricCard(labelText, valueText) {

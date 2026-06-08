@@ -424,6 +424,52 @@ def test_business_context_builder_mini_app_allowed_users_migration_is_bcb_only()
     assert "businesses" not in downgrade_source
 
 
+def test_business_context_builder_business_integrations_migration_is_bcb_only():
+    migration_path = (
+        Path(__file__).resolve().parents[1]
+        / "alembic"
+        / "versions"
+        / "0026_create_bcb_business_integrations.py"
+    )
+    spec = importlib.util.spec_from_file_location("migration_0026", migration_path)
+    assert spec is not None
+    assert spec.loader is not None
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    assert module.revision == "0026"
+    assert module.down_revision == "0025"
+    assert callable(module.upgrade)
+    assert callable(module.downgrade)
+
+    migration_source = migration_path.read_text()
+    assert "business_context_builder" in migration_source
+    assert "business_integrations" in migration_source
+    assert "alpstein_business_id" in migration_source
+    assert migration_source.count("op.create_table") == 1
+    assert migration_source.count("op.add_column") == 1
+    assert '"channel_type"' in migration_source
+    assert '"display_name"' in migration_source
+    assert '"external_channel_id"' in migration_source
+    assert '"workflow_name"' in migration_source
+    assert '"workflow_id"' in migration_source
+    assert '"backend_route"' in migration_source
+    assert "sa.ForeignKeyConstraint" not in migration_source
+    assert '["tenants.id"]' not in migration_source
+    assert '["businesses.id"]' not in migration_source
+    assert "public.tenants" not in migration_source
+    assert "public.businesses" not in migration_source
+    assert "prompt_runs" not in migration_source
+    assert "conversations" not in migration_source
+    assert "leads" not in migration_source
+
+    downgrade_source = migration_source.split("def downgrade")[1]
+    assert "op.drop_table(INTEGRATIONS_TABLE, schema=SCHEMA)" in downgrade_source
+    assert "op.drop_column(ALLOWED_USERS_TABLE, \"alpstein_business_id\", schema=SCHEMA)" in downgrade_source
+    assert "DROP SCHEMA" not in downgrade_source
+
+
 def test_flows_migration_is_flows_only():
     migration_path = (
         Path(__file__).resolve().parents[1]

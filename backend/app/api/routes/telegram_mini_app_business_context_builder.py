@@ -34,6 +34,7 @@ from app.schemas.telegram_mini_app import (
     TelegramMiniAppAuthSessionData,
     TelegramMiniAppAuthSessionRequest,
     TelegramMiniAppAuthSessionResponse,
+    TelegramMiniAppBusinessIntegrationResponse,
     TelegramMiniAppCompleteSessionRequest,
     TelegramMiniAppCreateSessionRequest,
     TelegramMiniAppSendMessageRequest,
@@ -116,6 +117,10 @@ async def verify_access(
     try:
         auth_context = _validate_init_data(body.init_data)
         allowed_user = await _verify_allowed_user(session, auth_context)
+        integrations = await telegram_access_service.list_integrations(
+            session,
+            alpstein_business_id=allowed_user.alpstein_business_id,
+        )
     except TelegramMiniAppAuthError as exc:
         return _auth_error(exc)
 
@@ -126,8 +131,14 @@ async def verify_access(
                 telegram_user_id=allowed_user.telegram_user_id,
                 display_name=allowed_user.display_name,
                 company_name=allowed_user.company_name,
+                alpstein_business_id=allowed_user.alpstein_business_id,
                 status=allowed_user.status,
             ),
+            company_name=allowed_user.company_name,
+            alpstein_business_id=allowed_user.alpstein_business_id,
+            integrations=[
+                _integration_response(integration) for integration in integrations
+            ],
             telegram_user=_telegram_user_response(auth_context),
         )
     ).model_dump(mode="json")
@@ -426,6 +437,22 @@ def _telegram_user_response(
         username=user.username,
         language_code=user.language_code,
         is_premium=user.is_premium,
+    )
+
+
+def _integration_response(integration) -> TelegramMiniAppBusinessIntegrationResponse:
+    return TelegramMiniAppBusinessIntegrationResponse(
+        id=str(integration.id),
+        alpstein_business_id=integration.alpstein_business_id,
+        channel_type=integration.channel_type,
+        display_name=integration.display_name,
+        status=integration.status,
+        external_channel_id=integration.external_channel_id,
+        provider=integration.provider,
+        workflow_name=integration.workflow_name,
+        workflow_id=integration.workflow_id,
+        backend_route=integration.backend_route,
+        notes=integration.notes,
     )
 
 

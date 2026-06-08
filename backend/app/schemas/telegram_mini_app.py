@@ -49,7 +49,24 @@ class TelegramMiniAppAllowedUserResponse(BaseModel):
     telegram_user_id: int
     display_name: str
     company_name: str
+    alpstein_business_id: str | None = None
     status: str
+
+
+class TelegramMiniAppBusinessIntegrationResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    alpstein_business_id: str
+    channel_type: str
+    display_name: str
+    status: str
+    external_channel_id: str | None = None
+    provider: str | None = None
+    workflow_name: str | None = None
+    workflow_id: str | None = None
+    backend_route: str | None = None
+    notes: str | None = None
 
 
 class TelegramMiniAppVerifyAccessData(BaseModel):
@@ -57,6 +74,9 @@ class TelegramMiniAppVerifyAccessData(BaseModel):
 
     allowed: Literal[True] = True
     user: TelegramMiniAppAllowedUserResponse
+    company_name: str
+    alpstein_business_id: str | None = None
+    integrations: list[TelegramMiniAppBusinessIntegrationResponse]
     telegram_user: TelegramMiniAppUserResponse
 
 

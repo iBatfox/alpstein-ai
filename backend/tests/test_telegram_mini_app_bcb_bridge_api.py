@@ -4,7 +4,7 @@ import json
 import time
 import uuid
 from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import ANY, AsyncMock, MagicMock
 from urllib.parse import urlencode
 
 import pytest
@@ -16,6 +16,7 @@ from app.models.business_context_builder import (
     MESSAGE_ROLE_USER,
     MINI_APP_ALLOWED_USER_STATUS_ACTIVE,
     SESSION_STATUS_ACTIVE,
+    BusinessContextBuilderBusinessIntegration,
     BusinessContextBuilderMessage,
     BusinessContextBuilderMiniAppAllowedUser,
     BusinessContextBuilderResult,
@@ -53,6 +54,7 @@ def configure_bridge(monkeypatch: pytest.MonkeyPatch) -> None:
             telegram_user_id=telegram_user_id,
             display_name="Bridge User",
             company_name="Alpstein Demo GmbH",
+            alpstein_business_id="alpstein-ai",
             status=MINI_APP_ALLOWED_USER_STATUS_ACTIVE,
             notes=None,
             created_at=datetime(2026, 6, 8, 12, 0, 0),
@@ -60,6 +62,40 @@ def configure_bridge(monkeypatch: pytest.MonkeyPatch) -> None:
         )
 
     access_service.verify_allowed_user = AsyncMock(side_effect=_verify_allowed_user)
+    access_service.list_integrations = AsyncMock(
+        return_value=[
+            BusinessContextBuilderBusinessIntegration(
+                id=uuid.UUID("00000000-0000-4000-8000-000000000301"),
+                alpstein_business_id="alpstein-ai",
+                channel_type="telegram",
+                display_name="Telegram Bot 1",
+                status="connected",
+                external_channel_id="telegram_bot_1",
+                provider="telegram",
+                workflow_name="Telegram customer ingress 1",
+                workflow_id="workflow-telegram-1",
+                backend_route="/api/v1/webhook/telegram",
+                notes="Owner-managed integration",
+                created_at=datetime(2026, 6, 8, 12, 0, 0),
+                updated_at=datetime(2026, 6, 8, 12, 0, 0),
+            ),
+            BusinessContextBuilderBusinessIntegration(
+                id=uuid.UUID("00000000-0000-4000-8000-000000000302"),
+                alpstein_business_id="alpstein-ai",
+                channel_type="telegram",
+                display_name="Telegram Bot 2",
+                status="connected",
+                external_channel_id="telegram_bot_2",
+                provider="telegram",
+                workflow_name="Telegram customer ingress 2",
+                workflow_id="workflow-telegram-2",
+                backend_route="/api/v1/webhook/telegram",
+                notes="Owner-managed integration",
+                created_at=datetime(2026, 6, 8, 12, 0, 0),
+                updated_at=datetime(2026, 6, 8, 12, 0, 0),
+            ),
+        ]
+    )
     monkeypatch.setattr(bridge, "telegram_access_service", access_service)
 
 
@@ -131,6 +167,16 @@ async def test_verify_access_accepts_valid_active_allowed_user():
     assert body["data"]["user"]["telegram_user_id"] == 777002
     assert body["data"]["user"]["display_name"] == "Bridge User"
     assert body["data"]["user"]["company_name"] == "Alpstein Demo GmbH"
+    assert body["data"]["user"]["alpstein_business_id"] == "alpstein-ai"
+    assert body["data"]["alpstein_business_id"] == "alpstein-ai"
+    assert [item["display_name"] for item in body["data"]["integrations"]] == [
+        "Telegram Bot 1",
+        "Telegram Bot 2",
+    ]
+    assert all(
+        item["alpstein_business_id"] == "alpstein-ai"
+        for item in body["data"]["integrations"]
+    )
     assert body["data"]["telegram_user"]["id"] == 777002
     assert "token" not in json.dumps(body).lower()
 
@@ -167,6 +213,46 @@ async def test_verify_access_rejects_disabled_allowed_user(monkeypatch: pytest.M
 
     assert response.status_code == 403
     assert response.json()["error"]["code"] == "TELEGRAM_USER_NOT_ALLOWED"
+
+
+@pytest.mark.anyio
+async def test_verify_access_missing_alpstein_business_id_returns_empty_integrations(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from app.api.routes import telegram_mini_app_business_context_builder as bridge
+
+    access_service = MagicMock()
+    access_service.verify_allowed_user = AsyncMock(
+        return_value=BusinessContextBuilderMiniAppAllowedUser(
+            id=uuid.uuid4(),
+            telegram_user_id=777001,
+            display_name="Bridge User",
+            company_name="Alpstein Demo GmbH",
+            alpstein_business_id=None,
+            status=MINI_APP_ALLOWED_USER_STATUS_ACTIVE,
+            notes=None,
+            created_at=datetime(2026, 6, 8, 12, 0, 0),
+            updated_at=datetime(2026, 6, 8, 12, 0, 0),
+        )
+    )
+    access_service.list_integrations = AsyncMock(return_value=[])
+    monkeypatch.setattr(bridge, "telegram_access_service", access_service)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/telegram-mini-app/business-context-builder/verify-access",
+            json={"init_data": signed_init_data(telegram_user_id=777001)},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["data"]["alpstein_business_id"] is None
+    assert body["data"]["integrations"] == []
+    access_service.list_integrations.assert_awaited_once_with(
+        ANY,
+        alpstein_business_id=None,
+    )
 
 
 @pytest.mark.anyio

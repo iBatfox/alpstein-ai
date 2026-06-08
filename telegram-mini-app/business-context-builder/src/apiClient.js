@@ -224,8 +224,52 @@ function createMockClient({ language }) {
           telegram_user_id: 0,
           display_name: "Browser preview",
           company_name: "Mock Company",
+          alpstein_business_id: "alpstein-ai",
           status: "active"
         },
+        company_name: "Mock Company",
+        alpstein_business_id: "alpstein-ai",
+        integrations: [
+          {
+            id: "mock-telegram-1",
+            alpstein_business_id: "alpstein-ai",
+            channel_type: "telegram",
+            display_name: "Telegram Bot 1",
+            status: "connected",
+            external_channel_id: "telegram_bot_1",
+            provider: "telegram",
+            workflow_name: "Telegram customer ingress 1",
+            workflow_id: "placeholder",
+            backend_route: "/api/v1/webhook/telegram",
+            notes: "Local preview integration"
+          },
+          {
+            id: "mock-telegram-2",
+            alpstein_business_id: "alpstein-ai",
+            channel_type: "telegram",
+            display_name: "Telegram Bot 2",
+            status: "connected",
+            external_channel_id: "telegram_bot_2",
+            provider: "telegram",
+            workflow_name: "Telegram customer ingress 2",
+            workflow_id: "placeholder",
+            backend_route: "/api/v1/webhook/telegram",
+            notes: "Local preview integration"
+          },
+          {
+            id: "mock-instagram",
+            alpstein_business_id: "alpstein-ai",
+            channel_type: "instagram",
+            display_name: "Instagram",
+            status: "connected",
+            external_channel_id: "instagram_account",
+            provider: "meta",
+            workflow_name: "Instagram unified customer ingress",
+            workflow_id: "placeholder",
+            backend_route: "/api/v1/webhook/meta",
+            notes: "Local preview integration"
+          }
+        ],
         telegram_user: {
           id: 0,
           first_name: "Browser preview"

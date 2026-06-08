@@ -4,6 +4,7 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from app.db.base import Base
 from app.models import (
     Business,
+    BusinessContextBuilderBusinessIntegration,
     BusinessContextBuilderMessage,
     BusinessContextBuilderMiniAppAllowedUser,
     BusinessContextBuilderResult,
@@ -74,6 +75,7 @@ def test_metadata_contains_persistence_slice_tables():
         "business_context_builder.messages",
         "business_context_builder.results",
         "business_context_builder.mini_app_allowed_users",
+        "business_context_builder.business_integrations",
     }
     assert Tenant.__tablename__ == "tenants"
     assert Business.__tablename__ == "businesses"
@@ -93,6 +95,7 @@ def test_metadata_contains_persistence_slice_tables():
     assert BusinessContextBuilderMessage.__tablename__ == "messages"
     assert BusinessContextBuilderResult.__tablename__ == "results"
     assert BusinessContextBuilderMiniAppAllowedUser.__tablename__ == "mini_app_allowed_users"
+    assert BusinessContextBuilderBusinessIntegration.__tablename__ == "business_integrations"
 
 
 def test_business_context_builder_models_use_isolated_schema():
@@ -100,19 +103,23 @@ def test_business_context_builder_models_use_isolated_schema():
     message_table = BusinessContextBuilderMessage.__table__
     result_table = BusinessContextBuilderResult.__table__
     allowed_user_table = BusinessContextBuilderMiniAppAllowedUser.__table__
+    integration_table = BusinessContextBuilderBusinessIntegration.__table__
 
     assert session_table.schema == "business_context_builder"
     assert message_table.schema == "business_context_builder"
     assert result_table.schema == "business_context_builder"
     assert allowed_user_table.schema == "business_context_builder"
+    assert integration_table.schema == "business_context_builder"
     assert session_table.fullname == "business_context_builder.sessions"
     assert message_table.fullname == "business_context_builder.messages"
     assert result_table.fullname == "business_context_builder.results"
     assert allowed_user_table.fullname == "business_context_builder.mini_app_allowed_users"
+    assert integration_table.fullname == "business_context_builder.business_integrations"
     assert isinstance(session_table.c.id.type, UUID)
     assert isinstance(message_table.c.id.type, UUID)
     assert isinstance(result_table.c.id.type, UUID)
     assert isinstance(allowed_user_table.c.id.type, UUID)
+    assert isinstance(integration_table.c.id.type, UUID)
     assert isinstance(result_table.c.structured_context.type, JSONB)
     assert session_table.c.tenant_id.nullable is False
     assert session_table.c.business_id.nullable is False
@@ -125,7 +132,12 @@ def test_business_context_builder_models_use_isolated_schema():
     assert allowed_user_table.c.telegram_user_id.nullable is False
     assert allowed_user_table.c.display_name.nullable is False
     assert allowed_user_table.c.company_name.nullable is False
+    assert allowed_user_table.c.alpstein_business_id.nullable is True
     assert allowed_user_table.c.status.nullable is False
+    assert integration_table.c.alpstein_business_id.nullable is False
+    assert integration_table.c.channel_type.nullable is False
+    assert integration_table.c.display_name.nullable is False
+    assert integration_table.c.status.nullable is False
     assert "bcb_sessions_tenant_business_idx" in {
         index.name for index in session_table.indexes
     }
@@ -159,10 +171,17 @@ def test_business_context_builder_models_use_isolated_schema():
         if isinstance(constraint, ForeignKeyConstraint)
         for element in constraint.elements
     }
+    integration_fk_targets = {
+        element.target_fullname
+        for constraint in integration_table.constraints
+        if isinstance(constraint, ForeignKeyConstraint)
+        for element in constraint.elements
+    }
     assert session_fk_targets == set()
     assert message_fk_targets == {"business_context_builder.sessions.id"}
     assert result_fk_targets == {"business_context_builder.sessions.id"}
     assert allowed_user_fk_targets == set()
+    assert integration_fk_targets == set()
     status_checks = {
         str(constraint.sqltext)
         for constraint in session_table.constraints

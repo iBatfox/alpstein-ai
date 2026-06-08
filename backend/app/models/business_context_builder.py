@@ -120,6 +120,10 @@ class BusinessContextBuilderMiniAppAllowedUser(Base):
             "bcb_mini_app_allowed_users_status_idx",
             "status",
         ),
+        Index(
+            "bcb_mini_app_allowed_users_business_id_idx",
+            "alpstein_business_id",
+        ),
         {"schema": BUSINESS_CONTEXT_BUILDER_SCHEMA},
     )
 
@@ -131,12 +135,60 @@ class BusinessContextBuilderMiniAppAllowedUser(Base):
     telegram_user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     display_name: Mapped[str] = mapped_column(Text, nullable=False)
     company_name: Mapped[str] = mapped_column(Text, nullable=False)
+    alpstein_business_id: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(
         String(50),
         nullable=False,
         default=MINI_APP_ALLOWED_USER_STATUS_ACTIVE,
         server_default=MINI_APP_ALLOWED_USER_STATUS_ACTIVE,
     )
+    notes: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=False),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=False),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+class BusinessContextBuilderBusinessIntegration(Base):
+    __tablename__ = "business_integrations"
+    __table_args__ = (
+        Index(
+            "bcb_business_integrations_business_id_idx",
+            "alpstein_business_id",
+        ),
+        Index(
+            "bcb_business_integrations_business_status_idx",
+            "alpstein_business_id",
+            "status",
+        ),
+        Index(
+            "bcb_business_integrations_channel_type_idx",
+            "channel_type",
+        ),
+        {"schema": BUSINESS_CONTEXT_BUILDER_SCHEMA},
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    alpstein_business_id: Mapped[str] = mapped_column(Text, nullable=False)
+    channel_type: Mapped[str] = mapped_column(Text, nullable=False)
+    display_name: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    external_channel_id: Mapped[str | None] = mapped_column(Text)
+    provider: Mapped[str | None] = mapped_column(Text)
+    workflow_name: Mapped[str | None] = mapped_column(Text)
+    workflow_id: Mapped[str | None] = mapped_column(Text)
+    backend_route: Mapped[str | None] = mapped_column(Text)
     notes: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=False),

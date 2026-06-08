@@ -27,6 +27,7 @@ telegram-mini-app/business-context-builder/
 - Backend bridge routes under `/api/v1/telegram-mini-app/business-context-builder`.
 - Server-side Telegram `initData` validation.
 - Owner-managed bridge access through `business_context_builder.mini_app_allowed_users`.
+- Read-only integration registry through `business_context_builder.business_integrations`.
 - Server-side BCB tenant/business scope resolution.
 
 ## Intentionally Not Implemented
@@ -168,6 +169,10 @@ identifiers.
 If the backend returns `403` with `TELEGRAM_USER_NOT_ALLOWED`, the frontend shows
 only the restricted-access screen and hides contexts/interview/bots navigation.
 
+`verify-access` also returns the allowed user's `alpstein_business_id` and the
+read-only integrations registered for that business. The frontend must not send
+or choose the business id.
+
 ## Language
 
 Supported frontend languages:
@@ -258,6 +263,8 @@ Fields:
 - `telegram_user_id` — numeric Telegram user ID, unique.
 - `display_name` — operator-visible user name.
 - `company_name` — company attached to this Mini App user.
+- `alpstein_business_id` — owner-managed business key used to scope integration
+  registry rows.
 - `status` — `active` or `disabled`.
 - `notes` — optional backend notes.
 - `created_at` and `updated_at`.
@@ -270,6 +277,7 @@ INSERT INTO business_context_builder.mini_app_allowed_users (
   telegram_user_id,
   display_name,
   company_name,
+  alpstein_business_id,
   status,
   notes
 ) VALUES (
@@ -277,6 +285,7 @@ INSERT INTO business_context_builder.mini_app_allowed_users (
   123456789,
   'Customer Name',
   'Customer Company',
+  'alpstein-ai',
   'active',
   'Added by owner'
 );
@@ -294,6 +303,104 @@ PY
 
 Set `status = 'disabled'` to block a previously allowed Telegram user. Missing
 users and disabled users both receive the restricted-access response.
+
+## Integration Registry
+
+Integrations are managed directly in PostgreSQL for now. They are read-only in
+the Mini App and have no foreign keys to n8n, Telegram, Instagram, CRM, or
+assistant runtime tables.
+
+Business id used for Alpstein AI:
+
+```text
+alpstein-ai
+```
+
+Owner allowlist example:
+
+```sql
+INSERT INTO business_context_builder.mini_app_allowed_users (
+  id,
+  telegram_user_id,
+  display_name,
+  company_name,
+  alpstein_business_id,
+  status,
+  notes
+) VALUES (
+  '<generated-uuid>',
+  1585306444,
+  'Ivan Bataev',
+  'Alpstein AI',
+  'alpstein-ai',
+  'active',
+  'Owner access'
+)
+ON CONFLICT (telegram_user_id) DO UPDATE SET
+  display_name = EXCLUDED.display_name,
+  company_name = EXCLUDED.company_name,
+  alpstein_business_id = EXCLUDED.alpstein_business_id,
+  status = EXCLUDED.status,
+  notes = EXCLUDED.notes,
+  updated_at = now();
+```
+
+Initial integrations example:
+
+```sql
+INSERT INTO business_context_builder.business_integrations (
+  id,
+  alpstein_business_id,
+  channel_type,
+  display_name,
+  status,
+  external_channel_id,
+  provider,
+  workflow_name,
+  workflow_id,
+  backend_route,
+  notes
+) VALUES
+  (
+    '<generated-uuid>',
+    'alpstein-ai',
+    'telegram',
+    'Telegram Bot 1',
+    'connected',
+    'telegram_bot_1',
+    'telegram',
+    'Telegram customer ingress 1',
+    'placeholder',
+    '/api/v1/webhook/telegram',
+    'Read-only registry row'
+  ),
+  (
+    '<generated-uuid>',
+    'alpstein-ai',
+    'telegram',
+    'Telegram Bot 2',
+    'connected',
+    'telegram_bot_2',
+    'telegram',
+    'Telegram customer ingress 2',
+    'placeholder',
+    '/api/v1/webhook/telegram',
+    'Read-only registry row'
+  ),
+  (
+    '<generated-uuid>',
+    'alpstein-ai',
+    'instagram',
+    'Instagram',
+    'connected',
+    'instagram_account',
+    'meta',
+    'Instagram unified customer ingress',
+    'placeholder',
+    '/api/v1/webhook/meta',
+    'Read-only registry row'
+  );
+```
 
 To find a Telegram user ID, use a trusted Telegram ID lookup bot or a temporary
 operator-only diagnostic outside the frontend. Do not commit Telegram user IDs,

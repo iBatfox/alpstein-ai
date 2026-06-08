@@ -1,5 +1,6 @@
 from app.models.business import Business
 from app.models.business_context_builder import (
+    BusinessContextBuilderBusinessIntegration,
     BusinessContextBuilderMessage,
     BusinessContextBuilderMiniAppAllowedUser,
     BusinessContextBuilderResult,
@@ -31,6 +32,7 @@ from app.models.tenant_knowledge_source import TenantKnowledgeSource
 
 __all__ = [
     "Business",
+    "BusinessContextBuilderBusinessIntegration",
     "BusinessContextBuilderMessage",
     "BusinessContextBuilderMiniAppAllowedUser",
     "BusinessContextBuilderResult",

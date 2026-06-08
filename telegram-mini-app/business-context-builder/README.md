@@ -7,10 +7,13 @@ The production default is fail-closed. On load, the app sends Telegram WebApp
 `initData` to the backend verification endpoint and only shows the UI when the
 validated Telegram user ID exists in the backend allowlist with `active` status.
 Local mock mode is available only when `api_mode=mock` is explicitly set.
+On public hostnames, mock mode is ignored and Telegram verification is still
+required.
 
 The UI still uses mock data and local click state after access is granted. It
-does not write Business Context data, change assistant configuration, alter
-prompts, or trigger integrations.
+renders read-only integration registry data from the access response. It does
+not write Business Context data, change assistant configuration, alter prompts,
+control workflows, or trigger integrations.
 
 ## Files
 
@@ -45,6 +48,8 @@ http://127.0.0.1:5174/?api_mode=mock
 Without `api_mode=mock`, browser preview shows the access-denied screen because
 Telegram `initData` is unavailable outside Telegram.
 
+Mock mode is accepted only on `localhost` or `127.0.0.1`.
+
 ## Owner-Managed Access
 
 Users cannot self-register. The owner/admin adds allowed users directly in the
@@ -56,6 +61,7 @@ INSERT INTO business_context_builder.mini_app_allowed_users (
   telegram_user_id,
   display_name,
   company_name,
+  alpstein_business_id,
   status,
   notes
 ) VALUES (
@@ -63,12 +69,22 @@ INSERT INTO business_context_builder.mini_app_allowed_users (
   123456789,
   'Customer Name',
   'Customer Company',
+  'alpstein-ai',
   'active',
   'Added by owner'
 );
 ```
 
 Set `status` to `disabled` to block a previously allowed user.
+
+Connected channels are managed in:
+
+```text
+business_context_builder.business_integrations
+```
+
+The Mini App displays these rows as read-only channel cards scoped by the
+verified user's `alpstein_business_id`.
 
 ## Rollback
 

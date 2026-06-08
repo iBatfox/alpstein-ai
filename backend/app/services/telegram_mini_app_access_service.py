@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.business_context_builder import (
     MINI_APP_ALLOWED_USER_STATUS_ACTIVE,
+    BusinessContextBuilderBusinessIntegration,
     BusinessContextBuilderMiniAppAllowedUser,
 )
 
@@ -36,3 +37,26 @@ class TelegramMiniAppAccessService:
         if allowed_user.status != MINI_APP_ALLOWED_USER_STATUS_ACTIVE:
             raise TelegramMiniAppAccessDisabledError()
         return allowed_user
+
+    async def list_integrations(
+        self,
+        session: AsyncSession,
+        *,
+        alpstein_business_id: str | None,
+    ) -> list[BusinessContextBuilderBusinessIntegration]:
+        clean_business_id = (alpstein_business_id or "").strip()
+        if not clean_business_id:
+            return []
+
+        result = await session.execute(
+            select(BusinessContextBuilderBusinessIntegration)
+            .where(
+                BusinessContextBuilderBusinessIntegration.alpstein_business_id
+                == clean_business_id
+            )
+            .order_by(
+                BusinessContextBuilderBusinessIntegration.channel_type,
+                BusinessContextBuilderBusinessIntegration.display_name,
+            )
+        )
+        return list(result.scalars().all())
