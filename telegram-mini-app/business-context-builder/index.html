@@ -15,23 +15,63 @@
           <p class="eyebrow">Alpstein AI</p>
           <h1>Business Context Builder</h1>
         </div>
-        <span class="status-pill" id="telegramStatus">Browser preview</span>
+        <div class="header-actions">
+          <span class="status-pill" id="telegramStatus">Browser preview</span>
+          <div class="header-menu">
+            <button
+              class="icon-button"
+              id="headerMenuButton"
+              type="button"
+              aria-label="Open menu"
+              aria-expanded="false"
+            >
+              <span aria-hidden="true"></span>
+            </button>
+            <div class="header-menu-panel" id="headerMenuPanel" hidden>
+              <button type="button" data-menu-action="contexts">Business contexts</button>
+              <button type="button" data-menu-action="new">New context</button>
+              <button type="button" data-menu-action="current">Current interview</button>
+              <button type="button" disabled data-static-disabled="true">Change language</button>
+              <button type="button" disabled data-static-disabled="true">Edit context</button>
+            </div>
+          </div>
+        </div>
       </header>
 
-      <section class="screen screen-active" id="screenStart" data-screen="start">
-        <div class="start-panel">
+      <section class="screen screen-active" id="screenContexts" data-screen="contexts">
+        <div class="contexts-hero">
           <div class="assistant-mark" aria-hidden="true">AI</div>
-          <h2>Build a draft context</h2>
+          <h2>Business Contexts</h2>
           <p>
-            Create a draft business context from a guided interview before it is
-            reviewed and published through a separate workflow.
+            Create and review draft business contexts from guided interviews.
+            Drafts stay separate from production assistant publishing.
           </p>
-          <div class="button-row">
-            <button class="primary-button" id="startInterviewButton" type="button">
-              Start interview
+          <button class="primary-button" id="startInterviewButton" type="button">
+            Create new context
+          </button>
+        </div>
+
+        <div class="menu-section">
+          <div class="section-heading">
+            <p class="eyebrow">Continue unfinished</p>
+            <h3>Current interview</h3>
+          </div>
+          <div class="context-list" id="unfinishedSessionList"></div>
+        </div>
+
+        <div class="menu-section">
+          <div class="section-heading">
+            <p class="eyebrow">Draft contexts</p>
+            <h3>Saved drafts</h3>
+          </div>
+          <div class="context-list" id="contextList"></div>
+          <div class="pagination-row">
+            <button class="secondary-button compact" id="previousPageButton" type="button">
+              Previous
             </button>
-            <button class="secondary-button" id="continueSessionButton" type="button">
-              Continue unfinished session
+            <span id="pageIndicator">Page 1</span>
+            <button class="secondary-button compact" id="nextPageButton" type="button">
+              Next
             </button>
           </div>
         </div>
@@ -43,8 +83,11 @@
             <p class="eyebrow" id="currentStepCount">Step 1 of 6</p>
             <h2 id="currentStepLabel">Company information</h2>
           </div>
-          <span class="status-pill" id="interviewStatus">Interview</span>
+          <button class="secondary-button compact" id="interviewBackButton" type="button">
+            Contexts
+          </button>
         </div>
+        <span class="status-pill interview-status" id="interviewStatus">Interview</span>
 
         <div class="progress-panel" aria-label="Interview progress">
           <div class="progress-track">
@@ -79,34 +122,17 @@
             <p class="eyebrow">Draft result</p>
             <h2>Generated context</h2>
           </div>
-          <button class="secondary-button compact" id="backToContextsButton" type="button">
-            Back to contexts
-          </button>
+          <div class="button-row result-actions">
+            <button class="secondary-button compact" id="backToContextsButton" type="button">
+              Back to contexts
+            </button>
+            <button class="primary-button compact" id="startAnotherContextButton" type="button">
+              Start another context
+            </button>
+          </div>
         </div>
         <pre class="result-output" id="resultOutput"></pre>
         <dl class="metadata-grid" id="metadataGrid"></dl>
-      </section>
-
-      <section class="screen" id="screenContexts" data-screen="contexts">
-        <div class="contexts-header">
-          <div>
-            <p class="eyebrow">Draft contexts</p>
-            <h2>Contexts</h2>
-          </div>
-          <button class="primary-button compact" id="newContextButton" type="button">
-            New context
-          </button>
-        </div>
-        <div class="context-list" id="contextList"></div>
-        <div class="pagination-row">
-          <button class="secondary-button compact" id="previousPageButton" type="button">
-            Previous
-          </button>
-          <span id="pageIndicator">Page 1</span>
-          <button class="secondary-button compact" id="nextPageButton" type="button">
-            Next
-          </button>
-        </div>
       </section>
     </main>
 
@@ -124,9 +150,10 @@
       <article class="context-item">
         <div>
           <h3></h3>
-          <p></p>
+          <p class="context-summary"></p>
+          <div class="context-meta"></div>
         </div>
-        <button class="secondary-button compact" type="button">Open</button>
+        <button class="secondary-button compact" type="button">View result</button>
       </article>
     </template>
 
