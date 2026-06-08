@@ -1,4 +1,5 @@
 import uuid
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -17,6 +18,7 @@ from app.models.business_context_builder import (
 )
 from app.services.business_context_builder_ai_service import (
     BusinessContextBuilderAiService,
+    BusinessContextBuilderDraftResult,
 )
 
 from app.services.business_context_builder_constants import (
@@ -47,6 +49,8 @@ TERMINAL_STATUSES = frozenset(
 )
 DEFAULT_CONTEXT_LIMIT = 20
 MAX_CONTEXT_LIMIT = 100
+
+logger = logging.getLogger(__name__)
 
 
 class BusinessContextBuilderSessionNotFoundError(Exception):
@@ -267,18 +271,42 @@ class BusinessContextBuilderService:
                 "cannot complete a session that already has a result"
             )
 
-        user_messages = await self._list_user_messages(
+        messages = await self._list_messages(
             session,
             tenant_id=tenant_id,
             business_id=business_id,
             session_id=session_id,
         )
-        if not user_messages:
+        if not any(message.role == MESSAGE_ROLE_USER for message in messages):
             raise BusinessContextBuilderValidationError(
                 "at least one user message is required before completion"
             )
 
         now = _now()
+        fallback_result = _fallback_draft_result(messages)
+        try:
+            draft_result = await self._ai_service.generate_draft_result(
+                session_id=builder_session.id,
+                tenant_id=tenant_id,
+                business_id=business_id,
+                current_step=builder_session.current_step,
+                messages=messages,
+                fallback_result=fallback_result,
+            )
+        except Exception as exc:
+            logger.info(
+                "bcb_ai_draft_result_fallback_after_error",
+                extra={
+                    "feature": "business_context_builder",
+                    "operation": "draft_result",
+                    "session_id": str(builder_session.id),
+                    "tenant_id": str(tenant_id),
+                    "business_id": str(business_id),
+                    "fallback_used": True,
+                    "error": str(exc),
+                },
+            )
+            draft_result = fallback_result
         builder_session.status = SESSION_STATUS_COMPLETED
         builder_session.current_step = STEP_COMPLETED
         builder_session.completed_at = now
@@ -289,8 +317,8 @@ class BusinessContextBuilderService:
             tenant_id=tenant_id,
             business_id=business_id,
             session_id=builder_session.id,
-            structured_context=_placeholder_structured_context(),
-            generated_prompt="Draft placeholder prompt text.",
+            structured_context=draft_result.structured_context,
+            generated_prompt=draft_result.generated_prompt,
             context_file_path=None,
             context_file_url=None,
             created_at=now,
@@ -466,25 +494,57 @@ def _validate_step(current_step: str | None) -> None:
         )
 
 
-def _placeholder_structured_context() -> dict[str, object]:
-    return {
-        "company": {
-            "name": None,
-            "website": None,
-            "industry": None,
-            "country": None,
-            "languages": [],
+def _fallback_draft_result(
+    messages: list[BusinessContextBuilderMessage],
+) -> BusinessContextBuilderDraftResult:
+    user_answers = [
+        message.content.strip()
+        for message in messages
+        if message.role == MESSAGE_ROLE_USER and message.content.strip()
+    ]
+    assistant_questions = [
+        message.content.strip()
+        for message in messages
+        if message.role == MESSAGE_ROLE_ASSISTANT and message.content.strip()
+    ]
+    missing_sections = [
+        "company_overview",
+        "business_description",
+        "target_customers",
+        "products_services",
+        "sales_process",
+        "communication_style",
+        "known_constraints",
+    ]
+    structured_context: dict[str, object] = {
+        "company_overview": "Unknown or not provided.",
+        "business_description": user_answers[0] if user_answers else "Unknown or not provided.",
+        "target_customers": "Unknown or not provided.",
+        "products_services": "Unknown or not provided.",
+        "sales_process": "Unknown or not provided.",
+        "communication_style": "Unknown or not provided.",
+        "known_constraints": [],
+        "missing_information": missing_sections,
+        "draft_quality_confidence": {
+            "level": "low",
+            "reason": "Fallback draft generated without AI interpretation.",
         },
-        "business_description": "",
-        "assistant_goals": [],
-        "services": [],
-        "target_customers": {},
-        "common_questions": [],
-        "lead_qualification": {},
-        "communication_style": {},
-        "restrictions": [],
-        "handoff_rules": [],
+        "source_summary": {
+            "user_message_count": len(user_answers),
+            "assistant_message_count": len(assistant_questions),
+            "fallback_used": True,
+        },
     }
+    generated_prompt = (
+        "Draft fallback business context generated from the interview transcript. "
+        "Review is required before any production assistant use. "
+        f"Provided user answers: {' | '.join(user_answers) if user_answers else 'none'}"
+    )
+    return BusinessContextBuilderDraftResult(
+        structured_context=structured_context,
+        generated_prompt=generated_prompt,
+        fallback_used=True,
+    )
 
 
 def _now() -> datetime:

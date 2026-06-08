@@ -1,4 +1,5 @@
 import uuid
+import json
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -10,7 +11,10 @@ from app.models.business_context_builder import (
     BusinessContextBuilderMessage,
 )
 from app.schemas.ai_gateway import AiGatewayResult
-from app.services.business_context_builder_ai_service import BusinessContextBuilderAiService
+from app.services.business_context_builder_ai_service import (
+    BusinessContextBuilderAiService,
+    BusinessContextBuilderDraftResult,
+)
 from app.services.business_context_builder_constants import STEP_BUSINESS_DESCRIPTION
 
 
@@ -41,6 +45,17 @@ def messages(tenant_scope: tuple[uuid.UUID, uuid.UUID, uuid.UUID]) -> list[Busin
             content="Alpstein Services GmbH",
         ),
     ]
+
+
+def _fallback_draft() -> BusinessContextBuilderDraftResult:
+    return BusinessContextBuilderDraftResult(
+        structured_context={
+            "company_overview": "Unknown or not provided.",
+            "missing_information": ["company_overview"],
+        },
+        generated_prompt="Fallback draft prompt.",
+        fallback_used=True,
+    )
 
 
 @pytest.mark.anyio
@@ -165,6 +180,158 @@ async def test_ai_service_uses_fallback_when_api_key_missing(
 
     assert question == "What does your company do?"
     gateway.complete.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_ai_service_generate_draft_result_returns_gateway_content(
+    tenant_scope: tuple[uuid.UUID, uuid.UUID, uuid.UUID],
+    messages: list[BusinessContextBuilderMessage],
+):
+    session_id, tenant_id, business_id = tenant_scope
+    gateway_payload = {
+        "structured_context": {
+            "company_overview": "Alpstein Services GmbH",
+            "business_description": "Local services",
+            "missing_information": [],
+            "draft_quality_confidence": {"level": "medium"},
+        },
+        "generated_prompt": "Draft context based on the interview only.",
+    }
+    gateway = AsyncMock()
+    gateway.complete = AsyncMock(
+        return_value=AiGatewayResult(
+            text=json.dumps(gateway_payload),
+            model="gpt-4o-mini",
+            provider="openai",
+            input_tokens=40,
+            output_tokens=80,
+            latency_ms=150,
+            error=None,
+        )
+    )
+    service = BusinessContextBuilderAiService(
+        app_settings=Settings(
+            openai_api_key="test-key",
+            bcb_ai_enabled=True,
+            bcb_ai_draft_enabled=True,
+        ),
+        ai_gateway_service=gateway,
+    )
+
+    draft = await service.generate_draft_result(
+        session_id=session_id,
+        tenant_id=tenant_id,
+        business_id=business_id,
+        current_step=STEP_BUSINESS_DESCRIPTION,
+        messages=messages,
+        fallback_result=_fallback_draft(),
+    )
+
+    assert draft.fallback_used is False
+    assert draft.structured_context["company_overview"] == "Alpstein Services GmbH"
+    assert draft.generated_prompt == "Draft context based on the interview only."
+    gateway.complete.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_ai_service_generate_draft_result_uses_fallback_when_disabled(
+    tenant_scope: tuple[uuid.UUID, uuid.UUID, uuid.UUID],
+    messages: list[BusinessContextBuilderMessage],
+):
+    session_id, tenant_id, business_id = tenant_scope
+    gateway = AsyncMock()
+    service = BusinessContextBuilderAiService(
+        app_settings=Settings(
+            openai_api_key="test-key",
+            bcb_ai_enabled=True,
+            bcb_ai_draft_enabled=False,
+        ),
+        ai_gateway_service=gateway,
+    )
+    fallback = _fallback_draft()
+
+    draft = await service.generate_draft_result(
+        session_id=session_id,
+        tenant_id=tenant_id,
+        business_id=business_id,
+        current_step=STEP_BUSINESS_DESCRIPTION,
+        messages=messages,
+        fallback_result=fallback,
+    )
+
+    assert draft is fallback
+    gateway.complete.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_ai_service_generate_draft_result_uses_fallback_when_api_key_missing(
+    tenant_scope: tuple[uuid.UUID, uuid.UUID, uuid.UUID],
+    messages: list[BusinessContextBuilderMessage],
+):
+    session_id, tenant_id, business_id = tenant_scope
+    gateway = AsyncMock()
+    service = BusinessContextBuilderAiService(
+        app_settings=Settings(
+            openai_api_key="",
+            bcb_ai_enabled=True,
+            bcb_ai_draft_enabled=True,
+        ),
+        ai_gateway_service=gateway,
+    )
+    fallback = _fallback_draft()
+
+    draft = await service.generate_draft_result(
+        session_id=session_id,
+        tenant_id=tenant_id,
+        business_id=business_id,
+        current_step=STEP_BUSINESS_DESCRIPTION,
+        messages=messages,
+        fallback_result=fallback,
+    )
+
+    assert draft is fallback
+    gateway.complete.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_ai_service_generate_draft_result_uses_fallback_when_gateway_fails(
+    tenant_scope: tuple[uuid.UUID, uuid.UUID, uuid.UUID],
+    messages: list[BusinessContextBuilderMessage],
+):
+    session_id, tenant_id, business_id = tenant_scope
+    gateway = AsyncMock()
+    gateway.complete = AsyncMock(
+        return_value=AiGatewayResult(
+            text=None,
+            model="gpt-4o-mini",
+            provider="openai",
+            input_tokens=None,
+            output_tokens=None,
+            latency_ms=50,
+            error="AI provider request timed out",
+        )
+    )
+    service = BusinessContextBuilderAiService(
+        app_settings=Settings(
+            openai_api_key="test-key",
+            bcb_ai_enabled=True,
+            bcb_ai_draft_enabled=True,
+        ),
+        ai_gateway_service=gateway,
+    )
+    fallback = _fallback_draft()
+
+    draft = await service.generate_draft_result(
+        session_id=session_id,
+        tenant_id=tenant_id,
+        business_id=business_id,
+        current_step=STEP_BUSINESS_DESCRIPTION,
+        messages=messages,
+        fallback_result=fallback,
+    )
+
+    assert draft is fallback
+    gateway.complete.assert_awaited_once()
 
 
 def test_ai_service_module_has_no_db_imports():

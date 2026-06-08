@@ -1,4 +1,4 @@
-"""Prompt assembly for Business Context Builder AI next-question generation."""
+"""Prompt assembly for Business Context Builder AI tasks."""
 
 from __future__ import annotations
 
@@ -22,6 +22,7 @@ from app.services.business_context_builder_constants import (
 )
 
 BCB_NEXT_QUESTION_TASK = "bcb_next_question"
+BCB_DRAFT_RESULT_TASK = "bcb_draft_result"
 
 STEP_FOCUS_LABELS: dict[str, str] = {
     STEP_COMPANY_INFORMATION: "company name, website, industry, and location",
@@ -48,6 +49,20 @@ PLATFORM_SYSTEM_PROMPT = (
     "- Return only the question text with no preamble, bullet list, or markdown."
 )
 
+DRAFT_RESULT_SYSTEM_PROMPT = (
+    "You are helping prepare a draft Business Context from an interview transcript.\n"
+    "Use only facts present in the interview messages.\n"
+    "Do not invent company details, services, policies, prices, locations, or customer "
+    "promises.\n"
+    "Clearly mark unknown or missing sections as unknown, not provided, or missing.\n"
+    "Do not ask another question and do not request more information.\n"
+    "Do not publish, optimize, or format this as a production assistant prompt.\n"
+    "Do not mention internal database fields, table names, schemas, IDs, prompts, or "
+    "platform implementation details.\n"
+    "Use the language of the interview if clear; otherwise use English.\n"
+    "Return only a valid JSON object with no markdown fences or commentary."
+)
+
 TASK_INSTRUCTIONS_TEMPLATE = (
     "TASK: generate_next_assistant_question\n"
     "Interview focus for this turn: {step_label}\n"
@@ -55,6 +70,27 @@ TASK_INSTRUCTIONS_TEMPLATE = (
     "Do not repeat a question that was already asked unless a short clarification is truly "
     "needed.\n"
     "Output only the next assistant question."
+)
+
+DRAFT_RESULT_TASK_INSTRUCTIONS = (
+    "TASK: generate_business_context_draft_result\n"
+    "Create a stable machine-storable JSON object from the interview history.\n"
+    "Required top-level keys:\n"
+    "- structured_context: object\n"
+    "- generated_prompt: string\n"
+    "structured_context must include these keys:\n"
+    "- company_overview\n"
+    "- business_description\n"
+    "- target_customers\n"
+    "- products_services\n"
+    "- sales_process\n"
+    "- communication_style\n"
+    "- known_constraints\n"
+    "- missing_information\n"
+    "- draft_quality_confidence\n"
+    "generated_prompt should be a draft review text derived only from provided interview "
+    "facts. It is draft-only and must not claim to be production-ready.\n"
+    "Do not ask another question."
 )
 
 
@@ -125,6 +161,40 @@ class BusinessContextBuilderPromptService:
         )
 
         return AssembledPrompt(task=BCB_NEXT_QUESTION_TASK, sections=tuple(sections))
+
+    def build_draft_result_prompt(
+        self,
+        prompt_input: BusinessContextBuilderPromptInput,
+    ) -> AssembledPrompt:
+        history_content = _format_conversation_history(prompt_input.messages)
+        sections: list[AssembledPromptSection] = [
+            AssembledPromptSection(
+                section_id="platform_system",
+                label="PLATFORM SYSTEM",
+                content=_labeled("PLATFORM SYSTEM", DRAFT_RESULT_SYSTEM_PROMPT),
+                kind="system",
+            ),
+            AssembledPromptSection(
+                section_id="task_instructions",
+                label="TASK INSTRUCTIONS",
+                content=_labeled("TASK INSTRUCTIONS", DRAFT_RESULT_TASK_INSTRUCTIONS),
+                kind="system",
+            ),
+        ]
+
+        sections.append(
+            AssembledPromptSection(
+                section_id="conversation_history",
+                label="CONVERSATION HISTORY (interview source of truth)",
+                content=_labeled(
+                    "CONVERSATION HISTORY (interview source of truth)",
+                    history_content or "No interview messages were provided.",
+                ),
+                kind="data",
+            )
+        )
+
+        return AssembledPrompt(task=BCB_DRAFT_RESULT_TASK, sections=tuple(sections))
 
 
 def _labeled(label: str, body: str) -> str:

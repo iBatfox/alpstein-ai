@@ -251,6 +251,10 @@ class Settings(BaseSettings):
         default=True,
         validation_alias="BCB_AI_ENABLED",
     )
+    bcb_ai_draft_enabled: bool = Field(
+        default=False,
+        validation_alias="BCB_AI_DRAFT_ENABLED",
+    )
 
     model_config = SettingsConfigDict(
         env_prefix="ALPSTEIN_AI_",

@@ -8,6 +8,7 @@ from app.models.business_context_builder import (
 )
 from app.services.business_context_builder_constants import STEP_TARGET_CUSTOMERS
 from app.services.business_context_builder_prompt_service import (
+    BCB_DRAFT_RESULT_TASK,
     BCB_NEXT_QUESTION_TASK,
     BusinessContextBuilderConversationTurn,
     BusinessContextBuilderPromptInput,
@@ -73,6 +74,43 @@ def test_prompt_builder_omits_empty_history_section():
         section for section in prompt.sections if section.section_id == "step_context"
     )
     assert "allowed_steps" in step_context.content
+
+
+def test_prompt_builder_creates_final_draft_result_prompt_from_history():
+    prompt_input = BusinessContextBuilderPromptInput(
+        session_id=uuid.uuid4(),
+        tenant_id=uuid.uuid4(),
+        business_id=uuid.uuid4(),
+        next_step="completed",
+        messages=(
+            BusinessContextBuilderConversationTurn(
+                role=MESSAGE_ROLE_ASSISTANT,
+                content="What does your company do?",
+            ),
+            BusinessContextBuilderConversationTurn(
+                role=MESSAGE_ROLE_USER,
+                content="We repair coffee machines for restaurants in St. Gallen.",
+            ),
+        ),
+    )
+
+    prompt = BusinessContextBuilderPromptService().build_draft_result_prompt(prompt_input)
+
+    assert prompt.task == BCB_DRAFT_RESULT_TASK
+    assert prompt.section_ids() == (
+        "platform_system",
+        "task_instructions",
+        "conversation_history",
+    )
+    serialized = "\n".join(section.content for section in prompt.sections).lower()
+    assert "we repair coffee machines" in serialized
+    assert "do not invent" in serialized
+    assert "unknown or missing" in serialized
+    assert "missing_information" in serialized
+    assert "do not ask another question" in serialized
+    assert "valid json object" in serialized
+    assert "internal database fields" in serialized
+    assert "request more information" in serialized
 
 
 def test_prompt_builder_does_not_import_openai_or_db_modules():

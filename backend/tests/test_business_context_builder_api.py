@@ -329,6 +329,130 @@ async def test_complete_completed_session_returns_invalid_transition(
 
 
 @pytest.mark.anyio
+async def test_complete_session_route_returns_generated_draft_result(
+    db_session: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    tenant_id = uuid.uuid4()
+    business_id = uuid.uuid4()
+    session_id = uuid.uuid4()
+    now = datetime(2026, 6, 8, 12, 0, 0)
+    builder_session = BusinessContextBuilderSession(
+        id=session_id,
+        tenant_id=tenant_id,
+        business_id=business_id,
+        status=SESSION_STATUS_COMPLETED,
+        current_step="completed",
+        created_at=now,
+        updated_at=now,
+        completed_at=now,
+    )
+    result = BusinessContextBuilderResult(
+        id=uuid.uuid4(),
+        tenant_id=tenant_id,
+        business_id=business_id,
+        session_id=session_id,
+        structured_context={
+            "company_overview": "AI generated overview",
+            "missing_information": [],
+        },
+        generated_prompt="AI generated draft prompt.",
+        created_at=now,
+        updated_at=now,
+    )
+
+    from app.api.routes import business_context_builder as bcb_routes
+
+    service = MagicMock()
+    service.complete_session = AsyncMock(return_value=(builder_session, result))
+    monkeypatch.setattr(bcb_routes, "business_context_builder_service", service)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            f"/api/v1/business-context-builder/sessions/{session_id}/complete",
+            json={
+                "tenant_id": str(tenant_id),
+                "business_id": str(business_id),
+            },
+            headers=_auth_headers(),
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["success"] is True
+    assert body["data"]["session"]["status"] == SESSION_STATUS_COMPLETED
+    assert body["data"]["result"]["generated_prompt"] == "AI generated draft prompt."
+    assert (
+        body["data"]["result"]["structured_context"]["company_overview"]
+        == "AI generated overview"
+    )
+    db_session.commit.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_get_completed_session_returns_stored_result(
+    db_session: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    tenant_id = uuid.uuid4()
+    business_id = uuid.uuid4()
+    session_id = uuid.uuid4()
+    now = datetime(2026, 6, 8, 12, 0, 0)
+    builder_session = BusinessContextBuilderSession(
+        id=session_id,
+        tenant_id=tenant_id,
+        business_id=business_id,
+        status=SESSION_STATUS_COMPLETED,
+        current_step="completed",
+        created_at=now,
+        updated_at=now,
+        completed_at=now,
+    )
+    result = BusinessContextBuilderResult(
+        id=uuid.uuid4(),
+        tenant_id=tenant_id,
+        business_id=business_id,
+        session_id=session_id,
+        structured_context={"company_overview": "Stored result"},
+        generated_prompt="Stored draft prompt.",
+        created_at=now,
+        updated_at=now,
+    )
+
+    from app.api.routes import business_context_builder as bcb_routes
+    from app.services.business_context_builder_service import (
+        BusinessContextBuilderSessionSnapshot,
+    )
+
+    service = MagicMock()
+    service.get_session = AsyncMock(
+        return_value=BusinessContextBuilderSessionSnapshot(
+            session=builder_session,
+            messages=[],
+            result=result,
+        )
+    )
+    monkeypatch.setattr(bcb_routes, "business_context_builder_service", service)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get(
+            f"/api/v1/business-context-builder/sessions/{session_id}",
+            params={
+                "tenant_id": str(tenant_id),
+                "business_id": str(business_id),
+            },
+            headers=_auth_headers(),
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["data"]["result"]["generated_prompt"] == "Stored draft prompt."
+    assert body["data"]["result"]["structured_context"]["company_overview"] == "Stored result"
+
+
+@pytest.mark.anyio
 async def test_not_found_session_returns_error_envelope(
     db_session: MagicMock,
     monkeypatch: pytest.MonkeyPatch,
