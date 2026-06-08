@@ -8,12 +8,22 @@ const client = createBusinessContextBuilderClient({
   initData: getTelegramInitData()
 });
 
+const INTERVIEW_STEPS = [
+  "company_information",
+  "business_description",
+  "target_customers",
+  "products_services",
+  "sales_process",
+  "communication_style"
+];
+
 const appState = {
   activeScreen: "start",
   session: null,
   messages: [],
   result: null,
   contexts: [],
+  isBusy: false,
   limit: 20,
   offset: 0
 };
@@ -30,7 +40,11 @@ const elements = {
   messageForm: document.getElementById("messageForm"),
   messageInput: document.getElementById("messageInput"),
   messageList: document.getElementById("messageList"),
+  currentStepCount: document.getElementById("currentStepCount"),
   currentStepLabel: document.getElementById("currentStepLabel"),
+  interviewStatus: document.getElementById("interviewStatus"),
+  progressFill: document.getElementById("progressFill"),
+  progressDots: document.getElementById("progressDots"),
   resultOutput: document.getElementById("resultOutput"),
   metadataGrid: document.getElementById("metadataGrid"),
   contextList: document.getElementById("contextList"),
@@ -74,6 +88,8 @@ function bindEvents() {
   elements.previousPageButton.addEventListener("click", previousPage);
   elements.nextPageButton.addEventListener("click", nextPage);
   elements.messageForm.addEventListener("submit", sendMessage);
+  elements.messageInput.addEventListener("keydown", handleComposerKeydown);
+  elements.messageInput.addEventListener("input", renderControls);
 }
 
 async function startInterview() {
@@ -122,6 +138,7 @@ async function sendMessage(event) {
 
   elements.messageInput.value = "";
   setBusy(true);
+  renderControls();
   try {
     const data = await client.sendMessage({
       sessionId: appState.session.id,
@@ -197,7 +214,24 @@ function render() {
 
 function renderStep() {
   const step = appState.session && appState.session.current_step;
+  const stepIndex = getStepIndex(step);
+  const stepNumber = stepIndex + 1;
+  const totalSteps = INTERVIEW_STEPS.length;
+  const progressPercent = Math.round((stepNumber / totalSteps) * 100);
+
   elements.currentStepLabel.textContent = step ? formatStep(step) : "Company information";
+  elements.currentStepCount.textContent = `Step ${stepNumber} of ${totalSteps}`;
+  elements.interviewStatus.textContent = appState.isBusy ? "Assistant responding" : "Interview";
+  elements.progressFill.style.width = `${progressPercent}%`;
+  elements.progressDots.style.gridTemplateColumns = `repeat(${totalSteps}, minmax(0, 1fr))`;
+  elements.progressDots.replaceChildren(
+    ...INTERVIEW_STEPS.map((_, index) => {
+      const dot = document.createElement("span");
+      dot.className = "progress-dot";
+      dot.classList.toggle("progress-dot-active", index <= stepIndex);
+      return dot;
+    })
+  );
 }
 
 function renderMessages() {
@@ -205,11 +239,14 @@ function renderMessages() {
   appState.messages.forEach((message) => {
     const node = elements.messageTemplate.content.firstElementChild.cloneNode(true);
     node.classList.add(`message-${message.role}`);
+    node.querySelector(".message-avatar").textContent = getAvatarLabel(message.role);
     node.querySelector(".message-role").textContent = formatRole(message.role);
     node.querySelector(".message-text").textContent = message.content;
     elements.messageList.appendChild(node);
   });
-  elements.messageList.scrollTop = elements.messageList.scrollHeight;
+  requestAnimationFrame(() => {
+    elements.messageList.scrollTop = elements.messageList.scrollHeight;
+  });
 }
 
 function renderResult() {
@@ -245,7 +282,8 @@ function renderContexts() {
   if (appState.contexts.length === 0) {
     const empty = document.createElement("p");
     empty.className = "empty-state";
-    empty.textContent = "No draft contexts yet.";
+    empty.textContent =
+      "No draft contexts yet. Start an interview to create the first saved draft.";
     elements.contextList.appendChild(empty);
   } else {
     appState.contexts.forEach((context) => {
@@ -269,8 +307,17 @@ function renderContexts() {
 }
 
 function renderControls() {
+  const sessionCanContinue = isOpenSession(appState.session);
+  const canSend =
+    sessionCanContinue && !appState.isBusy && elements.messageInput.value.trim().length > 0;
+  const canComplete = sessionCanContinue && !appState.isBusy && hasUserMessage();
+
   elements.continueSessionButton.disabled =
-    !appState.session || appState.session.status !== "active";
+    !appState.session || (!isOpenSession(appState.session) && !appState.result);
+  elements.messageInput.disabled = !sessionCanContinue || appState.isBusy;
+  elements.messageForm.querySelector(".send-button").disabled = !canSend;
+  elements.completeInterviewButton.disabled = !canComplete;
+  elements.completeInterviewButton.classList.toggle("complete-button-visible", canComplete);
 }
 
 function createMetadataItem(label, value) {
@@ -294,9 +341,18 @@ function pushSystemMessage(content) {
 }
 
 function setBusy(isBusy) {
+  appState.isBusy = isBusy;
+  document.body.classList.toggle("is-busy", isBusy);
   document.querySelectorAll("button, textarea").forEach((element) => {
     element.disabled = isBusy;
   });
+  renderStep();
+}
+
+function handleComposerKeydown(event) {
+  if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+  event.preventDefault();
+  elements.messageForm.requestSubmit();
 }
 
 function getConfigValue(name, fallback) {
@@ -315,6 +371,27 @@ function formatRole(role) {
   if (role === "assistant") return "Assistant";
   if (role === "user") return "You";
   return "System";
+}
+
+function getAvatarLabel(role) {
+  if (role === "assistant") return "AI";
+  if (role === "system") return "!";
+  return "";
+}
+
+function getStepIndex(step) {
+  const index = INTERVIEW_STEPS.indexOf(step);
+  if (index >= 0) return index;
+  if (step === "completed") return INTERVIEW_STEPS.length - 1;
+  return 0;
+}
+
+function isOpenSession(session) {
+  return Boolean(session && ["active", "in_progress", "created"].includes(session.status));
+}
+
+function hasUserMessage() {
+  return appState.messages.some((message) => message.role === "user");
 }
 
 function stringifyValue(value) {

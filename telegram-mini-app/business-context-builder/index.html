@@ -20,7 +20,8 @@
 
       <section class="screen screen-active" id="screenStart" data-screen="start">
         <div class="start-panel">
-          <h2>Business Context Builder</h2>
+          <div class="assistant-mark" aria-hidden="true">AI</div>
+          <h2>Build a draft context</h2>
           <p>
             Create a draft business context from a guided interview before it is
             reviewed and published through a separate workflow.
@@ -39,25 +40,36 @@
       <section class="screen" id="screenInterview" data-screen="interview">
         <div class="interview-toolbar">
           <div>
-            <p class="eyebrow">Current step</p>
+            <p class="eyebrow" id="currentStepCount">Step 1 of 6</p>
             <h2 id="currentStepLabel">Company information</h2>
           </div>
-          <button class="secondary-button compact" id="completeInterviewButton" type="button">
-            Complete interview
-          </button>
+          <span class="status-pill" id="interviewStatus">Interview</span>
+        </div>
+
+        <div class="progress-panel" aria-label="Interview progress">
+          <div class="progress-track">
+            <span class="progress-fill" id="progressFill"></span>
+          </div>
+          <div class="progress-dots" id="progressDots"></div>
         </div>
 
         <div class="message-list" id="messageList" aria-label="Interview messages"></div>
+
+        <button class="complete-button" id="completeInterviewButton" type="button">
+          Complete interview
+        </button>
 
         <form class="composer" id="messageForm">
           <label class="sr-only" for="messageInput">Message</label>
           <textarea
             id="messageInput"
             name="message"
-            rows="2"
+            rows="1"
             placeholder="Type an answer"
           ></textarea>
-          <button class="primary-button send-button" type="submit">Send</button>
+          <button class="primary-button send-button" type="submit" aria-label="Send message">
+            <span class="send-icon" aria-hidden="true"></span>
+          </button>
         </form>
       </section>
 
@@ -100,8 +112,11 @@
 
     <template id="messageTemplate">
       <article class="message">
-        <span class="message-role"></span>
-        <p class="message-text"></p>
+        <div class="message-avatar" aria-hidden="true"></div>
+        <div class="message-bubble">
+          <span class="message-role"></span>
+          <p class="message-text"></p>
+        </div>
       </article>
     </template>
 
