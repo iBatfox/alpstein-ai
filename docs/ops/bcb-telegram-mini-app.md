@@ -2,8 +2,8 @@
 
 ## Status
 
-Phase 2 adds the secure backend bridge needed for Telegram Mini App calls to
-Business Context Builder.
+The Mini App uses a secure backend bridge for Telegram access verification and
+Business Context Builder API calls.
 
 Location:
 
@@ -19,14 +19,14 @@ telegram-mini-app/business-context-builder/
 - Contexts screen with empty state and pagination-ready layout.
 - Telegram WebApp SDK initialization when available.
 - Telegram theme parameter support through CSS variables.
-- Browser preview without Telegram.
+- Browser preview without Telegram only when `api_mode=mock` is explicitly set.
 - Isolated API client module with mock and bridge adapters.
 - Sticky bottom navigation for Language, Contexts, Interview, Bots, and More.
 - Frontend language selection persisted as `bcb_language`.
 - Bots tab UI foundation with mock cards and bridge not-implemented state.
 - Backend bridge routes under `/api/v1/telegram-mini-app/business-context-builder`.
 - Server-side Telegram `initData` validation.
-- Owner-only bridge access through `TELEGRAM_MINI_APP_ALLOWED_USER_IDS`.
+- Owner-managed bridge access through `business_context_builder.mini_app_allowed_users`.
 - Server-side BCB tenant/business scope resolution.
 
 ## Intentionally Not Implemented
@@ -137,13 +137,13 @@ sudo systemctl reload nginx
 
 ## API Adapter
 
-Local browser preview uses a mock adapter by default:
+Local browser preview uses the mock adapter only when explicitly requested:
 
 ```text
 api_mode=mock
 ```
 
-Telegram runtime can use bridge mode:
+Telegram runtime and production browser loads use bridge mode:
 
 ```text
 api_mode=bridge
@@ -206,6 +206,7 @@ Namespace:
 
 Endpoints:
 
+- `POST /verify-access`
 - `POST /auth/session`
 - `POST /sessions`
 - `POST /sessions/{session_id}/messages`
@@ -219,6 +220,8 @@ Required behavior:
 
 - receive Telegram Mini App `initData`;
 - validate `initData` server-side using the bot token;
+- check the validated Telegram user ID against
+  `business_context_builder.mini_app_allowed_users`;
 - resolve tenant and business scope server-side;
 - call existing BCB backend service without exposing internal tokens;
 - return only draft BCB data to the Mini App.
@@ -232,7 +235,6 @@ Set on the backend only:
 ```text
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_INITDATA_MAX_AGE_SECONDS=86400
-TELEGRAM_MINI_APP_ALLOWED_USER_IDS=
 BCB_TELEGRAM_TENANT_ID=
 BCB_TELEGRAM_BUSINESS_ID=
 ```
@@ -240,14 +242,58 @@ BCB_TELEGRAM_BUSINESS_ID=
 The BCB scope values are UUIDs. They are not accepted from the frontend and are
 not validated through public schema foreign keys.
 
-`TELEGRAM_MINI_APP_ALLOWED_USER_IDS` is a comma-separated list of numeric
-Telegram user IDs, for example:
+## Owner-Managed Access
+
+Users cannot self-register and the Mini App does not expose admin management.
+The owner/admin adds allowed users in PostgreSQL after manual setup.
+
+Table:
 
 ```text
-TELEGRAM_MINI_APP_ALLOWED_USER_IDS=123456789,987654321
+business_context_builder.mini_app_allowed_users
 ```
 
-Empty allowlist denies access. This is the safest default for production.
+Fields:
+
+- `telegram_user_id` — numeric Telegram user ID, unique.
+- `display_name` — operator-visible user name.
+- `company_name` — company attached to this Mini App user.
+- `status` — `active` or `disabled`.
+- `notes` — optional backend notes.
+- `created_at` and `updated_at`.
+
+Manual insert example:
+
+```sql
+INSERT INTO business_context_builder.mini_app_allowed_users (
+  id,
+  telegram_user_id,
+  display_name,
+  company_name,
+  status,
+  notes
+) VALUES (
+  '<generated-uuid>',
+  123456789,
+  'Customer Name',
+  'Customer Company',
+  'active',
+  'Added by owner'
+);
+```
+
+Generate the UUID outside SQL if the database environment does not provide a
+UUID generation function:
+
+```bash
+python3 - <<'PY'
+import uuid
+print(uuid.uuid4())
+PY
+```
+
+Set `status = 'disabled'` to block a previously allowed Telegram user. Missing
+users and disabled users both receive the restricted-access response.
 
 To find a Telegram user ID, use a trusted Telegram ID lookup bot or a temporary
 operator-only diagnostic outside the frontend. Do not commit Telegram user IDs,
@@ -259,7 +305,7 @@ Telegram supplies trusted `initData` only inside the Mini App runtime. Test
 bridge mode in Telegram after the Mini App is served over HTTPS.
 
 BotFather Mini App URL setup should happen only after HTTPS deployment. Use
-`api_mode=mock` for local browser development before that.
+`api_mode=mock` only for local browser development before that.
 
 Use this Mini App URL in BotFather:
 
@@ -311,11 +357,11 @@ Expected:
 ## Security Notes
 
 - `TELEGRAM_BOT_TOKEN` stays on the backend.
-- `TELEGRAM_MINI_APP_ALLOWED_USER_IDS` stays on the backend.
+- Allowed Mini App users stay in `business_context_builder.mini_app_allowed_users`.
 - `N8N_BACKEND_API_TOKEN` stays out of frontend code.
 - Expired and invalid-signature `initData` are rejected by the backend.
-- Allowed-user enforcement happens after `initData` validation and before BCB
-  service access.
+- Allowed-user enforcement uses Telegram user ID, not username, after
+  `initData` validation and before BCB service access.
 - BCB access is scoped by backend-configured `BCB_TELEGRAM_TENANT_ID` and
   `BCB_TELEGRAM_BUSINESS_ID`.
 - The bridge reuses BCB service methods and does not write to production

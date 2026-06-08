@@ -37,6 +37,36 @@ class TelegramMiniAppAuthSessionResponse(BaseModel):
     data: TelegramMiniAppAuthSessionData
 
 
+class TelegramMiniAppVerifyAccessRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    init_data: str | None = None
+
+
+class TelegramMiniAppAllowedUserResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    telegram_user_id: int
+    display_name: str
+    company_name: str
+    status: str
+
+
+class TelegramMiniAppVerifyAccessData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    allowed: Literal[True] = True
+    user: TelegramMiniAppAllowedUserResponse
+    telegram_user: TelegramMiniAppUserResponse
+
+
+class TelegramMiniAppVerifyAccessResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    success: Literal[True] = True
+    data: TelegramMiniAppVerifyAccessData
+
+
 class TelegramMiniAppCreateSessionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

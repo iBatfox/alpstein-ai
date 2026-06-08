@@ -377,6 +377,53 @@ def test_business_context_builder_status_hardening_migration_is_bcb_only():
     assert "server_default=\"in_progress\"" in downgrade_source
 
 
+def test_business_context_builder_mini_app_allowed_users_migration_is_bcb_only():
+    migration_path = (
+        Path(__file__).resolve().parents[1]
+        / "alembic"
+        / "versions"
+        / "0025_create_bcb_mini_app_allowed_users.py"
+    )
+    spec = importlib.util.spec_from_file_location("migration_0025", migration_path)
+    assert spec is not None
+    assert spec.loader is not None
+
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    assert module.revision == "0025"
+    assert module.down_revision == "0024"
+    assert callable(module.upgrade)
+    assert callable(module.downgrade)
+
+    migration_source = migration_path.read_text()
+    assert "business_context_builder" in migration_source
+    assert "mini_app_allowed_users" in migration_source
+    assert migration_source.count("op.create_table") == 1
+    assert '"telegram_user_id"' in migration_source
+    assert '"display_name"' in migration_source
+    assert '"company_name"' in migration_source
+    assert '"status"' in migration_source
+    assert '"notes"' in migration_source
+    assert "active" in migration_source
+    assert "disabled" in migration_source
+    assert "sa.ForeignKeyConstraint" not in migration_source
+    assert '["tenants.id"]' not in migration_source
+    assert '["businesses.id"]' not in migration_source
+    assert "public.tenants" not in migration_source
+    assert "public.businesses" not in migration_source
+    assert "prompt_runs" not in migration_source
+    assert "conversations" not in migration_source
+    assert "messages" not in migration_source
+    assert "leads" not in migration_source
+
+    downgrade_source = migration_source.split("def downgrade")[1]
+    assert "op.drop_table(TABLE, schema=SCHEMA)" in downgrade_source
+    assert "DROP SCHEMA" not in downgrade_source
+    assert "tenants" not in downgrade_source
+    assert "businesses" not in downgrade_source
+
+
 def test_flows_migration_is_flows_only():
     migration_path = (
         Path(__file__).resolve().parents[1]

@@ -30,6 +30,7 @@ from app.schemas.business_context_builder import (
     SendMessageResponse,
 )
 from app.schemas.telegram_mini_app import (
+    TelegramMiniAppAllowedUserResponse,
     TelegramMiniAppAuthSessionData,
     TelegramMiniAppAuthSessionRequest,
     TelegramMiniAppAuthSessionResponse,
@@ -37,6 +38,9 @@ from app.schemas.telegram_mini_app import (
     TelegramMiniAppCreateSessionRequest,
     TelegramMiniAppSendMessageRequest,
     TelegramMiniAppUserResponse,
+    TelegramMiniAppVerifyAccessData,
+    TelegramMiniAppVerifyAccessRequest,
+    TelegramMiniAppVerifyAccessResponse,
 )
 from app.services.business_context_builder_service import (
     DEFAULT_CONTEXT_LIMIT,
@@ -54,6 +58,11 @@ from app.services.telegram_mini_app_auth_service import (
     TelegramMiniAppAuthError,
     TelegramMiniAppAuthService,
 )
+from app.services.telegram_mini_app_access_service import (
+    TelegramMiniAppAccessDeniedError,
+    TelegramMiniAppAccessDisabledError,
+    TelegramMiniAppAccessService,
+)
 
 TELEGRAM_INIT_DATA_HEADER = "X-Telegram-Init-Data"
 
@@ -62,6 +71,7 @@ router = APIRouter(
     tags=["telegram-mini-app-business-context-builder"],
 )
 telegram_auth_service = TelegramMiniAppAuthService()
+telegram_access_service = TelegramMiniAppAccessService()
 business_context_builder_service = BusinessContextBuilderService()
 
 
@@ -72,9 +82,13 @@ class BridgeScope:
 
 
 @router.post("/auth/session")
-async def auth_session(body: TelegramMiniAppAuthSessionRequest):
+async def auth_session(
+    body: TelegramMiniAppAuthSessionRequest,
+    session: AsyncSession = Depends(get_db_session),
+):
     try:
         auth_context = _validate_init_data(body.init_data)
+        await _verify_allowed_user(session, auth_context)
     except TelegramMiniAppAuthError as exc:
         return _auth_error(exc)
 
@@ -94,13 +108,38 @@ async def auth_session(body: TelegramMiniAppAuthSessionRequest):
     ).model_dump(mode="json")
 
 
+@router.post("/verify-access")
+async def verify_access(
+    body: TelegramMiniAppVerifyAccessRequest,
+    session: AsyncSession = Depends(get_db_session),
+):
+    try:
+        auth_context = _validate_init_data(body.init_data)
+        allowed_user = await _verify_allowed_user(session, auth_context)
+    except TelegramMiniAppAuthError as exc:
+        return _auth_error(exc)
+
+    return TelegramMiniAppVerifyAccessResponse(
+        data=TelegramMiniAppVerifyAccessData(
+            allowed=True,
+            user=TelegramMiniAppAllowedUserResponse(
+                telegram_user_id=allowed_user.telegram_user_id,
+                display_name=allowed_user.display_name,
+                company_name=allowed_user.company_name,
+                status=allowed_user.status,
+            ),
+            telegram_user=_telegram_user_response(auth_context),
+        )
+    ).model_dump(mode="json")
+
+
 @router.post("/sessions")
 async def create_session(
     _body: TelegramMiniAppCreateSessionRequest,
     session: AsyncSession = Depends(get_db_session),
     init_data: str | None = Header(default=None, alias=TELEGRAM_INIT_DATA_HEADER),
 ):
-    auth_context, scope_or_error = _auth_and_scope(init_data)
+    auth_context, scope_or_error = await _auth_and_scope(session, init_data)
     if isinstance(scope_or_error, JSONResponse):
         return scope_or_error
     scope = scope_or_error
@@ -128,7 +167,7 @@ async def send_message(
     session: AsyncSession = Depends(get_db_session),
     init_data: str | None = Header(default=None, alias=TELEGRAM_INIT_DATA_HEADER),
 ):
-    _auth_context, scope_or_error = _auth_and_scope(init_data)
+    _auth_context, scope_or_error = await _auth_and_scope(session, init_data)
     if isinstance(scope_or_error, JSONResponse):
         return scope_or_error
     scope = scope_or_error
@@ -188,7 +227,7 @@ async def get_session(
     session: AsyncSession = Depends(get_db_session),
     init_data: str | None = Header(default=None, alias=TELEGRAM_INIT_DATA_HEADER),
 ):
-    _auth_context, scope_or_error = _auth_and_scope(init_data)
+    _auth_context, scope_or_error = await _auth_and_scope(session, init_data)
     if isinstance(scope_or_error, JSONResponse):
         return scope_or_error
     scope = scope_or_error
@@ -229,7 +268,7 @@ async def complete_session(
     session: AsyncSession = Depends(get_db_session),
     init_data: str | None = Header(default=None, alias=TELEGRAM_INIT_DATA_HEADER),
 ):
-    _auth_context, scope_or_error = _auth_and_scope(init_data)
+    _auth_context, scope_or_error = await _auth_and_scope(session, init_data)
     if isinstance(scope_or_error, JSONResponse):
         return scope_or_error
     scope = scope_or_error
@@ -277,7 +316,7 @@ async def list_contexts(
     session: AsyncSession = Depends(get_db_session),
     init_data: str | None = Header(default=None, alias=TELEGRAM_INIT_DATA_HEADER),
 ):
-    _auth_context, scope_or_error = _auth_and_scope(init_data)
+    _auth_context, scope_or_error = await _auth_and_scope(session, init_data)
     if isinstance(scope_or_error, JSONResponse):
         return scope_or_error
     scope = scope_or_error
@@ -302,11 +341,13 @@ async def list_contexts(
     ).model_dump(mode="json")
 
 
-def _auth_and_scope(
+async def _auth_and_scope(
+    session: AsyncSession,
     init_data: str | None,
 ) -> tuple[TelegramMiniAppAuthContext, BridgeScope] | tuple[None, JSONResponse]:
     try:
         auth_context = _validate_init_data(init_data)
+        await _verify_allowed_user(session, auth_context)
         scope = _resolve_scope()
     except TelegramMiniAppAuthError as exc:
         return None, _auth_error(exc)
@@ -314,43 +355,28 @@ def _auth_and_scope(
 
 
 def _validate_init_data(init_data: str | None) -> TelegramMiniAppAuthContext:
-    auth_context = telegram_auth_service.validate_init_data(
+    return telegram_auth_service.validate_init_data(
         init_data,
         bot_token=settings.telegram_bot_token,
         max_age_seconds=settings.telegram_initdata_max_age_seconds,
     )
-    _validate_allowed_user(auth_context)
-    return auth_context
 
 
-def _validate_allowed_user(auth_context: TelegramMiniAppAuthContext) -> None:
-    allowed_user_ids = _parse_allowed_user_ids(settings.telegram_mini_app_allowed_user_ids)
-    if auth_context.telegram_user.id not in allowed_user_ids:
+async def _verify_allowed_user(
+    session: AsyncSession,
+    auth_context: TelegramMiniAppAuthContext,
+):
+    try:
+        return await telegram_access_service.verify_allowed_user(
+            session,
+            telegram_user_id=auth_context.telegram_user.id,
+        )
+    except (TelegramMiniAppAccessDeniedError, TelegramMiniAppAccessDisabledError) as exc:
         raise TelegramMiniAppAuthError(
             "TELEGRAM_USER_NOT_ALLOWED",
-            "Telegram Mini App access is restricted",
+            "Access is not enabled for your account yet. Please contact Alpstein AI.",
             status_code=403,
-        )
-
-
-def _parse_allowed_user_ids(raw_value: str) -> frozenset[int]:
-    values = raw_value.strip()
-    if not values:
-        return frozenset()
-    allowed_user_ids: set[int] = set()
-    for item in values.split(","):
-        clean_item = item.strip()
-        if not clean_item:
-            continue
-        try:
-            allowed_user_ids.add(int(clean_item))
-        except ValueError as exc:
-            raise TelegramMiniAppAuthError(
-                "TELEGRAM_ALLOWED_USERS_INVALID",
-                "TELEGRAM_MINI_APP_ALLOWED_USER_IDS must contain comma-separated integers",
-                status_code=503,
-            ) from exc
-    return frozenset(allowed_user_ids)
+        ) from exc
 
 
 def _resolve_scope() -> BridgeScope:
@@ -387,6 +413,20 @@ def _parse_config_uuid(value: str, *, code: str, field_name: str) -> uuid.UUID:
 
 def _auth_error(exc: TelegramMiniAppAuthError) -> JSONResponse:
     return _error(exc.status_code, exc.code, exc.message)
+
+
+def _telegram_user_response(
+    auth_context: TelegramMiniAppAuthContext,
+) -> TelegramMiniAppUserResponse:
+    user = auth_context.telegram_user
+    return TelegramMiniAppUserResponse(
+        id=user.id,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        username=user.username,
+        language_code=user.language_code,
+        is_premium=user.is_premium,
+    )
 
 
 def _error(status_code: int, code: str, message: str) -> JSONResponse:

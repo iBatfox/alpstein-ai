@@ -13,6 +13,13 @@ const channelTitle = document.getElementById("channelTitle");
 const channelStatus = document.getElementById("channelStatus");
 const channelStats = document.getElementById("channelStats");
 const channelConnection = document.getElementById("channelConnection");
+const accessDeniedMessage = document.getElementById("accessDeniedMessage");
+
+const accessMessage =
+  "Access is not enabled for your account yet. Please contact Alpstein AI.";
+const apiMode = getConfigValue("api_mode", "bridge");
+const apiBaseUrl = getConfigValue("api_base_url", "");
+const localMockAllowed = isLocalDevelopmentHost();
 
 const bots = [
   {
@@ -110,9 +117,11 @@ let currentStep = 0;
 
 renderBots();
 renderWizard();
+verifyStartupAccess();
 
 loginForm.addEventListener("submit", (event) => {
   event.preventDefault();
+  if (apiMode !== "mock" || !localMockAllowed) return;
   bottomNav.hidden = false;
   showScreen("bots");
 });
@@ -150,6 +159,80 @@ function showScreen(screenName) {
   bottomNav.querySelectorAll("button[data-nav]").forEach((button) => {
     button.classList.toggle("active", button.dataset.nav === screenName);
   });
+}
+
+async function verifyStartupAccess() {
+  bottomNav.hidden = true;
+
+  if (apiMode === "mock" && localMockAllowed) {
+    showScreen("login");
+    return;
+  }
+
+  showScreen("verifying");
+
+  try {
+    await requestAccessVerification();
+    bottomNav.hidden = false;
+    showScreen("bots");
+  } catch (_error) {
+    showAccessDenied();
+  }
+}
+
+async function requestAccessVerification() {
+  const initData = getTelegramInitData();
+  if (!initData) {
+    throw new Error("Telegram initData is required");
+  }
+
+  const response = await fetch(
+    `${apiBaseUrl}/api/v1/telegram-mini-app/business-context-builder/verify-access`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        init_data: initData
+      })
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error("Access verification failed");
+  }
+
+  const payload = await response.json();
+  if (!payload.success || payload.data?.allowed !== true) {
+    throw new Error("Access denied");
+  }
+
+  return payload.data;
+}
+
+function getTelegramInitData() {
+  const webApp = window.Telegram?.WebApp;
+  webApp?.ready?.();
+  return webApp?.initData || "";
+}
+
+function getConfigValue(key, fallback) {
+  const params = new URLSearchParams(window.location.search);
+  const value = params.get(key);
+  return value === null || value === "" ? fallback : value;
+}
+
+function isLocalDevelopmentHost() {
+  return ["localhost", "127.0.0.1"].includes(window.location.hostname);
+}
+
+function showAccessDenied() {
+  if (accessDeniedMessage) {
+    accessDeniedMessage.textContent = accessMessage;
+  }
+  bottomNav.hidden = true;
+  showScreen("access-denied");
 }
 
 function renderBots() {

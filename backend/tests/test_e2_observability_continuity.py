@@ -76,14 +76,14 @@ def test_e2_persistence_tables_in_model_metadata():
     assert "delivery_events" in tables
 
 
-def test_alembic_head_is_0024():
+def test_alembic_head_is_0025():
     from alembic.config import Config
     from alembic.script import ScriptDirectory
 
     cfg = Config(str(BACKEND_DIR / "alembic.ini"))
     script = ScriptDirectory.from_config(cfg)
     heads = script.get_heads()
-    assert heads == ["0024"]
+    assert heads == ["0025"]
 
 
 def test_trace_and_delivery_mappers_share_outbound_message_id():

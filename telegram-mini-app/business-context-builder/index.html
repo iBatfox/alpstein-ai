@@ -5,10 +5,43 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Alpstein AI Prototype</title>
     <link rel="stylesheet" href="./styles.css" />
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
   </head>
   <body>
     <main class="prototype-shell">
-      <section class="screen screen-active login-screen" data-screen="login">
+      <section class="screen screen-active login-screen" data-screen="verifying">
+        <div class="brand-lockup">
+          <div class="logo-mark" aria-hidden="true">
+            <span></span>
+          </div>
+          <div>
+            <p class="eyebrow">Alpstein AI</p>
+            <h1>Verifying access</h1>
+          </div>
+        </div>
+        <article class="login-card">
+          <p>Please wait while Alpstein AI checks your Telegram access.</p>
+        </article>
+      </section>
+
+      <section class="screen login-screen" data-screen="access-denied">
+        <div class="brand-lockup">
+          <div class="logo-mark" aria-hidden="true">
+            <span></span>
+          </div>
+          <div>
+            <p class="eyebrow">Alpstein AI</p>
+            <h1>Access not enabled</h1>
+          </div>
+        </div>
+        <article class="login-card">
+          <p id="accessDeniedMessage">
+            Access is not enabled for your account yet. Please contact Alpstein AI.
+          </p>
+        </article>
+      </section>
+
+      <section class="screen login-screen" data-screen="login">
         <div class="brand-lockup">
           <div class="logo-mark" aria-hidden="true">
             <span></span>

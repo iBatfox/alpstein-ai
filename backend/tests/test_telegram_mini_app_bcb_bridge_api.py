@@ -14,13 +14,19 @@ from app.main import app
 from app.models.business_context_builder import (
     MESSAGE_ROLE_ASSISTANT,
     MESSAGE_ROLE_USER,
+    MINI_APP_ALLOWED_USER_STATUS_ACTIVE,
     SESSION_STATUS_ACTIVE,
     BusinessContextBuilderMessage,
+    BusinessContextBuilderMiniAppAllowedUser,
     BusinessContextBuilderResult,
     BusinessContextBuilderSession,
 )
 from app.services.business_context_builder_service import (
     BusinessContextBuilderSessionSnapshot,
+)
+from app.services.telegram_mini_app_access_service import (
+    TelegramMiniAppAccessDeniedError,
+    TelegramMiniAppAccessDisabledError,
 )
 
 BOT_TOKEN = "123456:test-token"
@@ -34,12 +40,30 @@ def configure_bridge(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(bridge.settings, "telegram_bot_token", BOT_TOKEN)
     monkeypatch.setattr(bridge.settings, "telegram_initdata_max_age_seconds", 86400)
-    monkeypatch.setattr(bridge.settings, "telegram_mini_app_allowed_user_ids", "777001,777002,777003")
     monkeypatch.setattr(bridge.settings, "bcb_telegram_tenant_id", str(TENANT_ID))
     monkeypatch.setattr(bridge.settings, "bcb_telegram_business_id", str(BUSINESS_ID))
 
+    access_service = MagicMock()
 
-@pytest.fixture
+    async def _verify_allowed_user(_session, *, telegram_user_id: int):
+        if telegram_user_id not in {777001, 777002, 777003}:
+            raise TelegramMiniAppAccessDeniedError()
+        return BusinessContextBuilderMiniAppAllowedUser(
+            id=uuid.uuid4(),
+            telegram_user_id=telegram_user_id,
+            display_name="Bridge User",
+            company_name="Alpstein Demo GmbH",
+            status=MINI_APP_ALLOWED_USER_STATUS_ACTIVE,
+            notes=None,
+            created_at=datetime(2026, 6, 8, 12, 0, 0),
+            updated_at=datetime(2026, 6, 8, 12, 0, 0),
+        )
+
+    access_service.verify_allowed_user = AsyncMock(side_effect=_verify_allowed_user)
+    monkeypatch.setattr(bridge, "telegram_access_service", access_service)
+
+
+@pytest.fixture(autouse=True)
 def db_session() -> MagicMock:
     session = MagicMock()
     session.commit = AsyncMock()
@@ -92,6 +116,86 @@ def init_headers(init_data: str | None = None) -> dict[str, str]:
 
 
 @pytest.mark.anyio
+async def test_verify_access_accepts_valid_active_allowed_user():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/telegram-mini-app/business-context-builder/verify-access",
+            json={"init_data": signed_init_data(telegram_user_id=777002)},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["success"] is True
+    assert body["data"]["allowed"] is True
+    assert body["data"]["user"]["telegram_user_id"] == 777002
+    assert body["data"]["user"]["display_name"] == "Bridge User"
+    assert body["data"]["user"]["company_name"] == "Alpstein Demo GmbH"
+    assert body["data"]["telegram_user"]["id"] == 777002
+    assert "token" not in json.dumps(body).lower()
+
+
+@pytest.mark.anyio
+async def test_verify_access_rejects_valid_user_not_in_allowlist():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/telegram-mini-app/business-context-builder/verify-access",
+            json={"init_data": signed_init_data(telegram_user_id=888001)},
+        )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "TELEGRAM_USER_NOT_ALLOWED"
+
+
+@pytest.mark.anyio
+async def test_verify_access_rejects_disabled_allowed_user(monkeypatch: pytest.MonkeyPatch):
+    from app.api.routes import telegram_mini_app_business_context_builder as bridge
+
+    access_service = MagicMock()
+    access_service.verify_allowed_user = AsyncMock(
+        side_effect=TelegramMiniAppAccessDisabledError()
+    )
+    monkeypatch.setattr(bridge, "telegram_access_service", access_service)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/telegram-mini-app/business-context-builder/verify-access",
+            json={"init_data": signed_init_data(telegram_user_id=777001)},
+        )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "TELEGRAM_USER_NOT_ALLOWED"
+
+
+@pytest.mark.anyio
+async def test_verify_access_rejects_invalid_init_data():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/telegram-mini-app/business-context-builder/verify-access",
+            json={"init_data": signed_init_data(bot_token="wrong-token")},
+        )
+
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "TELEGRAM_INIT_DATA_INVALID_SIGNATURE"
+
+
+@pytest.mark.anyio
+async def test_verify_access_rejects_missing_init_data():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/telegram-mini-app/business-context-builder/verify-access",
+            json={},
+        )
+
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "TELEGRAM_INIT_DATA_REQUIRED"
+
+
+@pytest.mark.anyio
 async def test_auth_session_accepts_valid_init_data():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -141,23 +245,6 @@ async def test_auth_session_rejects_disallowed_telegram_user():
         response = await client.post(
             "/api/v1/telegram-mini-app/business-context-builder/auth/session",
             json={"init_data": signed_init_data(telegram_user_id=888001)},
-        )
-
-    assert response.status_code == 403
-    assert response.json()["error"]["code"] == "TELEGRAM_USER_NOT_ALLOWED"
-
-
-@pytest.mark.anyio
-async def test_missing_allowlist_denies_access(monkeypatch: pytest.MonkeyPatch):
-    from app.api.routes import telegram_mini_app_business_context_builder as bridge
-
-    monkeypatch.setattr(bridge.settings, "telegram_mini_app_allowed_user_ids", "")
-
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        response = await client.post(
-            "/api/v1/telegram-mini-app/business-context-builder/auth/session",
-            json={"init_data": signed_init_data(telegram_user_id=777001)},
         )
 
     assert response.status_code == 403

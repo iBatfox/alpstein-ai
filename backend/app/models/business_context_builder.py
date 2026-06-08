@@ -10,6 +10,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    BigInteger,
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -26,6 +27,9 @@ SESSION_STATUS_CANCELLED = "cancelled"
 MESSAGE_ROLE_ASSISTANT = "assistant"
 MESSAGE_ROLE_USER = "user"
 MESSAGE_ROLE_SYSTEM = "system"
+
+MINI_APP_ALLOWED_USER_STATUS_ACTIVE = "active"
+MINI_APP_ALLOWED_USER_STATUS_DISABLED = "disabled"
 
 
 class BusinessContextBuilderSession(Base):
@@ -94,6 +98,56 @@ class BusinessContextBuilderSession(Base):
         back_populates="session",
         cascade="all, delete-orphan",
         uselist=False,
+    )
+
+
+class BusinessContextBuilderMiniAppAllowedUser(Base):
+    __tablename__ = "mini_app_allowed_users"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('active', 'disabled')",
+            name="business_context_builder_mini_app_allowed_users_status_check",
+        ),
+        UniqueConstraint(
+            "telegram_user_id",
+            name="business_context_builder_mini_app_allowed_users_telegram_user_id_unique",
+        ),
+        Index(
+            "bcb_mini_app_allowed_users_telegram_user_id_idx",
+            "telegram_user_id",
+        ),
+        Index(
+            "bcb_mini_app_allowed_users_status_idx",
+            "status",
+        ),
+        {"schema": BUSINESS_CONTEXT_BUILDER_SCHEMA},
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    telegram_user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    display_name: Mapped[str] = mapped_column(Text, nullable=False)
+    company_name: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default=MINI_APP_ALLOWED_USER_STATUS_ACTIVE,
+        server_default=MINI_APP_ALLOWED_USER_STATUS_ACTIVE,
+    )
+    notes: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=False),
+        nullable=False,
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=False),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
     )
 
 

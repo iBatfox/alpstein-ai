@@ -50,17 +50,33 @@ const MOCK_TENANT_ID = "00000000-0000-4000-8000-000000000001";
 const MOCK_BUSINESS_ID = "00000000-0000-4000-8000-000000000002";
 
 export function createBusinessContextBuilderClient(config = {}) {
-  const mode = config.mode || "mock";
+  const mode = config.mode || "bridge";
   if (mode === "bridge") {
     return createBridgeClient({
       baseUrl: config.baseUrl || "",
       initData: config.initData || ""
     });
   }
+  if (mode === "mock") {
+    if (!isLocalDevelopmentHost()) {
+      return createBridgeClient({
+        baseUrl: config.baseUrl || "",
+        initData: config.initData || ""
+      });
+    }
+    return createMockClient({ language: config.language || "en" });
+  }
   if (mode === "backend") {
     return createDirectBackendBlockedClient();
   }
-  return createMockClient({ language: config.language || "en" });
+  return createBridgeClient({
+    baseUrl: config.baseUrl || "",
+    initData: config.initData || ""
+  });
+}
+
+function isLocalDevelopmentHost() {
+  return ["localhost", "127.0.0.1"].includes(window.location.hostname);
 }
 
 function createDirectBackendBlockedClient() {
@@ -73,6 +89,7 @@ function createDirectBackendBlockedClient() {
 
   return {
     authSession: blocked,
+    verifyAccess: blocked,
     createSession: blocked,
     sendMessage: blocked,
     getSession: blocked,
@@ -115,7 +132,11 @@ function createBridgeClient({ baseUrl, initData }) {
 
   return {
     async authSession() {
-      return request("/auth/session", {
+      return this.verifyAccess();
+    },
+
+    async verifyAccess() {
+      return request("/verify-access", {
         method: "POST",
         body: { init_data: initData }
       });
@@ -193,13 +214,22 @@ function createMockClient({ language }) {
 
   return {
     async authSession() {
+      return this.verifyAccess();
+    },
+
+    async verifyAccess() {
       return {
-        authenticated: true,
+        allowed: true,
         user: {
+          telegram_user_id: 0,
+          display_name: "Browser preview",
+          company_name: "Mock Company",
+          status: "active"
+        },
+        telegram_user: {
           id: 0,
           first_name: "Browser preview"
         },
-        auth_date: Math.floor(Date.now() / 1000)
       };
     },
 
