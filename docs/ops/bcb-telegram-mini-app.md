@@ -213,6 +213,11 @@ Endpoints:
 
 - `POST /verify-access`
 - `POST /auth/session`
+- `POST /interview/session`
+- `POST /interview/answer`
+- `POST /interview/generate-documents`
+- `GET /interview/documents`
+- `GET /interview/documents/{document_id}`
 - `POST /sessions`
 - `POST /sessions/{session_id}/messages`
 - `GET /sessions/{session_id}`
@@ -232,6 +237,43 @@ Required behavior:
 - return only draft BCB data to the Mini App.
 
 The bridge must not publish drafts to production assistants.
+
+## Business Analyst Interview
+
+The Interview tab is a verified Business Analyst Interview. It asks structured
+business questions, stores answers for the verified user's business, generates
+deterministic markdown documents, and lists/views saved documents in the Mini
+App.
+
+Storage root:
+
+```text
+/opt/alpstein-ai/docs/interview
+```
+
+Business-scoped folder:
+
+```text
+/opt/alpstein-ai/docs/interview/{alpstein_business_id}/
+```
+
+Example generated files:
+
+```text
+/opt/alpstein-ai/docs/interview/alpstein-ai/2026-06-08-business-analysis.md
+/opt/alpstein-ai/docs/interview/alpstein-ai/2026-06-08-technical-spec.md
+```
+
+The backend sanitizes `alpstein_business_id` before creating folders. The
+frontend cannot send business ids or file paths. Document IDs are resolved only
+inside the verified user's own business folder.
+
+Generated documents:
+
+- `Business Automation Analysis`
+- `Technical Specification Draft`
+
+This implementation is template-based and does not call OpenAI.
 
 ## Backend Env
 

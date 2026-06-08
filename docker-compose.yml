@@ -74,6 +74,8 @@ services:
       BCB_TELEGRAM_BUSINESS_ID: ${BCB_TELEGRAM_BUSINESS_ID:-}
     networks:
       - alpstein_internal
+    volumes:
+      - /opt/alpstein-ai/docs/interview:/opt/alpstein-ai/docs/interview
     expose:
       - "8000"
     ports:

@@ -8,6 +8,10 @@ const wizardQuestion = document.getElementById("wizardQuestion");
 const wizardAnswer = document.getElementById("wizardAnswer");
 const wizardContinue = document.getElementById("wizardContinue");
 const answerStack = document.getElementById("answerStack");
+const documentList = document.getElementById("documentList");
+const documentViewer = document.getElementById("documentViewer");
+const documentTitle = document.getElementById("documentTitle");
+const documentContent = document.getElementById("documentContent");
 const channelBack = document.getElementById("channelBack");
 const channelTitle = document.getElementById("channelTitle");
 const channelStatus = document.getElementById("channelStatus");
@@ -23,15 +27,27 @@ const localMockAllowed = isLocalDevelopmentHost();
 
 const wizardSteps = [
   "What is your company name?",
-  "What do you sell?",
-  "Who are your customers?",
-  "How should the assistant communicate?",
-  "What questions do customers ask most often?"
+  "What does the company sell or provide?",
+  "Who are the main customers?",
+  "Which communication channels are used now?",
+  "What questions do customers ask most often?",
+  "Where are leads currently stored?",
+  "Which CRM/ERP/software is used?",
+  "Which manual processes take the most time?",
+  "Where do employees lose leads or forget to answer?",
+  "Which parts should AI automate first?",
+  "What should AI never do without human approval?",
+  "What tone/language should the assistant use?",
+  "What information should be collected from customers?",
+  "Who should receive notifications when a lead appears?",
+  "What would a successful automation result look like?"
 ];
 
 const answers = [];
+let interviewComplete = false;
 let integrations = [];
 let currentStep = 0;
+let mockDocuments = [];
 
 renderIntegrations();
 renderWizard();
@@ -42,6 +58,7 @@ loginForm.addEventListener("submit", (event) => {
   if (apiMode !== "mock" || !localMockAllowed) return;
   integrations = getMockIntegrations();
   renderIntegrations();
+  loadInterview();
   bottomNav.hidden = false;
   showScreen("bots");
 });
@@ -56,19 +73,17 @@ channelBack.addEventListener("click", () => {
   showScreen("bots");
 });
 
-wizardContinue.addEventListener("click", () => {
-  const answer = wizardAnswer.value.trim();
-  answers[currentStep] = answer || "Prototype answer not entered yet.";
-  wizardAnswer.value = "";
-
-  if (currentStep < wizardSteps.length - 1) {
-    currentStep += 1;
-    renderWizard();
+wizardContinue.addEventListener("click", async () => {
+  if (interviewComplete) {
+    await generateInterviewDocuments();
     return;
   }
 
-  renderGeneratedContext();
-  showScreen("context");
+  const answer = wizardAnswer.value.trim();
+  if (!answer) return;
+  wizardAnswer.value = "";
+
+  await saveInterviewAnswer(answer);
 });
 
 function showScreen(screenName) {
@@ -97,6 +112,7 @@ async function verifyStartupAccess() {
     const access = await requestAccessVerification();
     integrations = Array.isArray(access.integrations) ? access.integrations : [];
     renderIntegrations();
+    await loadInterview();
     bottomNav.hidden = false;
     showScreen("bots");
   } catch (_error) {
@@ -135,6 +151,37 @@ async function requestAccessVerification() {
   return payload.data;
 }
 
+async function bridgeRequest(path, { method = "GET", body } = {}) {
+  if (apiMode === "mock" && localMockAllowed) {
+    return mockBridgeRequest(path, { method, body });
+  }
+
+  const initData = getTelegramInitData();
+  if (!initData) {
+    throw new Error("Telegram initData is required");
+  }
+
+  const response = await fetch(
+    `${apiBaseUrl}/api/v1/telegram-mini-app/business-context-builder${path}`,
+    {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        "X-Telegram-Init-Data": initData
+      },
+      body: body === undefined ? undefined : JSON.stringify(body)
+    }
+  );
+  if (!response.ok) {
+    throw new Error("Business Context Builder request failed");
+  }
+  const payload = await response.json();
+  if (!payload.success) {
+    throw new Error("Business Context Builder request failed");
+  }
+  return payload.data;
+}
+
 function getTelegramInitData() {
   const webApp = window.Telegram?.WebApp;
   webApp?.ready?.();
@@ -157,6 +204,165 @@ function showAccessDenied() {
   }
   bottomNav.hidden = true;
   showScreen("access-denied");
+}
+
+async function loadInterview() {
+  try {
+    const session = await bridgeRequest("/interview/session", { method: "POST" });
+    applyInterviewSession(session);
+    await loadInterviewDocuments();
+  } catch (_error) {
+    renderDocuments([]);
+  }
+}
+
+async function saveInterviewAnswer(answer) {
+  try {
+    const session = await bridgeRequest("/interview/answer", {
+      method: "POST",
+      body: { content: answer }
+    });
+    applyInterviewSession(session);
+  } catch (_error) {
+    wizardAnswer.value = answer;
+  }
+}
+
+async function generateInterviewDocuments() {
+  try {
+    const response = await bridgeRequest("/interview/generate-documents", {
+      method: "POST"
+    });
+    renderDocuments(response.items || []);
+    await loadInterviewDocuments();
+  } catch (_error) {
+    return;
+  }
+}
+
+async function loadInterviewDocuments() {
+  const response = await bridgeRequest("/interview/documents");
+  renderDocuments(response.items || []);
+}
+
+async function openInterviewDocument(documentId) {
+  const response = await bridgeRequest(
+    `/interview/documents/${encodeURIComponent(documentId)}`
+  );
+  documentTitle.textContent = response.document.title;
+  documentContent.textContent = response.content;
+  documentViewer.hidden = false;
+}
+
+function applyInterviewSession(session) {
+  answers.length = 0;
+  answers.push(...(session.answers || []).map((item) => item.answer));
+  currentStep = Math.min(session.current_index || 0, wizardSteps.length - 1);
+  interviewComplete = Boolean(session.is_complete);
+  if (session.question) {
+    wizardQuestion.textContent = session.question;
+  }
+  renderWizard();
+}
+
+function renderDocuments(documents) {
+  if (!documentList) return;
+  if (!documents.length) {
+    const empty = document.createElement("article");
+    empty.className = "answer-card";
+    empty.textContent = "No saved documents yet.";
+    documentList.replaceChildren(empty);
+    documentViewer.hidden = true;
+    return;
+  }
+  documentList.replaceChildren(
+    ...documents.map((document) => {
+      const card = document.createElement("article");
+      const type = document.createElement("span");
+      const title = document.createElement("p");
+      const created = document.createElement("span");
+      const button = document.createElement("button");
+      card.className = "answer-card";
+      type.textContent = document.document_type === "technical_specification"
+        ? "Technical Specification"
+        : "Business Analysis";
+      title.textContent = document.title;
+      created.textContent = document.created_at;
+      button.className = "secondary-button compact";
+      button.type = "button";
+      button.textContent = "Open";
+      button.addEventListener("click", () => openInterviewDocument(document.id));
+      card.append(type, title, created, button);
+      return card;
+    })
+  );
+}
+
+async function mockBridgeRequest(path, { method, body } = {}) {
+  if (path === "/interview/session") {
+    return mockInterviewSession();
+  }
+  if (path === "/interview/answer" && method === "POST") {
+    const answer = (body?.content || "").trim();
+    if (answer && !interviewComplete) {
+      answers[currentStep] = answer;
+      if (currentStep < wizardSteps.length - 1) {
+        currentStep += 1;
+      } else {
+        interviewComplete = true;
+      }
+    }
+    return mockInterviewSession();
+  }
+  if (path === "/interview/generate-documents" && method === "POST") {
+    mockDocuments = [
+      {
+        id: "mock-business-analysis",
+        title: "Business Analysis",
+        document_type: "business_analysis",
+        created_at: new Date().toISOString(),
+        filename: "browser-preview-business-analysis.md",
+        content: "# Business Automation Analysis\n\nBrowser preview document."
+      },
+      {
+        id: "mock-technical-spec",
+        title: "Technical Specification",
+        document_type: "technical_specification",
+        created_at: new Date().toISOString(),
+        filename: "browser-preview-technical-spec.md",
+        content: "# Technical Specification Draft\n\nBrowser preview document."
+      }
+    ];
+    return { items: mockDocuments.map(({ content, ...item }) => item) };
+  }
+  if (path === "/interview/documents") {
+    return { items: mockDocuments.map(({ content, ...item }) => item) };
+  }
+  if (path.startsWith("/interview/documents/")) {
+    const documentId = decodeURIComponent(path.split("/").pop() || "");
+    const document = mockDocuments.find((item) => item.id === documentId);
+    if (!document) throw new Error("Document not found");
+    const { content, ...item } = document;
+    return { document: item, content };
+  }
+  throw new Error("Mock endpoint not implemented");
+}
+
+function mockInterviewSession() {
+  return {
+    alpstein_business_id: "alpstein-ai",
+    current_index: currentStep,
+    question: interviewComplete ? null : wizardSteps[currentStep],
+    progress_current: Math.min(currentStep + 1, wizardSteps.length),
+    progress_total: wizardSteps.length,
+    is_complete: interviewComplete,
+    answers: answers.map((answer, index) => ({
+      question_index: index,
+      question: wizardSteps[index],
+      answer,
+      answered_at: new Date().toISOString()
+    }))
+  };
 }
 
 function renderIntegrations() {
@@ -356,9 +562,14 @@ function createMetricCard(labelText, valueText) {
 function renderWizard() {
   stepLabel.textContent = `Step ${currentStep + 1} of ${wizardSteps.length}`;
   progressFill.style.width = `${((currentStep + 1) / wizardSteps.length) * 100}%`;
-  wizardQuestion.textContent = wizardSteps[currentStep];
-  wizardContinue.textContent =
-    currentStep === wizardSteps.length - 1 ? "Generate Business Context" : "Continue";
+  wizardQuestion.textContent = interviewComplete
+    ? "The interview is complete. Generate the analysis documents."
+    : wizardSteps[currentStep];
+  wizardAnswer.disabled = interviewComplete;
+  wizardAnswer.placeholder = interviewComplete
+    ? "Generate documents to save the interview results"
+    : "Type a short answer";
+  wizardContinue.textContent = interviewComplete ? "Generate Analysis" : "Continue";
   renderAnswers();
 }
 

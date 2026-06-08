@@ -95,6 +95,11 @@ function createDirectBackendBlockedClient() {
     getSession: blocked,
     completeSession: blocked,
     listContexts: blocked,
+    createInterviewSession: blocked,
+    sendInterviewAnswer: blocked,
+    generateInterviewDocuments: blocked,
+    listInterviewDocuments: blocked,
+    getInterviewDocument: blocked,
     listBots: blocked
   };
 }
@@ -175,6 +180,35 @@ function createBridgeClient({ baseUrl, initData }) {
       return request(`/contexts?${params.toString()}`);
     },
 
+    async createInterviewSession() {
+      return request("/interview/session", {
+        method: "POST",
+        body: {}
+      });
+    },
+
+    async sendInterviewAnswer({ content }) {
+      return request("/interview/answer", {
+        method: "POST",
+        body: { content }
+      });
+    },
+
+    async generateInterviewDocuments() {
+      return request("/interview/generate-documents", {
+        method: "POST",
+        body: {}
+      });
+    },
+
+    async listInterviewDocuments() {
+      return request("/interview/documents");
+    },
+
+    async getInterviewDocument({ documentId }) {
+      return request(`/interview/documents/${encodeURIComponent(documentId)}`);
+    },
+
     async listBots() {
       throw createClientError(
         "Bots listing is not implemented in the backend bridge yet.",
@@ -190,6 +224,11 @@ function createMockClient({ language }) {
     language,
     sessions: new Map(),
     contexts: [],
+    interview: {
+      currentIndex: 0,
+      answers: [],
+      documents: []
+    },
     bots: [
       {
         id: "mock-instagram-sales",
@@ -381,6 +420,58 @@ function createMockClient({ language }) {
       };
     },
 
+    async createInterviewSession() {
+      return mockInterviewSession(state);
+    },
+
+    async sendInterviewAnswer({ content }) {
+      const cleanContent = (content || "").trim();
+      if (cleanContent && state.interview.currentIndex < STEPS.length) {
+        state.interview.answers[state.interview.currentIndex] = cleanContent;
+        state.interview.currentIndex += 1;
+      }
+      return mockInterviewSession(state);
+    },
+
+    async generateInterviewDocuments() {
+      state.interview.documents = [
+        {
+          id: "mock-business-analysis",
+          title: "Business Analysis",
+          document_type: "business_analysis",
+          created_at: timestamp(),
+          filename: "browser-preview-business-analysis.md",
+          content: "# Business Automation Analysis\n\nBrowser preview document."
+        },
+        {
+          id: "mock-technical-spec",
+          title: "Technical Specification",
+          document_type: "technical_specification",
+          created_at: timestamp(),
+          filename: "browser-preview-technical-spec.md",
+          content: "# Technical Specification Draft\n\nBrowser preview document."
+        }
+      ];
+      return {
+        items: state.interview.documents.map(({ content, ...item }) => item)
+      };
+    },
+
+    async listInterviewDocuments() {
+      return {
+        items: state.interview.documents.map(({ content, ...item }) => item)
+      };
+    },
+
+    async getInterviewDocument({ documentId }) {
+      const document = state.interview.documents.find((item) => item.id === documentId);
+      if (!document) {
+        throw createClientError("Interview document not found", "DOCUMENT_NOT_FOUND", 404);
+      }
+      const { content, ...item } = document;
+      return { document: item, content };
+    },
+
     async listBots() {
       return {
         items: state.bots
@@ -395,6 +486,25 @@ function requireSession(state, sessionId) {
     throw createClientError("Session not found", "SESSION_NOT_FOUND", 404);
   }
   return record;
+}
+
+function mockInterviewSession(state) {
+  const currentIndex = state.interview.currentIndex;
+  const isComplete = currentIndex >= STEPS.length;
+  return {
+    alpstein_business_id: "alpstein-ai",
+    current_index: Math.min(currentIndex, STEPS.length - 1),
+    question: isComplete ? null : questionFor(state.language, STEPS[currentIndex]),
+    progress_current: Math.min(currentIndex + 1, STEPS.length),
+    progress_total: STEPS.length,
+    is_complete: isComplete,
+    answers: state.interview.answers.map((answer, index) => ({
+      question_index: index,
+      question: questionFor(state.language, STEPS[index]),
+      answer,
+      answered_at: timestamp()
+    }))
+  };
 }
 
 function questionFor(language, step) {

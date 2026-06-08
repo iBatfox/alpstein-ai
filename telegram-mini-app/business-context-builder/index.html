@@ -187,9 +187,9 @@
         <header class="page-header">
           <div>
             <p class="eyebrow" id="stepLabel">Step 1 of 5</p>
-            <h2>Interview Wizard</h2>
+            <h2>Business Analyst Interview</h2>
           </div>
-          <span class="status-pill">Prototype</span>
+          <span class="status-pill">Client review</span>
         </header>
 
         <div class="progress-track">
@@ -203,6 +203,22 @@
         </article>
 
         <div class="answer-stack" id="answerStack"></div>
+
+        <section class="channel-section">
+          <div class="section-heading">
+            <p class="eyebrow">Saved Documents</p>
+            <h3>Interview documents</h3>
+          </div>
+          <div class="answer-stack" id="documentList"></div>
+        </section>
+
+        <section class="channel-section" id="documentViewer" hidden>
+          <div class="section-heading">
+            <p class="eyebrow">Document</p>
+            <h3 id="documentTitle">Business Analysis</h3>
+          </div>
+          <pre class="document-content" id="documentContent"></pre>
+        </section>
       </section>
 
       <section class="screen" data-screen="settings">

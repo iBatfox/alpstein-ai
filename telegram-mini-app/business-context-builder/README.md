@@ -12,8 +12,9 @@ required.
 
 The UI still uses mock data and local click state after access is granted. It
 renders read-only integration registry data from the access response. It does
-not write Business Context data, change assistant configuration, alter prompts,
-control workflows, or trigger integrations.
+stores Business Analyst Interview answers/documents through verified backend
+endpoints. It does not change assistant configuration, alter prompts, control
+workflows, or trigger integrations.
 
 ## Files
 
@@ -28,8 +29,26 @@ control workflows, or trigger integrations.
 - Login
 - Bots dashboard
 - Business Context Builder
-- Interview wizard
+- Business Analyst Interview
 - Bot settings
+
+## Interview Documents
+
+The Interview tab stores generated markdown documents on the backend under:
+
+```text
+/opt/alpstein-ai/docs/interview/{alpstein_business_id}/
+```
+
+Example filenames:
+
+```text
+2026-06-08-business-analysis.md
+2026-06-08-technical-spec.md
+```
+
+The backend derives `alpstein_business_id` from the verified Telegram allowlist
+record. The frontend cannot choose a business id or file path.
 
 ## Local Run
 

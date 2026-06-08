@@ -99,3 +99,74 @@ class TelegramMiniAppSendMessageRequest(BaseModel):
 
 class TelegramMiniAppCompleteSessionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+
+class TelegramMiniAppInterviewAnswerRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    content: str = Field(min_length=1)
+
+
+class TelegramMiniAppInterviewAnswerItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    question_index: int
+    question: str
+    answer: str
+    answered_at: str
+
+
+class TelegramMiniAppInterviewSessionData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    alpstein_business_id: str
+    current_index: int
+    question: str | None = None
+    progress_current: int
+    progress_total: int
+    is_complete: bool
+    answers: list[TelegramMiniAppInterviewAnswerItem]
+
+
+class TelegramMiniAppInterviewSessionResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    success: Literal[True] = True
+    data: TelegramMiniAppInterviewSessionData
+
+
+class TelegramMiniAppInterviewDocumentItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    title: str
+    document_type: str
+    created_at: str
+    filename: str
+
+
+class TelegramMiniAppInterviewDocumentsData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[TelegramMiniAppInterviewDocumentItem]
+
+
+class TelegramMiniAppInterviewDocumentsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    success: Literal[True] = True
+    data: TelegramMiniAppInterviewDocumentsData
+
+
+class TelegramMiniAppInterviewDocumentData(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    document: TelegramMiniAppInterviewDocumentItem
+    content: str
+
+
+class TelegramMiniAppInterviewDocumentResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    success: Literal[True] = True
+    data: TelegramMiniAppInterviewDocumentData

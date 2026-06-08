@@ -37,6 +37,14 @@ from app.schemas.telegram_mini_app import (
     TelegramMiniAppBusinessIntegrationResponse,
     TelegramMiniAppCompleteSessionRequest,
     TelegramMiniAppCreateSessionRequest,
+    TelegramMiniAppInterviewAnswerRequest,
+    TelegramMiniAppInterviewDocumentData,
+    TelegramMiniAppInterviewDocumentItem,
+    TelegramMiniAppInterviewDocumentResponse,
+    TelegramMiniAppInterviewDocumentsData,
+    TelegramMiniAppInterviewDocumentsResponse,
+    TelegramMiniAppInterviewSessionData,
+    TelegramMiniAppInterviewSessionResponse,
     TelegramMiniAppSendMessageRequest,
     TelegramMiniAppUserResponse,
     TelegramMiniAppVerifyAccessData,
@@ -64,6 +72,11 @@ from app.services.telegram_mini_app_access_service import (
     TelegramMiniAppAccessDisabledError,
     TelegramMiniAppAccessService,
 )
+from app.services.telegram_mini_app_interview_service import (
+    InterviewAccessError,
+    InterviewDocumentNotFoundError,
+    TelegramMiniAppInterviewService,
+)
 
 TELEGRAM_INIT_DATA_HEADER = "X-Telegram-Init-Data"
 
@@ -73,6 +86,7 @@ router = APIRouter(
 )
 telegram_auth_service = TelegramMiniAppAuthService()
 telegram_access_service = TelegramMiniAppAccessService()
+telegram_interview_service = TelegramMiniAppInterviewService()
 business_context_builder_service = BusinessContextBuilderService()
 
 
@@ -352,6 +366,138 @@ async def list_contexts(
     ).model_dump(mode="json")
 
 
+@router.post("/interview/session")
+async def create_or_get_interview_session(
+    session: AsyncSession = Depends(get_db_session),
+    init_data: str | None = Header(default=None, alias=TELEGRAM_INIT_DATA_HEADER),
+):
+    _auth_context, allowed_user_or_error = await _auth_and_allowed_user(session, init_data)
+    if isinstance(allowed_user_or_error, JSONResponse):
+        return allowed_user_or_error
+    allowed_user = allowed_user_or_error
+
+    try:
+        interview_session = telegram_interview_service.create_or_get_session(
+            alpstein_business_id=allowed_user.alpstein_business_id,
+        )
+    except InterviewAccessError as exc:
+        return _error(400, "ALPSTEIN_BUSINESS_ID_REQUIRED", str(exc))
+
+    return TelegramMiniAppInterviewSessionResponse(
+        data=_interview_session_data(interview_session)
+    ).model_dump(mode="json")
+
+
+@router.post("/interview/answer")
+async def save_interview_answer(
+    body: TelegramMiniAppInterviewAnswerRequest,
+    session: AsyncSession = Depends(get_db_session),
+    init_data: str | None = Header(default=None, alias=TELEGRAM_INIT_DATA_HEADER),
+):
+    _auth_context, allowed_user_or_error = await _auth_and_allowed_user(session, init_data)
+    if isinstance(allowed_user_or_error, JSONResponse):
+        return allowed_user_or_error
+    allowed_user = allowed_user_or_error
+
+    try:
+        interview_session = telegram_interview_service.save_answer(
+            alpstein_business_id=allowed_user.alpstein_business_id,
+            answer=body.content,
+        )
+    except InterviewAccessError as exc:
+        return _error(400, "ALPSTEIN_BUSINESS_ID_REQUIRED", str(exc))
+    except ValueError as exc:
+        return _error(400, "VALIDATION_ERROR", str(exc))
+
+    return TelegramMiniAppInterviewSessionResponse(
+        data=_interview_session_data(interview_session)
+    ).model_dump(mode="json")
+
+
+@router.post("/interview/generate-documents")
+async def generate_interview_documents(
+    session: AsyncSession = Depends(get_db_session),
+    init_data: str | None = Header(default=None, alias=TELEGRAM_INIT_DATA_HEADER),
+):
+    _auth_context, allowed_user_or_error = await _auth_and_allowed_user(session, init_data)
+    if isinstance(allowed_user_or_error, JSONResponse):
+        return allowed_user_or_error
+    allowed_user = allowed_user_or_error
+
+    integrations = await telegram_access_service.list_integrations(
+        session,
+        alpstein_business_id=allowed_user.alpstein_business_id,
+    )
+
+    try:
+        documents = telegram_interview_service.generate_documents(
+            alpstein_business_id=allowed_user.alpstein_business_id,
+            company_name=allowed_user.company_name,
+            integrations=integrations,
+        )
+    except InterviewAccessError as exc:
+        return _error(400, "ALPSTEIN_BUSINESS_ID_REQUIRED", str(exc))
+
+    return TelegramMiniAppInterviewDocumentsResponse(
+        data=TelegramMiniAppInterviewDocumentsData(
+            items=[_interview_document_item(document) for document in documents],
+        )
+    ).model_dump(mode="json")
+
+
+@router.get("/interview/documents")
+async def list_interview_documents(
+    session: AsyncSession = Depends(get_db_session),
+    init_data: str | None = Header(default=None, alias=TELEGRAM_INIT_DATA_HEADER),
+):
+    _auth_context, allowed_user_or_error = await _auth_and_allowed_user(session, init_data)
+    if isinstance(allowed_user_or_error, JSONResponse):
+        return allowed_user_or_error
+    allowed_user = allowed_user_or_error
+
+    try:
+        documents = telegram_interview_service.list_documents(
+            alpstein_business_id=allowed_user.alpstein_business_id,
+        )
+    except InterviewAccessError as exc:
+        return _error(400, "ALPSTEIN_BUSINESS_ID_REQUIRED", str(exc))
+
+    return TelegramMiniAppInterviewDocumentsResponse(
+        data=TelegramMiniAppInterviewDocumentsData(
+            items=[_interview_document_item(document) for document in documents],
+        )
+    ).model_dump(mode="json")
+
+
+@router.get("/interview/documents/{document_id}")
+async def get_interview_document(
+    document_id: str,
+    session: AsyncSession = Depends(get_db_session),
+    init_data: str | None = Header(default=None, alias=TELEGRAM_INIT_DATA_HEADER),
+):
+    _auth_context, allowed_user_or_error = await _auth_and_allowed_user(session, init_data)
+    if isinstance(allowed_user_or_error, JSONResponse):
+        return allowed_user_or_error
+    allowed_user = allowed_user_or_error
+
+    try:
+        document = telegram_interview_service.get_document(
+            alpstein_business_id=allowed_user.alpstein_business_id,
+            document_id=document_id,
+        )
+    except InterviewAccessError as exc:
+        return _error(400, "ALPSTEIN_BUSINESS_ID_REQUIRED", str(exc))
+    except InterviewDocumentNotFoundError:
+        return _error(404, "INTERVIEW_DOCUMENT_NOT_FOUND", "Interview document not found")
+
+    return TelegramMiniAppInterviewDocumentResponse(
+        data=TelegramMiniAppInterviewDocumentData(
+            document=_interview_document_item(document),
+            content=document.content or "",
+        )
+    ).model_dump(mode="json")
+
+
 async def _auth_and_scope(
     session: AsyncSession,
     init_data: str | None,
@@ -363,6 +509,18 @@ async def _auth_and_scope(
     except TelegramMiniAppAuthError as exc:
         return None, _auth_error(exc)
     return auth_context, scope
+
+
+async def _auth_and_allowed_user(
+    session: AsyncSession,
+    init_data: str | None,
+):
+    try:
+        auth_context = _validate_init_data(init_data)
+        allowed_user = await _verify_allowed_user(session, auth_context)
+    except TelegramMiniAppAuthError as exc:
+        return None, _auth_error(exc)
+    return auth_context, allowed_user
 
 
 def _validate_init_data(init_data: str | None) -> TelegramMiniAppAuthContext:
@@ -453,6 +611,28 @@ def _integration_response(integration) -> TelegramMiniAppBusinessIntegrationResp
         workflow_id=integration.workflow_id,
         backend_route=integration.backend_route,
         notes=integration.notes,
+    )
+
+
+def _interview_session_data(interview_session) -> TelegramMiniAppInterviewSessionData:
+    return TelegramMiniAppInterviewSessionData(
+        alpstein_business_id=interview_session.alpstein_business_id,
+        current_index=interview_session.current_index,
+        question=interview_session.question,
+        progress_current=interview_session.progress_current,
+        progress_total=interview_session.progress_total,
+        is_complete=interview_session.is_complete,
+        answers=interview_session.answers,
+    )
+
+
+def _interview_document_item(document) -> TelegramMiniAppInterviewDocumentItem:
+    return TelegramMiniAppInterviewDocumentItem(
+        id=document.id,
+        title=document.title,
+        document_type=document.document_type,
+        created_at=document.created_at,
+        filename=document.filename,
     )
 
 
