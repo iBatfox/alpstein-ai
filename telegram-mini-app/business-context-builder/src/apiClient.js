@@ -17,18 +17,27 @@ const STEP_QUESTIONS = {
   communication_style: "What communication style should the assistant use?"
 };
 
+const MOCK_TENANT_ID = "00000000-0000-4000-8000-000000000001";
+const MOCK_BUSINESS_ID = "00000000-0000-4000-8000-000000000002";
+
 export function createBusinessContextBuilderClient(config = {}) {
   const mode = config.mode || "mock";
+  if (mode === "bridge") {
+    return createBridgeClient({
+      baseUrl: config.baseUrl || "",
+      initData: config.initData || ""
+    });
+  }
   if (mode === "backend") {
-    return createBackendPlaceholderClient();
+    return createDirectBackendBlockedClient();
   }
   return createMockClient();
 }
 
-function createBackendPlaceholderClient() {
+function createDirectBackendBlockedClient() {
   async function blocked() {
     throw new Error(
-      "Direct backend calls are disabled in Phase 1. Phase 2 must add a secure Telegram auth bridge."
+      "Direct backend calls are disabled. Use api_mode=bridge so Telegram initData is validated server-side."
     );
   }
 
@@ -41,6 +50,75 @@ function createBackendPlaceholderClient() {
   };
 }
 
+function createBridgeClient({ baseUrl, initData }) {
+  const bridgeBase = `${baseUrl}/api/v1/telegram-mini-app/business-context-builder`;
+
+  async function request(path, { method = "GET", body } = {}) {
+    if (!initData) {
+      throw new Error("Telegram initData is unavailable. Use mock mode for browser preview.");
+    }
+
+    const response = await fetch(`${bridgeBase}${path}`, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        "X-Telegram-Init-Data": initData
+      },
+      body: body === undefined ? undefined : JSON.stringify(body)
+    });
+    const payload = await response.json();
+    if (!response.ok || payload.success === false) {
+      throw new Error(
+        (payload.error && payload.error.message) ||
+          `Business Context Builder request failed with ${response.status}`
+      );
+    }
+    return payload.data;
+  }
+
+  return {
+    async authSession() {
+      return request("/auth/session", {
+        method: "POST",
+        body: { init_data: initData }
+      });
+    },
+
+    async createSession() {
+      return request("/sessions", {
+        method: "POST",
+        body: {}
+      });
+    },
+
+    async sendMessage({ sessionId, content }) {
+      return request(`/sessions/${encodeURIComponent(sessionId)}/messages`, {
+        method: "POST",
+        body: { content }
+      });
+    },
+
+    async getSession({ sessionId }) {
+      return request(`/sessions/${encodeURIComponent(sessionId)}`);
+    },
+
+    async completeSession({ sessionId }) {
+      return request(`/sessions/${encodeURIComponent(sessionId)}/complete`, {
+        method: "POST",
+        body: {}
+      });
+    },
+
+    async listContexts({ limit = 20, offset = 0 } = {}) {
+      const params = new URLSearchParams({
+        limit: String(limit),
+        offset: String(offset)
+      });
+      return request(`/contexts?${params.toString()}`);
+    }
+  };
+}
+
 function createMockClient() {
   const state = {
     sessions: new Map(),
@@ -48,7 +126,7 @@ function createMockClient() {
   };
 
   return {
-    async createSession({ tenantId, businessId }) {
+    async createSession({ tenantId = MOCK_TENANT_ID, businessId = MOCK_BUSINESS_ID } = {}) {
       const now = timestamp();
       const session = {
         id: createId(),

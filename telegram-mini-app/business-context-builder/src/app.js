@@ -1,9 +1,12 @@
 import { createBusinessContextBuilderClient } from "./apiClient.js";
 
-const tenantId = getConfigValue("tenant_id", "00000000-0000-4000-8000-000000000001");
-const businessId = getConfigValue("business_id", "00000000-0000-4000-8000-000000000002");
 const apiMode = getConfigValue("api_mode", "mock");
-const client = createBusinessContextBuilderClient({ mode: apiMode });
+const apiBaseUrl = getConfigValue("api_base_url", "");
+const client = createBusinessContextBuilderClient({
+  mode: apiMode,
+  baseUrl: apiBaseUrl,
+  initData: getTelegramInitData()
+});
 
 const appState = {
   activeScreen: "start",
@@ -41,7 +44,7 @@ bindEvents();
 render();
 
 function initializeTelegram() {
-  const webApp = window.Telegram && window.Telegram.WebApp;
+  const webApp = getTelegramWebApp();
   if (!webApp) {
     elements.telegramStatus.textContent = "Browser preview";
     return;
@@ -51,6 +54,15 @@ function initializeTelegram() {
   webApp.ready();
   webApp.expand();
   elements.telegramStatus.textContent = "Telegram";
+}
+
+function getTelegramWebApp() {
+  return window.Telegram && window.Telegram.WebApp;
+}
+
+function getTelegramInitData() {
+  const webApp = getTelegramWebApp();
+  return (webApp && webApp.initData) || "";
 }
 
 function bindEvents() {
@@ -67,7 +79,7 @@ function bindEvents() {
 async function startInterview() {
   setBusy(true);
   try {
-    const data = await client.createSession({ tenantId, businessId });
+    const data = await client.createSession();
     appState.session = data.session;
     appState.messages = [data.message];
     appState.result = null;
@@ -113,8 +125,6 @@ async function sendMessage(event) {
   try {
     const data = await client.sendMessage({
       sessionId: appState.session.id,
-      tenantId,
-      businessId,
       content
     });
     appState.session = data.session;
@@ -132,9 +142,7 @@ async function completeInterview() {
   setBusy(true);
   try {
     const data = await client.completeSession({
-      sessionId: appState.session.id,
-      tenantId,
-      businessId
+      sessionId: appState.session.id
     });
     appState.session = data.session;
     appState.result = data.result;
@@ -156,8 +164,6 @@ async function openContexts() {
 
 async function refreshContexts() {
   const data = await client.listContexts({
-    tenantId,
-    businessId,
     limit: appState.limit,
     offset: appState.offset
   });

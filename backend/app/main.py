@@ -8,6 +8,9 @@ from app.api.routes.health import router as health_router
 from app.api.routes.instagram_channel import router as instagram_channel_router
 from app.api.routes.meta_webhook import router as meta_webhook_router
 from app.api.routes.observability import router as observability_router
+from app.api.routes.telegram_mini_app_business_context_builder import (
+    router as telegram_mini_app_business_context_builder_router,
+)
 from app.api.routes.webhook import router as webhook_router
 from app.api.webhook_auth import WebhookAuthError
 from app.core.observability_context import configure_observability_logging
@@ -36,4 +39,5 @@ app.include_router(webhook_router, prefix="/api/v1")
 app.include_router(instagram_channel_router, prefix="/api/v1")
 app.include_router(observability_router, prefix="/api/v1")
 app.include_router(business_context_builder_router, prefix="/api/v1")
+app.include_router(telegram_mini_app_business_context_builder_router, prefix="/api/v1")
 app.include_router(meta_webhook_router, prefix="/webhooks")

@@ -255,6 +255,22 @@ class Settings(BaseSettings):
         default=False,
         validation_alias="BCB_AI_DRAFT_ENABLED",
     )
+    telegram_bot_token: str = Field(
+        default="",
+        validation_alias="TELEGRAM_BOT_TOKEN",
+    )
+    telegram_initdata_max_age_seconds: int = Field(
+        default=86400,
+        validation_alias="TELEGRAM_INITDATA_MAX_AGE_SECONDS",
+    )
+    bcb_telegram_tenant_id: str = Field(
+        default="",
+        validation_alias="BCB_TELEGRAM_TENANT_ID",
+    )
+    bcb_telegram_business_id: str = Field(
+        default="",
+        validation_alias="BCB_TELEGRAM_BUSINESS_ID",
+    )
 
     model_config = SettingsConfigDict(
         env_prefix="ALPSTEIN_AI_",
