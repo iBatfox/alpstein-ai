@@ -109,7 +109,7 @@ location ^~ /telegram-context/ {
 }
 
 location ^~ /api/v1/telegram-mini-app/business-context-builder/ {
-    proxy_pass http://127.0.0.1:8000;
+    proxy_pass http://127.0.0.1:18081;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
@@ -119,6 +119,8 @@ location ^~ /api/v1/telegram-mini-app/business-context-builder/ {
 ```
 
 No new public ports are required; nginx continues to use existing `80/443`.
+The backend compose service binds `127.0.0.1:18081:8000` for host nginx only.
+Do not use `0.0.0.0:8000:8000` or expose the backend directly.
 
 Reload after edits:
 
@@ -243,6 +245,17 @@ Expected once the backend bridge code is deployed: a project-style auth error
 for missing Telegram `initData`, not an internal token error. If the live backend
 returns `404`, nginx is reaching backend but the running backend image/process
 does not yet include the Phase 2 bridge routes.
+
+Host upstream readiness check:
+
+```bash
+curl -i http://127.0.0.1:18081/api/v1/health/ready
+```
+
+Expected:
+
+- `200 OK` when the backend container is healthy.
+- Loopback-only binding visible as `127.0.0.1:18081->8000/tcp` in `docker compose ps`.
 
 ## Security Notes
 

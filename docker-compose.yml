@@ -76,6 +76,9 @@ services:
       - alpstein_internal
     expose:
       - "8000"
+    ports:
+      # Host nginx bridge upstream only; loopback bind, not public.
+      - "127.0.0.1:18081:8000"
     healthcheck:
       test:
         [
@@ -86,7 +89,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 90s
-    # No host ports in default file — dev overlay maps 127.0.0.1:8000 only.
+    # No public host ports. Loopback 18081 is for host nginx only.
 
   backend-bootstrap:
     profiles:
