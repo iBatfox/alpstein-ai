@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Business Context Builder</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  </head>
+  <body>
+    <main class="app-shell" aria-live="polite">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Alpstein AI</p>
+          <h1 id="appTitle">Business Context Builder</h1>
+        </div>
+        <span class="status-pill" id="telegramStatus">Browser preview</span>
+      </header>
+
+      <section class="screen screen-active" id="screenContexts" data-screen="contexts">
+        <div class="hero-panel">
+          <div class="assistant-mark" aria-hidden="true">AI</div>
+          <h2 id="contextsTitle">Business Contexts</h2>
+          <p id="contextsIntro">
+            Create and review draft business contexts from guided interviews.
+          </p>
+          <div class="button-row">
+            <button class="primary-button" id="startInterviewButton" type="button">
+              Create new context
+            </button>
+            <button class="secondary-button" id="continueInterviewButton" type="button">
+              Continue interview
+            </button>
+          </div>
+        </div>
+
+        <div class="section-panel">
+          <div class="section-heading">
+            <p class="eyebrow" id="currentInterviewEyebrow">Continue unfinished</p>
+            <h3 id="currentInterviewTitle">Current interview</h3>
+          </div>
+          <div class="list-stack" id="unfinishedSessionList"></div>
+        </div>
+
+        <div class="section-panel">
+          <div class="section-heading">
+            <p class="eyebrow" id="draftContextsEyebrow">Draft contexts</p>
+            <h3 id="draftContextsTitle">Saved drafts</h3>
+          </div>
+          <div class="list-stack" id="contextList"></div>
+          <div class="pagination-row">
+            <button class="secondary-button compact" id="previousPageButton" type="button">
+              Previous
+            </button>
+            <span id="pageIndicator">Page 1</span>
+            <button class="secondary-button compact" id="nextPageButton" type="button">
+              Next
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section class="screen" id="screenInterview" data-screen="interview">
+        <div class="empty-interview" id="interviewEmptyState">
+          <h2 id="interviewEmptyTitle">No active interview</h2>
+          <p id="interviewEmptyCopy">Create a context to start the guided interview.</p>
+          <button class="primary-button" id="interviewCreateButton" type="button">
+            Create context
+          </button>
+        </div>
+
+        <div class="interview-layout" id="interviewActiveState" hidden>
+          <div class="interview-toolbar">
+            <div>
+              <p class="eyebrow" id="currentStepCount">Step 1 of 6</p>
+              <h2 id="currentStepLabel">Company information</h2>
+            </div>
+            <span class="status-pill interview-status" id="interviewStatus">Interview</span>
+          </div>
+
+          <div class="progress-panel" aria-label="Interview progress">
+            <div class="progress-track">
+              <span class="progress-fill" id="progressFill"></span>
+            </div>
+            <div class="progress-dots" id="progressDots"></div>
+          </div>
+
+          <div class="message-list" id="messageList" aria-label="Interview messages"></div>
+
+          <button class="complete-button" id="completeInterviewButton" type="button">
+            Complete interview
+          </button>
+
+          <form class="composer" id="messageForm">
+            <label class="sr-only" for="messageInput">Message</label>
+            <textarea
+              id="messageInput"
+              name="message"
+              rows="1"
+              placeholder="Type an answer"
+            ></textarea>
+            <button class="primary-button send-button" type="submit" aria-label="Send message">
+              <span class="send-icon" aria-hidden="true"></span>
+            </button>
+          </form>
+        </div>
+      </section>
+
+      <section class="screen" id="screenLanguage" data-screen="language">
+        <div class="section-heading">
+          <p class="eyebrow" id="languageEyebrow">Language</p>
+          <h2 id="languageTitle">Choose language</h2>
+        </div>
+        <div class="language-list" id="languageList"></div>
+      </section>
+
+      <section class="screen" id="screenBots" data-screen="bots">
+        <div class="section-heading">
+          <p class="eyebrow" id="botsEyebrow">Bots</p>
+          <h2 id="botsTitle">Bots and workflows</h2>
+        </div>
+        <p class="muted-copy" id="botsIntro">
+          UI foundation for owner-created bots and linked business contexts.
+        </p>
+        <div class="list-stack" id="botList"></div>
+        <button
+          class="primary-button"
+          id="createBotButton"
+          type="button"
+          disabled
+          data-static-disabled="true"
+        >
+          Create bot
+        </button>
+      </section>
+
+      <section class="screen" id="screenMore" data-screen="more">
+        <div class="section-heading">
+          <p class="eyebrow" id="moreEyebrow">More</p>
+          <h2 id="moreTitle">Settings</h2>
+        </div>
+        <div class="settings-list">
+          <article class="settings-item">
+            <span id="modeLabel">Mode</span>
+            <strong id="modeValue">mock</strong>
+          </article>
+          <article class="settings-item">
+            <span id="accessLabel">Access</span>
+            <strong id="accessValue">Owner only in bridge mode</strong>
+          </article>
+          <article class="settings-item">
+            <span id="languageGapLabel">Backend language</span>
+            <strong id="languageGapValue">Not implemented yet</strong>
+          </article>
+        </div>
+      </section>
+
+      <section class="screen" id="screenResult" data-screen="result">
+        <div class="result-header">
+          <div>
+            <p class="eyebrow" id="resultEyebrow">Draft result</p>
+            <h2 id="resultTitle">Generated context</h2>
+          </div>
+          <div class="button-row result-actions">
+            <button class="secondary-button compact" id="backToContextsButton" type="button">
+              Back to contexts
+            </button>
+            <button class="primary-button compact" id="startAnotherContextButton" type="button">
+              Start another context
+            </button>
+          </div>
+        </div>
+        <pre class="result-output" id="resultOutput"></pre>
+        <dl class="metadata-grid" id="metadataGrid"></dl>
+      </section>
+
+      <section class="screen" id="screenRestricted" data-screen="restricted">
+        <div class="restricted-panel">
+          <h2 id="restrictedTitle">Access is restricted.</h2>
+          <p id="restrictedCopy">This Mini App is available only to allowed Telegram users.</p>
+        </div>
+      </section>
+
+      <nav class="bottom-nav" id="bottomNav" aria-label="Mini App navigation">
+        <button type="button" data-tab="language">🌐<span>Language</span></button>
+        <button type="button" data-tab="contexts">📂<span>Contexts</span></button>
+        <button type="button" data-tab="interview">💬<span>Interview</span></button>
+        <button type="button" data-tab="bots">🤖<span>Bots</span></button>
+        <button type="button" data-tab="more">⚙️<span>More</span></button>
+      </nav>
+    </main>
+
+    <template id="messageTemplate">
+      <article class="message">
+        <div class="message-avatar" aria-hidden="true"></div>
+        <div class="message-bubble">
+          <span class="message-role"></span>
+          <p class="message-text"></p>
+        </div>
+      </article>
+    </template>
+
+    <template id="contextTemplate">
+      <article class="context-item">
+        <div>
+          <h3></h3>
+          <p class="context-summary"></p>
+          <div class="context-meta"></div>
+        </div>
+        <button class="secondary-button compact" type="button">View result</button>
+      </article>
+    </template>
+
+    <template id="botTemplate">
+      <article class="bot-card">
+        <div>
+          <div class="bot-title-row">
+            <h3></h3>
+            <span class="meta-chip"></span>
+          </div>
+          <p class="bot-source"></p>
+          <p class="bot-context"></p>
+          <p class="bot-updated"></p>
+        </div>
+        <div class="bot-actions">
+          <button class="secondary-button compact" type="button" data-bot-action="view">
+            View bot
+          </button>
+          <button class="secondary-button compact" type="button" disabled data-static-disabled="true">
+            Create bot
+          </button>
+          <button class="secondary-button compact" type="button" disabled data-static-disabled="true">
+            Link context
+          </button>
+        </div>
+      </article>
+    </template>
+
+    <script type="module" src="./src/app.js"></script>
+  </body>
+</html>

@@ -1,13 +1,27 @@
 # Business Context Builder Telegram Mini App
 
-Static Telegram Mini App UI for the Business Context Builder interview flow.
+Static design-first prototype for the future Business Context Builder user
+experience.
+
+This UI is intentionally frontend-only. It uses mock data and local click state
+only. It does not call backend APIs, write to the database, change assistant
+configuration, alter prompts, or trigger integrations.
 
 ## Files
 
-- `index.html` — Mini App shell.
-- `styles.css` — responsive Telegram-safe layout and theme variables.
-- `src/app.js` — screen state and UI behavior.
-- `src/apiClient.js` — isolated BCB API adapter.
+- `index.html` — prototype shell and screens.
+- `styles.css` — Swiss SaaS mobile-first visual styling.
+- `src/app.js` — local prototype navigation and wizard state.
+- `src/apiClient.js` — legacy API adapter retained for rollback compatibility;
+  the current prototype UI does not import it.
+
+## Screens
+
+- Login
+- Bots dashboard
+- Business Context Builder
+- Interview wizard
+- Bot settings
 
 ## Local Run
 
@@ -23,149 +37,20 @@ Open:
 http://127.0.0.1:5174/
 ```
 
-Optional preview parameters:
+## Rollback
+
+The previous Mini App was copied to:
 
 ```text
-?api_mode=mock
-?api_mode=bridge&api_base_url=https://backend.example
+telegram-mini-app/business-context-builder-legacy-backup/
 ```
 
-## HTTPS Deployment
-
-Production Mini App URL:
+To rollback the source tree, copy the backed-up files from that directory back
+into:
 
 ```text
-https://alpstein-ai.ch/telegram-context
+telegram-mini-app/business-context-builder/
 ```
 
-The nginx route redirects this exact URL to the slash-normalized path so
-relative CSS and module imports resolve correctly:
-
-```text
-https://alpstein-ai.ch/telegram-context/
-```
-
-Static files are deployed on the host at:
-
-```text
-/var/www/alpstein-ai/telegram-context/
-```
-
-Required files:
-
-- `index.html`
-- `styles.css`
-- `src/app.js`
-- `src/apiClient.js`
-
-Deploy/update static files from this directory:
-
-```bash
-sudo install -d -m 0755 /var/www/alpstein-ai/telegram-context/src
-sudo install -m 0644 index.html /var/www/alpstein-ai/telegram-context/index.html
-sudo install -m 0644 styles.css /var/www/alpstein-ai/telegram-context/styles.css
-sudo install -m 0644 src/app.js /var/www/alpstein-ai/telegram-context/src/app.js
-sudo install -m 0644 src/apiClient.js /var/www/alpstein-ai/telegram-context/src/apiClient.js
-```
-
-## Current Behavior
-
-- Uses the mock API adapter by default.
-- Supports `api_mode=bridge` for Telegram runtime calls through the backend bridge.
-- Uses sticky bottom navigation: Language, Contexts, Interview, Bots, More.
-- Stores the selected UI language in `localStorage` as `bcb_language`.
-- Initializes `window.Telegram.WebApp` when the Telegram SDK is available.
-- Applies Telegram theme colors when running inside Telegram.
-- Works in a normal browser for local preview.
-- Does not expose backend internal tokens.
-
-## Language
-
-Supported languages:
-
-- English `en`
-- Deutsch `de`
-- Français `fr`
-- Українська `uk`
-
-Mock mode uses the selected language for static interview questions. Bridge mode
-keeps language frontend-only because the backend BCB API does not yet accept a
-safe language parameter.
-
-## Bots Tab
-
-The Bots tab is UI foundation only.
-
-- Mock mode shows local sample bot cards.
-- Bridge mode calls no production bot data API yet and shows a clear
-  not-implemented state.
-- Create bot and Link context actions are disabled/coming soon.
-
-## Bridge API Contract
-
-Bridge mode uses:
-
-- `POST /api/v1/telegram-mini-app/business-context-builder/auth/session`
-- `POST /api/v1/telegram-mini-app/business-context-builder/sessions`
-- `POST /api/v1/telegram-mini-app/business-context-builder/sessions/{session_id}/messages`
-- `GET /api/v1/telegram-mini-app/business-context-builder/sessions/{session_id}`
-- `POST /api/v1/telegram-mini-app/business-context-builder/sessions/{session_id}/complete`
-- `GET /api/v1/telegram-mini-app/business-context-builder/contexts`
-
-All bridge requests send Telegram `initData` to the backend. Operational
-requests use the `X-Telegram-Init-Data` header. The frontend does not send
-tenant or business identifiers in bridge mode.
-
-On production, bridge mode is same-origin through nginx:
-
-```text
-https://alpstein-ai.ch/telegram-context/?api_mode=bridge
-```
-
-If the backend is not on the same origin in another environment, use
-`api_base_url`.
-
-## Backend Env
-
-Required for bridge mode:
-
-- `TELEGRAM_BOT_TOKEN`
-- `TELEGRAM_INITDATA_MAX_AGE_SECONDS`
-- `TELEGRAM_MINI_APP_ALLOWED_USER_IDS`
-- `BCB_TELEGRAM_TENANT_ID`
-- `BCB_TELEGRAM_BUSINESS_ID`
-
-The bot token is backend-only. Do not add it to this directory or any frontend
-deployment config.
-
-`TELEGRAM_MINI_APP_ALLOWED_USER_IDS` is a backend-only comma-separated allowlist
-of numeric Telegram user IDs. Empty allowlist denies bridge access.
-
-To find a Telegram user ID, open the Mini App in bridge mode after allowlisting a
-known test account or use a trusted Telegram ID lookup bot outside this codebase;
-never commit IDs or bot tokens into frontend files.
-
-## Telegram Setup Notes
-
-Bridge mode requires real Telegram `window.Telegram.WebApp.initData`, so it must
-be tested inside Telegram after the Mini App is served over HTTPS.
-
-BotFather Mini App URL setup should happen only after HTTPS deployment. Local
-browser development should use `api_mode=mock`.
-
-Use this URL in BotFather after HTTPS verification:
-
-```text
-https://alpstein-ai.ch/telegram-context/
-```
-
-## Not Implemented
-
-- Telegram bot messaging logic.
-- Backend bot listing API.
-- Backend language-aware BCB generation.
-- n8n integration.
-- CRM integration.
-- Production assistant publishing.
-- File generation.
-- Direct internal-token BCB API calls from the browser.
+No backend, nginx, Docker, database, workflow, prompt builder, or assistant
+logic changes are part of this prototype.
