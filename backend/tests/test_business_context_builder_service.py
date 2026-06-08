@@ -26,7 +26,11 @@ from app.services.business_context_builder_service import (
     BusinessContextBuilderSessionNotFoundError,
 )
 from app.services.business_context_builder_ai_service import (
+    BusinessContextBuilderAiTrace,
     BusinessContextBuilderDraftResult,
+)
+from app.services.business_context_builder_prompt_service import (
+    BCB_DRAFT_RESULT_PROMPT_VERSION,
 )
 
 
@@ -58,6 +62,18 @@ def _ai_draft_result() -> BusinessContextBuilderDraftResult:
         },
         generated_prompt="AI generated draft prompt.",
         fallback_used=False,
+        trace=BusinessContextBuilderAiTrace(
+            provider="openai",
+            model="gpt-4o-mini",
+            prompt_version=BCB_DRAFT_RESULT_PROMPT_VERSION,
+            generation_timestamp="2026-06-08T12:00:00+00:00",
+            fallback_used=False,
+            ai_enabled=True,
+            generation_mode="ai",
+            latency_ms=123,
+            input_tokens=10,
+            output_tokens=20,
+        ),
     )
 
 
@@ -384,6 +400,16 @@ async def test_complete_session_creates_result_in_business_context_builder_schem
     assert result.session_id == session_id
     assert result.generated_prompt == "AI generated draft prompt."
     assert result.structured_context["company_overview"] == "AI generated overview"
+    metadata = result.structured_context["generation_metadata"]
+    assert metadata["provider"] == "openai"
+    assert metadata["model"] == "gpt-4o-mini"
+    assert metadata["prompt_version"] == BCB_DRAFT_RESULT_PROMPT_VERSION
+    assert metadata["fallback_used"] is False
+    assert metadata["ai_enabled"] is True
+    assert metadata["generation_mode"] == "ai"
+    assert metadata["latency_ms"] == 123
+    assert metadata["input_tokens"] == 10
+    assert metadata["output_tokens"] == 20
     assert BusinessContextBuilderResult.__table__.schema == "business_context_builder"
     db_session.add.assert_called_once_with(result)
     db_session.flush.assert_awaited_once()
@@ -431,6 +457,15 @@ async def test_complete_session_stores_fallback_draft_when_ai_fails():
             },
             generated_prompt="Fallback draft prompt.",
             fallback_used=True,
+            trace=BusinessContextBuilderAiTrace(
+                provider=None,
+                model=None,
+                prompt_version=BCB_DRAFT_RESULT_PROMPT_VERSION,
+                generation_timestamp="2026-06-08T12:00:00+00:00",
+                fallback_used=True,
+                ai_enabled=False,
+                generation_mode="fallback",
+            ),
         )
     )
     wrapped_service = BusinessContextBuilderService(ai_service=ai_service)
@@ -444,6 +479,13 @@ async def test_complete_session_stores_fallback_draft_when_ai_fails():
 
     assert result.generated_prompt == "Fallback draft prompt."
     assert result.structured_context["source_summary"]["fallback_used"] is True
+    metadata = result.structured_context["generation_metadata"]
+    assert metadata["provider"] is None
+    assert metadata["model"] is None
+    assert metadata["prompt_version"] == BCB_DRAFT_RESULT_PROMPT_VERSION
+    assert metadata["fallback_used"] is True
+    assert metadata["ai_enabled"] is False
+    assert metadata["generation_mode"] == "fallback"
 
 
 @pytest.mark.anyio
@@ -489,6 +531,11 @@ async def test_complete_session_stores_local_fallback_when_ai_service_raises():
     )
 
     assert result.structured_context["source_summary"]["fallback_used"] is True
+    metadata = result.structured_context["generation_metadata"]
+    assert metadata["fallback_used"] is True
+    assert metadata["ai_enabled"] is True
+    assert metadata["generation_mode"] == "fallback"
+    assert metadata["prompt_version"] == BCB_DRAFT_RESULT_PROMPT_VERSION
     assert result.generated_prompt.startswith("Draft fallback business context")
 
 

@@ -18,6 +18,7 @@ from app.models.business_context_builder import (
 )
 from app.services.business_context_builder_ai_service import (
     BusinessContextBuilderAiService,
+    BusinessContextBuilderAiTrace,
     BusinessContextBuilderDraftResult,
 )
 
@@ -32,6 +33,9 @@ from app.services.business_context_builder_constants import (
     STEP_PRODUCTS_SERVICES,
     STEP_SALES_PROCESS,
     STEP_TARGET_CUSTOMERS,
+)
+from app.services.business_context_builder_prompt_service import (
+    BCB_DRAFT_RESULT_PROMPT_VERSION,
 )
 
 ALLOWED_STATUSES = frozenset(
@@ -294,6 +298,7 @@ class BusinessContextBuilderService:
                 fallback_result=fallback_result,
             )
         except Exception as exc:
+            fallback_trace = _fallback_trace(ai_enabled=True)
             logger.info(
                 "bcb_ai_draft_result_fallback_after_error",
                 extra={
@@ -302,11 +307,14 @@ class BusinessContextBuilderService:
                     "session_id": str(builder_session.id),
                     "tenant_id": str(tenant_id),
                     "business_id": str(business_id),
+                    "prompt_version": fallback_trace.prompt_version,
                     "fallback_used": True,
+                    "provider": fallback_trace.provider,
+                    "model": fallback_trace.model,
                     "error": str(exc),
                 },
             )
-            draft_result = fallback_result
+            draft_result = fallback_result.with_trace(fallback_trace)
         builder_session.status = SESSION_STATUS_COMPLETED
         builder_session.current_step = STEP_COMPLETED
         builder_session.completed_at = now
@@ -317,7 +325,7 @@ class BusinessContextBuilderService:
             tenant_id=tenant_id,
             business_id=business_id,
             session_id=builder_session.id,
-            structured_context=draft_result.structured_context,
+            structured_context=_structured_context_with_generation_metadata(draft_result),
             generated_prompt=draft_result.generated_prompt,
             context_file_path=None,
             context_file_url=None,
@@ -544,7 +552,28 @@ def _fallback_draft_result(
         structured_context=structured_context,
         generated_prompt=generated_prompt,
         fallback_used=True,
+        trace=_fallback_trace(ai_enabled=False),
     )
+
+
+def _fallback_trace(*, ai_enabled: bool) -> BusinessContextBuilderAiTrace:
+    return BusinessContextBuilderAiTrace(
+        provider=None,
+        model=None,
+        prompt_version=BCB_DRAFT_RESULT_PROMPT_VERSION,
+        generation_timestamp=datetime.now(UTC).isoformat(),
+        fallback_used=True,
+        ai_enabled=ai_enabled,
+        generation_mode="fallback",
+    )
+
+
+def _structured_context_with_generation_metadata(
+    draft_result: BusinessContextBuilderDraftResult,
+) -> dict[str, object]:
+    structured_context = dict(draft_result.structured_context)
+    structured_context["generation_metadata"] = draft_result.trace.to_metadata()
+    return structured_context
 
 
 def _now() -> datetime:

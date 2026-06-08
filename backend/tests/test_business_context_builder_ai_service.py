@@ -12,10 +12,15 @@ from app.models.business_context_builder import (
 )
 from app.schemas.ai_gateway import AiGatewayResult
 from app.services.business_context_builder_ai_service import (
+    BusinessContextBuilderAiTrace,
     BusinessContextBuilderAiService,
     BusinessContextBuilderDraftResult,
 )
 from app.services.business_context_builder_constants import STEP_BUSINESS_DESCRIPTION
+from app.services.business_context_builder_prompt_service import (
+    BCB_DRAFT_RESULT_PROMPT_VERSION,
+    BCB_NEXT_QUESTION_PROMPT_VERSION,
+)
 
 
 @pytest.fixture
@@ -55,6 +60,15 @@ def _fallback_draft() -> BusinessContextBuilderDraftResult:
         },
         generated_prompt="Fallback draft prompt.",
         fallback_used=True,
+        trace=BusinessContextBuilderAiTrace(
+            provider=None,
+            model=None,
+            prompt_version=BCB_DRAFT_RESULT_PROMPT_VERSION,
+            generation_timestamp="2026-06-08T12:00:00+00:00",
+            fallback_used=True,
+            ai_enabled=False,
+            generation_mode="fallback",
+        ),
     )
 
 
@@ -228,6 +242,15 @@ async def test_ai_service_generate_draft_result_returns_gateway_content(
     )
 
     assert draft.fallback_used is False
+    assert draft.trace.provider == "openai"
+    assert draft.trace.model == "gpt-4o-mini"
+    assert draft.trace.prompt_version == BCB_DRAFT_RESULT_PROMPT_VERSION
+    assert draft.trace.fallback_used is False
+    assert draft.trace.ai_enabled is True
+    assert draft.trace.generation_mode == "ai"
+    assert draft.trace.latency_ms == 150
+    assert draft.trace.input_tokens == 40
+    assert draft.trace.output_tokens == 80
     assert draft.structured_context["company_overview"] == "Alpstein Services GmbH"
     assert draft.generated_prompt == "Draft context based on the interview only."
     gateway.complete.assert_awaited_once()
@@ -259,7 +282,11 @@ async def test_ai_service_generate_draft_result_uses_fallback_when_disabled(
         fallback_result=fallback,
     )
 
-    assert draft is fallback
+    assert draft.structured_context is fallback.structured_context
+    assert draft.trace.prompt_version == BCB_DRAFT_RESULT_PROMPT_VERSION
+    assert draft.trace.fallback_used is True
+    assert draft.trace.ai_enabled is False
+    assert draft.trace.generation_mode == "fallback"
     gateway.complete.assert_not_awaited()
 
 
@@ -289,7 +316,11 @@ async def test_ai_service_generate_draft_result_uses_fallback_when_api_key_missi
         fallback_result=fallback,
     )
 
-    assert draft is fallback
+    assert draft.structured_context is fallback.structured_context
+    assert draft.trace.prompt_version == BCB_DRAFT_RESULT_PROMPT_VERSION
+    assert draft.trace.fallback_used is True
+    assert draft.trace.ai_enabled is False
+    assert draft.trace.generation_mode == "fallback"
     gateway.complete.assert_not_awaited()
 
 
@@ -330,8 +361,49 @@ async def test_ai_service_generate_draft_result_uses_fallback_when_gateway_fails
         fallback_result=fallback,
     )
 
-    assert draft is fallback
+    assert draft.structured_context is fallback.structured_context
+    assert draft.trace.provider == "openai"
+    assert draft.trace.model == "gpt-4o-mini"
+    assert draft.trace.prompt_version == BCB_DRAFT_RESULT_PROMPT_VERSION
+    assert draft.trace.fallback_used is True
+    assert draft.trace.ai_enabled is True
+    assert draft.trace.generation_mode == "fallback"
+    assert draft.trace.latency_ms == 50
     gateway.complete.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_ai_service_next_question_logs_prompt_version(
+    tenant_scope: tuple[uuid.UUID, uuid.UUID, uuid.UUID],
+    messages: list[BusinessContextBuilderMessage],
+    caplog: pytest.LogCaptureFixture,
+):
+    caplog.set_level("INFO")
+    session_id, tenant_id, business_id = tenant_scope
+    gateway = AsyncMock()
+    service = BusinessContextBuilderAiService(
+        app_settings=Settings(openai_api_key="", bcb_ai_enabled=True),
+        ai_gateway_service=gateway,
+    )
+
+    await service.generate_next_question(
+        session_id=session_id,
+        tenant_id=tenant_id,
+        business_id=business_id,
+        next_step=STEP_BUSINESS_DESCRIPTION,
+        messages=messages,
+        fallback_question="What does your company do?",
+    )
+
+    record = next(
+        record
+        for record in caplog.records
+        if record.getMessage() == "bcb_ai_next_question_skipped"
+    )
+    assert record.feature == "business_context_builder"
+    assert record.operation == "next_question"
+    assert record.prompt_version == BCB_NEXT_QUESTION_PROMPT_VERSION
+    assert record.fallback_used is True
 
 
 def test_ai_service_module_has_no_db_imports():

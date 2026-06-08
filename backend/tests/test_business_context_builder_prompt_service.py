@@ -9,12 +9,23 @@ from app.models.business_context_builder import (
 from app.services.business_context_builder_constants import STEP_TARGET_CUSTOMERS
 from app.services.business_context_builder_prompt_service import (
     BCB_DRAFT_RESULT_TASK,
+    BCB_DRAFT_RESULT_PROMPT_VERSION,
     BCB_NEXT_QUESTION_TASK,
+    BCB_NEXT_QUESTION_PROMPT_VERSION,
     BusinessContextBuilderConversationTurn,
     BusinessContextBuilderPromptInput,
     BusinessContextBuilderPromptService,
     PLATFORM_SYSTEM_PROMPT,
 )
+
+
+def test_prompt_builder_exposes_prompt_versions():
+    service = BusinessContextBuilderPromptService()
+
+    assert BCB_NEXT_QUESTION_PROMPT_VERSION == "1.0"
+    assert BCB_DRAFT_RESULT_PROMPT_VERSION == "1.0"
+    assert service.next_question_prompt_version() == BCB_NEXT_QUESTION_PROMPT_VERSION
+    assert service.draft_result_prompt_version() == BCB_DRAFT_RESULT_PROMPT_VERSION
 
 
 def test_prompt_builder_creates_constrained_next_question_prompt():
@@ -47,6 +58,7 @@ def test_prompt_builder_creates_constrained_next_question_prompt():
     assert "internal system fields" in platform.lower()
     assert "sensitive" in platform.lower()
     assert "generate_next_assistant_question" in task
+    assert f"prompt_version: {BCB_NEXT_QUESTION_PROMPT_VERSION}" in task
     assert "target customers" in task.lower()
     history = next(
         section for section in prompt.sections if section.section_id == "conversation_history"
@@ -103,6 +115,7 @@ def test_prompt_builder_creates_final_draft_result_prompt_from_history():
         "conversation_history",
     )
     serialized = "\n".join(section.content for section in prompt.sections).lower()
+    assert f"prompt_version: {BCB_DRAFT_RESULT_PROMPT_VERSION}" in serialized
     assert "we repair coffee machines" in serialized
     assert "do not invent" in serialized
     assert "unknown or missing" in serialized

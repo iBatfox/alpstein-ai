@@ -23,6 +23,8 @@ from app.services.business_context_builder_constants import (
 
 BCB_NEXT_QUESTION_TASK = "bcb_next_question"
 BCB_DRAFT_RESULT_TASK = "bcb_draft_result"
+BCB_NEXT_QUESTION_PROMPT_VERSION = "1.0"
+BCB_DRAFT_RESULT_PROMPT_VERSION = "1.0"
 
 STEP_FOCUS_LABELS: dict[str, str] = {
     STEP_COMPANY_INFORMATION: "company name, website, industry, and location",
@@ -110,6 +112,12 @@ class BusinessContextBuilderPromptInput:
 
 
 class BusinessContextBuilderPromptService:
+    def next_question_prompt_version(self) -> str:
+        return BCB_NEXT_QUESTION_PROMPT_VERSION
+
+    def draft_result_prompt_version(self) -> str:
+        return BCB_DRAFT_RESULT_PROMPT_VERSION
+
     def build_next_question_prompt(
         self,
         prompt_input: BusinessContextBuilderPromptInput,
@@ -129,9 +137,12 @@ class BusinessContextBuilderPromptService:
                 label="TASK INSTRUCTIONS",
                 content=_labeled(
                     "TASK INSTRUCTIONS",
-                    TASK_INSTRUCTIONS_TEMPLATE.format(
-                        step_label=_step_label(prompt_input.next_step),
-                        step_focus=_step_focus(prompt_input.next_step),
+                    (
+                        f"prompt_version: {BCB_NEXT_QUESTION_PROMPT_VERSION}\n"
+                        + TASK_INSTRUCTIONS_TEMPLATE.format(
+                            step_label=_step_label(prompt_input.next_step),
+                            step_focus=_step_focus(prompt_input.next_step),
+                        )
                     ),
                 ),
                 kind="system",
@@ -177,7 +188,13 @@ class BusinessContextBuilderPromptService:
             AssembledPromptSection(
                 section_id="task_instructions",
                 label="TASK INSTRUCTIONS",
-                content=_labeled("TASK INSTRUCTIONS", DRAFT_RESULT_TASK_INSTRUCTIONS),
+                content=_labeled(
+                    "TASK INSTRUCTIONS",
+                    (
+                        f"prompt_version: {BCB_DRAFT_RESULT_PROMPT_VERSION}\n"
+                        + DRAFT_RESULT_TASK_INSTRUCTIONS
+                    ),
+                ),
                 kind="system",
             ),
         ]

@@ -6,12 +6,15 @@ import logging
 import json
 import uuid
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 from app.core.config import Settings, settings
 from app.models.business_context_builder import BusinessContextBuilderMessage
 from app.services.ai_gateway_service import AiGatewayService
 from app.services.business_context_builder_prompt_service import (
+    BCB_DRAFT_RESULT_PROMPT_VERSION,
+    BCB_NEXT_QUESTION_PROMPT_VERSION,
     BusinessContextBuilderConversationTurn,
     BusinessContextBuilderPromptInput,
     BusinessContextBuilderPromptService,
@@ -29,6 +32,50 @@ class BusinessContextBuilderDraftResult:
     structured_context: dict[str, Any]
     generated_prompt: str
     fallback_used: bool
+    trace: "BusinessContextBuilderAiTrace"
+
+    def with_trace(
+        self,
+        trace: "BusinessContextBuilderAiTrace",
+    ) -> "BusinessContextBuilderDraftResult":
+        return BusinessContextBuilderDraftResult(
+            structured_context=self.structured_context,
+            generated_prompt=self.generated_prompt,
+            fallback_used=trace.fallback_used,
+            trace=trace,
+        )
+
+
+@dataclass(frozen=True)
+class BusinessContextBuilderAiTrace:
+    provider: str | None
+    model: str | None
+    prompt_version: str
+    generation_timestamp: str
+    fallback_used: bool
+    ai_enabled: bool
+    generation_mode: str
+    latency_ms: int | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+
+    def to_metadata(self) -> dict[str, object]:
+        metadata: dict[str, object] = {
+            "provider": self.provider,
+            "model": self.model,
+            "prompt_version": self.prompt_version,
+            "generation_timestamp": self.generation_timestamp,
+            "fallback_used": self.fallback_used,
+            "ai_enabled": self.ai_enabled,
+            "generation_mode": self.generation_mode,
+        }
+        if self.latency_ms is not None:
+            metadata["latency_ms"] = self.latency_ms
+        if self.input_tokens is not None:
+            metadata["input_tokens"] = self.input_tokens
+        if self.output_tokens is not None:
+            metadata["output_tokens"] = self.output_tokens
+        return metadata
 
 
 class BusinessContextBuilderAiService:
@@ -66,6 +113,7 @@ class BusinessContextBuilderAiService:
                     next_step=next_step,
                     ai_enabled=False,
                     used_fallback=True,
+                    prompt_version=BCB_NEXT_QUESTION_PROMPT_VERSION,
                 ),
             )
             return fallback_question
@@ -98,6 +146,7 @@ class BusinessContextBuilderAiService:
                 used_fallback=not gateway_result.succeeded,
                 provider=gateway_result.provider,
                 model=gateway_result.model,
+                prompt_version=BCB_NEXT_QUESTION_PROMPT_VERSION,
                 latency_ms=gateway_result.latency_ms,
                 input_tokens=gateway_result.input_tokens,
                 output_tokens=gateway_result.output_tokens,
@@ -133,9 +182,19 @@ class BusinessContextBuilderAiService:
                     next_step=current_step,
                     ai_enabled=False,
                     used_fallback=True,
+                    prompt_version=BCB_DRAFT_RESULT_PROMPT_VERSION,
                 ),
             )
-            return fallback_result
+            return fallback_result.with_trace(
+                _build_trace(
+                    provider=None,
+                    model=None,
+                    prompt_version=BCB_DRAFT_RESULT_PROMPT_VERSION,
+                    fallback_used=True,
+                    ai_enabled=False,
+                    generation_mode="fallback",
+                )
+            )
 
         prompt_input = BusinessContextBuilderPromptInput(
             session_id=session_id,
@@ -152,6 +211,24 @@ class BusinessContextBuilderAiService:
         )
         assembled_prompt = self._prompt_service.build_draft_result_prompt(prompt_input)
         gateway_result = await self._ai_gateway_service.complete(assembled_prompt)
+        parsed_result = (
+            _parse_draft_result(
+                gateway_result.text,
+                trace=_build_trace(
+                    provider=gateway_result.provider,
+                    model=gateway_result.model,
+                    prompt_version=BCB_DRAFT_RESULT_PROMPT_VERSION,
+                    fallback_used=False,
+                    ai_enabled=True,
+                    generation_mode="ai",
+                    latency_ms=gateway_result.latency_ms,
+                    input_tokens=gateway_result.input_tokens,
+                    output_tokens=gateway_result.output_tokens,
+                ),
+            )
+            if gateway_result.succeeded and gateway_result.text
+            else None
+        )
 
         logger.info(
             "bcb_ai_draft_result_completed",
@@ -162,9 +239,10 @@ class BusinessContextBuilderAiService:
                 business_id=business_id,
                 next_step=current_step,
                 ai_enabled=True,
-                used_fallback=not gateway_result.succeeded,
+                used_fallback=parsed_result is None,
                 provider=gateway_result.provider,
                 model=gateway_result.model,
+                prompt_version=BCB_DRAFT_RESULT_PROMPT_VERSION,
                 latency_ms=gateway_result.latency_ms,
                 input_tokens=gateway_result.input_tokens,
                 output_tokens=gateway_result.output_tokens,
@@ -172,12 +250,22 @@ class BusinessContextBuilderAiService:
             ),
         )
 
-        if gateway_result.succeeded and gateway_result.text:
-            parsed = _parse_draft_result(gateway_result.text)
-            if parsed is not None:
-                return parsed
+        if parsed_result is not None:
+            return parsed_result
 
-        return fallback_result
+        return fallback_result.with_trace(
+            _build_trace(
+                provider=gateway_result.provider,
+                model=gateway_result.model,
+                prompt_version=BCB_DRAFT_RESULT_PROMPT_VERSION,
+                fallback_used=True,
+                ai_enabled=True,
+                generation_mode="fallback",
+                latency_ms=gateway_result.latency_ms,
+                input_tokens=gateway_result.input_tokens,
+                output_tokens=gateway_result.output_tokens,
+            )
+        )
 
     def _bcb_ai_enabled(self) -> bool:
         if not self._settings.bcb_ai_enabled:
@@ -199,7 +287,11 @@ def _normalize_question_text(text: str) -> str:
     return cleaned
 
 
-def _parse_draft_result(text: str) -> BusinessContextBuilderDraftResult | None:
+def _parse_draft_result(
+    text: str,
+    *,
+    trace: BusinessContextBuilderAiTrace,
+) -> BusinessContextBuilderDraftResult | None:
     try:
         payload = json.loads(text.strip())
     except json.JSONDecodeError:
@@ -218,6 +310,33 @@ def _parse_draft_result(text: str) -> BusinessContextBuilderDraftResult | None:
         structured_context=structured_context,
         generated_prompt=generated_prompt.strip(),
         fallback_used=False,
+        trace=trace,
+    )
+
+
+def _build_trace(
+    *,
+    provider: str | None,
+    model: str | None,
+    prompt_version: str,
+    fallback_used: bool,
+    ai_enabled: bool,
+    generation_mode: str,
+    latency_ms: int | None = None,
+    input_tokens: int | None = None,
+    output_tokens: int | None = None,
+) -> BusinessContextBuilderAiTrace:
+    return BusinessContextBuilderAiTrace(
+        provider=provider,
+        model=model,
+        prompt_version=prompt_version,
+        generation_timestamp=datetime.now(UTC).isoformat(),
+        fallback_used=fallback_used,
+        ai_enabled=ai_enabled,
+        generation_mode=generation_mode,
+        latency_ms=latency_ms,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
     )
 
 
@@ -230,6 +349,7 @@ def _observability_metadata(
     next_step: str | None,
     ai_enabled: bool,
     used_fallback: bool,
+    prompt_version: str,
     provider: str | None = None,
     model: str | None = None,
     latency_ms: int | None = None,
@@ -245,6 +365,7 @@ def _observability_metadata(
         "business_id": str(business_id),
         "ai_enabled": ai_enabled,
         "fallback_used": used_fallback,
+        "prompt_version": prompt_version,
     }
     if next_step is not None:
         metadata["next_step"] = next_step
