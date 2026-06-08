@@ -21,8 +21,12 @@ telegram-mini-app/business-context-builder/
 - Telegram theme parameter support through CSS variables.
 - Browser preview without Telegram.
 - Isolated API client module with mock and bridge adapters.
+- Sticky bottom navigation for Language, Contexts, Interview, Bots, and More.
+- Frontend language selection persisted as `bcb_language`.
+- Bots tab UI foundation with mock cards and bridge not-implemented state.
 - Backend bridge routes under `/api/v1/telegram-mini-app/business-context-builder`.
 - Server-side Telegram `initData` validation.
+- Owner-only bridge access through `TELEGRAM_MINI_APP_ALLOWED_USER_IDS`.
 - Server-side BCB tenant/business scope resolution.
 
 ## Intentionally Not Implemented
@@ -34,6 +38,8 @@ telegram-mini-app/business-context-builder/
 - Backend schema changes.
 - New public ports or backend services.
 - Telegram bot messaging logic.
+- Backend bot listing API.
+- Backend language-aware BCB question/result generation.
 
 ## Local Run
 
@@ -159,6 +165,37 @@ Bridge mode reads `window.Telegram.WebApp.initData` and sends it to the backend.
 It does not send the internal webhook token and does not send tenant/business
 identifiers.
 
+If the backend returns `403` with `TELEGRAM_USER_NOT_ALLOWED`, the frontend shows
+only the restricted-access screen and hides contexts/interview/bots navigation.
+
+## Language
+
+Supported frontend languages:
+
+- English `en`
+- Deutsch `de`
+- Français `fr`
+- Українська `uk`
+
+Selection is stored in browser storage as:
+
+```text
+bcb_language
+```
+
+Mock mode uses the selected language for static questions. Bridge mode keeps the
+selected language frontend-only because the BCB bridge/backend does not yet have
+a safe language parameter.
+
+## Bots Tab
+
+The Bots tab is a UI foundation.
+
+- Mock mode returns local sample bot cards.
+- Bridge mode returns a clear “not implemented yet” state because no backend bot
+  listing API exists in this scope.
+- Create bot and Link context are disabled/coming soon.
+
 ## Backend Bridge
 
 Namespace:
@@ -195,12 +232,26 @@ Set on the backend only:
 ```text
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_INITDATA_MAX_AGE_SECONDS=86400
+TELEGRAM_MINI_APP_ALLOWED_USER_IDS=
 BCB_TELEGRAM_TENANT_ID=
 BCB_TELEGRAM_BUSINESS_ID=
 ```
 
 The BCB scope values are UUIDs. They are not accepted from the frontend and are
 not validated through public schema foreign keys.
+
+`TELEGRAM_MINI_APP_ALLOWED_USER_IDS` is a comma-separated list of numeric
+Telegram user IDs, for example:
+
+```text
+TELEGRAM_MINI_APP_ALLOWED_USER_IDS=123456789,987654321
+```
+
+Empty allowlist denies access. This is the safest default for production.
+
+To find a Telegram user ID, use a trusted Telegram ID lookup bot or a temporary
+operator-only diagnostic outside the frontend. Do not commit Telegram user IDs,
+bot tokens, or internal webhook tokens into frontend files.
 
 ## Telegram HTTPS Setup
 
@@ -260,8 +311,11 @@ Expected:
 ## Security Notes
 
 - `TELEGRAM_BOT_TOKEN` stays on the backend.
+- `TELEGRAM_MINI_APP_ALLOWED_USER_IDS` stays on the backend.
 - `N8N_BACKEND_API_TOKEN` stays out of frontend code.
 - Expired and invalid-signature `initData` are rejected by the backend.
+- Allowed-user enforcement happens after `initData` validation and before BCB
+  service access.
 - BCB access is scoped by backend-configured `BCB_TELEGRAM_TENANT_ID` and
   `BCB_TELEGRAM_BUSINESS_ID`.
 - The bridge reuses BCB service methods and does not write to production

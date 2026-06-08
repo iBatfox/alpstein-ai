@@ -314,11 +314,43 @@ def _auth_and_scope(
 
 
 def _validate_init_data(init_data: str | None) -> TelegramMiniAppAuthContext:
-    return telegram_auth_service.validate_init_data(
+    auth_context = telegram_auth_service.validate_init_data(
         init_data,
         bot_token=settings.telegram_bot_token,
         max_age_seconds=settings.telegram_initdata_max_age_seconds,
     )
+    _validate_allowed_user(auth_context)
+    return auth_context
+
+
+def _validate_allowed_user(auth_context: TelegramMiniAppAuthContext) -> None:
+    allowed_user_ids = _parse_allowed_user_ids(settings.telegram_mini_app_allowed_user_ids)
+    if auth_context.telegram_user.id not in allowed_user_ids:
+        raise TelegramMiniAppAuthError(
+            "TELEGRAM_USER_NOT_ALLOWED",
+            "Telegram Mini App access is restricted",
+            status_code=403,
+        )
+
+
+def _parse_allowed_user_ids(raw_value: str) -> frozenset[int]:
+    values = raw_value.strip()
+    if not values:
+        return frozenset()
+    allowed_user_ids: set[int] = set()
+    for item in values.split(","):
+        clean_item = item.strip()
+        if not clean_item:
+            continue
+        try:
+            allowed_user_ids.add(int(clean_item))
+        except ValueError as exc:
+            raise TelegramMiniAppAuthError(
+                "TELEGRAM_ALLOWED_USERS_INVALID",
+                "TELEGRAM_MINI_APP_ALLOWED_USER_IDS must contain comma-separated integers",
+                status_code=503,
+            ) from exc
+    return frozenset(allowed_user_ids)
 
 
 def _resolve_scope() -> BridgeScope:

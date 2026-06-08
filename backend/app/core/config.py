@@ -263,6 +263,10 @@ class Settings(BaseSettings):
         default=86400,
         validation_alias="TELEGRAM_INITDATA_MAX_AGE_SECONDS",
     )
+    telegram_mini_app_allowed_user_ids: str = Field(
+        default="",
+        validation_alias="TELEGRAM_MINI_APP_ALLOWED_USER_IDS",
+    )
     bcb_telegram_tenant_id: str = Field(
         default="",
         validation_alias="BCB_TELEGRAM_TENANT_ID",

@@ -34,6 +34,7 @@ def configure_bridge(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(bridge.settings, "telegram_bot_token", BOT_TOKEN)
     monkeypatch.setattr(bridge.settings, "telegram_initdata_max_age_seconds", 86400)
+    monkeypatch.setattr(bridge.settings, "telegram_mini_app_allowed_user_ids", "777001,777002,777003")
     monkeypatch.setattr(bridge.settings, "bcb_telegram_tenant_id", str(TENANT_ID))
     monkeypatch.setattr(bridge.settings, "bcb_telegram_business_id", str(BUSINESS_ID))
 
@@ -131,6 +132,61 @@ async def test_auth_session_rejects_expired_init_data():
 
     assert response.status_code == 401
     assert response.json()["error"]["code"] == "TELEGRAM_INIT_DATA_EXPIRED"
+
+
+@pytest.mark.anyio
+async def test_auth_session_rejects_disallowed_telegram_user():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/telegram-mini-app/business-context-builder/auth/session",
+            json={"init_data": signed_init_data(telegram_user_id=888001)},
+        )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "TELEGRAM_USER_NOT_ALLOWED"
+
+
+@pytest.mark.anyio
+async def test_missing_allowlist_denies_access(monkeypatch: pytest.MonkeyPatch):
+    from app.api.routes import telegram_mini_app_business_context_builder as bridge
+
+    monkeypatch.setattr(bridge.settings, "telegram_mini_app_allowed_user_ids", "")
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/telegram-mini-app/business-context-builder/auth/session",
+            json={"init_data": signed_init_data(telegram_user_id=777001)},
+        )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "TELEGRAM_USER_NOT_ALLOWED"
+
+
+@pytest.mark.anyio
+async def test_bridge_routes_enforce_allowlist_before_bcb_access(
+    db_session: MagicMock,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    from app.api.routes import telegram_mini_app_business_context_builder as bridge
+
+    service = MagicMock()
+    service.create_session = AsyncMock()
+    monkeypatch.setattr(bridge, "business_context_builder_service", service)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/telegram-mini-app/business-context-builder/sessions",
+            json={},
+            headers=init_headers(signed_init_data(telegram_user_id=888001)),
+        )
+
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "TELEGRAM_USER_NOT_ALLOWED"
+    service.create_session.assert_not_called()
+    db_session.commit.assert_not_called()
 
 
 @pytest.mark.anyio

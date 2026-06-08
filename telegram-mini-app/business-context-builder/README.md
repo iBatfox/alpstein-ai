@@ -72,10 +72,34 @@ sudo install -m 0644 src/apiClient.js /var/www/alpstein-ai/telegram-context/src/
 
 - Uses the mock API adapter by default.
 - Supports `api_mode=bridge` for Telegram runtime calls through the backend bridge.
+- Uses sticky bottom navigation: Language, Contexts, Interview, Bots, More.
+- Stores the selected UI language in `localStorage` as `bcb_language`.
 - Initializes `window.Telegram.WebApp` when the Telegram SDK is available.
 - Applies Telegram theme colors when running inside Telegram.
 - Works in a normal browser for local preview.
 - Does not expose backend internal tokens.
+
+## Language
+
+Supported languages:
+
+- English `en`
+- Deutsch `de`
+- Français `fr`
+- Українська `uk`
+
+Mock mode uses the selected language for static interview questions. Bridge mode
+keeps language frontend-only because the backend BCB API does not yet accept a
+safe language parameter.
+
+## Bots Tab
+
+The Bots tab is UI foundation only.
+
+- Mock mode shows local sample bot cards.
+- Bridge mode calls no production bot data API yet and shows a clear
+  not-implemented state.
+- Create bot and Link context actions are disabled/coming soon.
 
 ## Bridge API Contract
 
@@ -107,11 +131,19 @@ Required for bridge mode:
 
 - `TELEGRAM_BOT_TOKEN`
 - `TELEGRAM_INITDATA_MAX_AGE_SECONDS`
+- `TELEGRAM_MINI_APP_ALLOWED_USER_IDS`
 - `BCB_TELEGRAM_TENANT_ID`
 - `BCB_TELEGRAM_BUSINESS_ID`
 
 The bot token is backend-only. Do not add it to this directory or any frontend
 deployment config.
+
+`TELEGRAM_MINI_APP_ALLOWED_USER_IDS` is a backend-only comma-separated allowlist
+of numeric Telegram user IDs. Empty allowlist denies bridge access.
+
+To find a Telegram user ID, open the Mini App in bridge mode after allowlisting a
+known test account or use a trusted Telegram ID lookup bot outside this codebase;
+never commit IDs or bot tokens into frontend files.
 
 ## Telegram Setup Notes
 
@@ -130,6 +162,8 @@ https://alpstein-ai.ch/telegram-context/
 ## Not Implemented
 
 - Telegram bot messaging logic.
+- Backend bot listing API.
+- Backend language-aware BCB generation.
 - n8n integration.
 - CRM integration.
 - Production assistant publishing.

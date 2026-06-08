@@ -8,13 +8,42 @@ const STEPS = [
 ];
 
 const STEP_QUESTIONS = {
-  company_information:
-    "Hello. I will help you create a draft Business Context. What is the name of your company?",
-  business_description: "What does your company do?",
-  target_customers: "Who are your target customers?",
-  products_services: "What are your main products or services?",
-  sales_process: "How does your sales or booking process work?",
-  communication_style: "What communication style should the assistant use?"
+  en: {
+    company_information:
+      "Hello. I will help you create a draft Business Context. What is the name of your company?",
+    business_description: "What does your company do?",
+    target_customers: "Who are your target customers?",
+    products_services: "What are your main products or services?",
+    sales_process: "How does your sales or booking process work?",
+    communication_style: "What communication style should the assistant use?"
+  },
+  de: {
+    company_information:
+      "Hallo. Ich helfe dir, einen Business Context Entwurf zu erstellen. Wie heisst dein Unternehmen?",
+    business_description: "Was macht dein Unternehmen?",
+    target_customers: "Wer sind deine Zielkunden?",
+    products_services: "Was sind deine wichtigsten Produkte oder Dienstleistungen?",
+    sales_process: "Wie funktioniert dein Verkaufs- oder Buchungsprozess?",
+    communication_style: "Welchen Kommunikationsstil soll der Assistent verwenden?"
+  },
+  fr: {
+    company_information:
+      "Bonjour. Je vais vous aider a creer un brouillon de Business Context. Quel est le nom de votre entreprise ?",
+    business_description: "Que fait votre entreprise ?",
+    target_customers: "Qui sont vos clients cibles ?",
+    products_services: "Quels sont vos principaux produits ou services ?",
+    sales_process: "Comment fonctionne votre processus de vente ou de reservation ?",
+    communication_style: "Quel style de communication l'assistant doit-il utiliser ?"
+  },
+  uk: {
+    company_information:
+      "Вітаю. Я допоможу створити чернетку Business Context. Як називається ваша компанія?",
+    business_description: "Чим займається ваша компанія?",
+    target_customers: "Хто ваші цільові клієнти?",
+    products_services: "Які ваші основні продукти або послуги?",
+    sales_process: "Як працює процес продажів або бронювання?",
+    communication_style: "Який стиль спілкування має використовувати асистент?"
+  }
 };
 
 const MOCK_TENANT_ID = "00000000-0000-4000-8000-000000000001";
@@ -31,22 +60,25 @@ export function createBusinessContextBuilderClient(config = {}) {
   if (mode === "backend") {
     return createDirectBackendBlockedClient();
   }
-  return createMockClient();
+  return createMockClient({ language: config.language || "en" });
 }
 
 function createDirectBackendBlockedClient() {
   async function blocked() {
-    throw new Error(
-      "Direct backend calls are disabled. Use api_mode=bridge so Telegram initData is validated server-side."
+    throw createClientError(
+      "Direct backend calls are disabled. Use api_mode=bridge so Telegram initData is validated server-side.",
+      "DIRECT_BACKEND_DISABLED"
     );
   }
 
   return {
+    authSession: blocked,
     createSession: blocked,
     sendMessage: blocked,
     getSession: blocked,
     completeSession: blocked,
-    listContexts: blocked
+    listContexts: blocked,
+    listBots: blocked
   };
 }
 
@@ -55,7 +87,10 @@ function createBridgeClient({ baseUrl, initData }) {
 
   async function request(path, { method = "GET", body } = {}) {
     if (!initData) {
-      throw new Error("Telegram initData is unavailable. Use mock mode for browser preview.");
+      throw createClientError(
+        "Telegram initData is unavailable. Use mock mode for browser preview.",
+        "TELEGRAM_INIT_DATA_UNAVAILABLE"
+      );
     }
 
     const response = await fetch(`${bridgeBase}${path}`, {
@@ -68,9 +103,11 @@ function createBridgeClient({ baseUrl, initData }) {
     });
     const payload = await response.json();
     if (!response.ok || payload.success === false) {
-      throw new Error(
+      throw createClientError(
         (payload.error && payload.error.message) ||
-          `Business Context Builder request failed with ${response.status}`
+          `Business Context Builder request failed with ${response.status}`,
+        payload.error && payload.error.code,
+        response.status
       );
     }
     return payload.data;
@@ -115,17 +152,57 @@ function createBridgeClient({ baseUrl, initData }) {
         offset: String(offset)
       });
       return request(`/contexts?${params.toString()}`);
+    },
+
+    async listBots() {
+      throw createClientError(
+        "Bots listing is not implemented in the backend bridge yet.",
+        "BOTS_API_NOT_IMPLEMENTED",
+        501
+      );
     }
   };
 }
 
-function createMockClient() {
+function createMockClient({ language }) {
   const state = {
+    language,
     sessions: new Map(),
-    contexts: []
+    contexts: [],
+    bots: [
+      {
+        id: "mock-instagram-sales",
+        name: "Instagram Lead Assistant",
+        source: "Instagram",
+        context_title: "Demo service context",
+        context_id: "mock-context-001",
+        status: "draft",
+        updated_at: timestamp()
+      },
+      {
+        id: "mock-website-chat",
+        name: "Website Chat Qualification",
+        source: "Website",
+        context_title: null,
+        context_id: null,
+        status: "paused",
+        updated_at: timestamp()
+      }
+    ]
   };
 
   return {
+    async authSession() {
+      return {
+        authenticated: true,
+        user: {
+          id: 0,
+          first_name: "Browser preview"
+        },
+        auth_date: Math.floor(Date.now() / 1000)
+      };
+    },
+
     async createSession({ tenantId = MOCK_TENANT_ID, businessId = MOCK_BUSINESS_ID } = {}) {
       const now = timestamp();
       const session = {
@@ -138,7 +215,7 @@ function createMockClient() {
         updated_at: now,
         completed_at: null
       };
-      const message = createMessage(session.id, "assistant", STEP_QUESTIONS[STEPS[0]]);
+      const message = createMessage(session.id, "assistant", questionFor(state.language, STEPS[0]));
       state.sessions.set(session.id, {
         session,
         messages: [message],
@@ -157,8 +234,7 @@ function createMockClient() {
       const assistantMessage = createMessage(
         sessionId,
         "assistant",
-        STEP_QUESTIONS[nextStep] ||
-          "Thank you. You can continue adding details or complete the draft context."
+        questionFor(state.language, nextStep)
       );
       record.messages.push(userMessage, assistantMessage);
       return {
@@ -209,7 +285,7 @@ function createMockClient() {
           }
         },
         generated_prompt:
-          "Mock draft result for UI preview. Phase 2 will call the backend through a secure auth bridge.",
+          "Mock draft result for UI preview. Backend language-aware generation is not implemented yet.",
         context_file_path: null,
         context_file_url: null,
         created_at: now,
@@ -229,6 +305,12 @@ function createMockClient() {
         limit,
         offset
       };
+    },
+
+    async listBots() {
+      return {
+        items: state.bots
+      };
     }
   };
 }
@@ -236,9 +318,17 @@ function createMockClient() {
 function requireSession(state, sessionId) {
   const record = state.sessions.get(sessionId);
   if (!record) {
-    throw new Error("Session not found");
+    throw createClientError("Session not found", "SESSION_NOT_FOUND", 404);
   }
   return record;
+}
+
+function questionFor(language, step) {
+  const questions = STEP_QUESTIONS[language] || STEP_QUESTIONS.en;
+  return (
+    questions[step] ||
+    "Thank you. You can continue adding details or complete the draft context."
+  );
 }
 
 function createMessage(sessionId, role, content) {
@@ -260,4 +350,11 @@ function createId() {
 
 function timestamp() {
   return new Date().toISOString();
+}
+
+function createClientError(message, code = "REQUEST_FAILED", status = 0) {
+  const error = new Error(message);
+  error.code = code;
+  error.status = status;
+  return error;
 }
