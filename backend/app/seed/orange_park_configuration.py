@@ -54,6 +54,11 @@ PRICES_AVAILABILITY_PATH = (
     / "04_prices_and_availability"
     / "orange_park_prices_and_availability.md"
 )
+CONVERSATION_STYLE_GUIDE_PATH = (
+    ORANGE_PARK_DOCS_ROOT
+    / "07_conversation_examples"
+    / "orange_park_conversation_style_guide.md"
+)
 
 
 class OrangeParkConfigurationSeedError(Exception):
@@ -109,6 +114,7 @@ async def seed_orange_park_configuration(
         business=business,
         sales_materials=docs["sales_materials"],
         ai_policies=docs["ai_policies"],
+        conversation_style=docs["conversation_style"],
         actions=actions,
     )
     await _ensure_channel_setting(
@@ -144,6 +150,24 @@ async def seed_orange_park_configuration(
         ],
         actions=actions,
     )
+    await _ensure_knowledge_source(
+        session,
+        tenant=tenant,
+        business=business,
+        source_type="conversation_style",
+        title="Orange Park Conversation Style Guide",
+        document=_conversation_style_runtime_document(docs["conversation_style"]),
+        tags=[
+            "conversation_style",
+            "ai_behavior",
+            "qualification",
+            "manager_handoff",
+            "orange_park",
+            "telegram_mvp",
+            "not_factual_knowledge",
+        ],
+        actions=actions,
+    )
 
     return OrangeParkSeedResult(
         tenant_id=tenant.id,
@@ -161,6 +185,7 @@ def _load_source_documents() -> dict[str, SourceDocument]:
         "ai_policies": AI_POLICIES_PATH,
         "faq": FAQ_PATH,
         "prices_availability": PRICES_AVAILABILITY_PATH,
+        "conversation_style": CONVERSATION_STYLE_GUIDE_PATH,
     }
     return {key: _read_source_document(path) for key, path in paths.items()}
 
@@ -348,13 +373,14 @@ async def _ensure_ai_profile(
     business: Business,
     sales_materials: SourceDocument,
     ai_policies: SourceDocument,
+    conversation_style: SourceDocument,
     actions: list[str],
 ) -> TenantAiProfile:
     profile = await _get_ai_profile(session, tenant.id, business.id)
     values = {
         "profile_name": "Orange Park Telegram MVP",
         "tone": "professional, consultative, friendly",
-        "response_style": "concise Telegram real estate sales assistant",
+        "response_style": "no emojis; no exact availability; ask 1 question; offer manager/viewing/video",
         "language": ORANGE_PARK_LANGUAGE,
         "ask_for_name": True,
         "ask_for_phone": True,
@@ -374,6 +400,11 @@ async def _ensure_ai_profile(
             "кредит",
             "рассрочка",
             "розтермінування",
+            "перегляд",
+            "відеоогляд",
+            "видеообзор",
+            "бронь",
+            "бронювання",
         ],
         "forbidden_promises": [
             "exact price",
@@ -387,6 +418,9 @@ async def _ensure_ai_profile(
             "live pricing",
             "live availability",
             "external CRM lead creation",
+            "payment instructions",
+            "bank or card details",
+            "tax, notary, registration, or service-fee amounts",
         ],
         "fallback_response": (
             "Дякуємо за звернення. Я передам запит менеджеру Orange Park, "
@@ -395,9 +429,11 @@ async def _ensure_ai_profile(
         "metadata_": _metadata_for_documents(
             sales_materials,
             ai_policies,
+            conversation_style,
             category="tenant_ai_profile",
             telegram_only_mvp=True,
             lead_creation_enabled=False,
+            conversation_style_source="included_as_behavior_guidance",
         ),
     }
     if profile is None:
@@ -513,6 +549,36 @@ async def _ensure_knowledge_source(
         actions.append(f"updated knowledge source {title!r}")
     await session.flush()
     return source
+
+
+def _conversation_style_runtime_document(document: SourceDocument) -> SourceDocument:
+    runtime_summary = """# Orange Park Conversation Style Runtime Summary
+
+Use this as behavior guidance only, not as stable factual knowledge.
+
+- Mirror the customer's language: Ukrainian or Russian.
+- Keep Telegram replies warm, practical, concise, and consultative.
+- Answer the immediate question first, then ask one useful qualification question.
+- For apartment interest, ask about room count, purpose, budget, payment route, and viewing/video preference.
+- For availability questions, do not invent exact options. Offer manager confirmation and ask what room count or format the customer wants.
+- For price, discount, installment, єОселя, credit, payment, legal, documents, readiness, or reservation questions, explain that a manager must confirm current details.
+- Offer a concrete next step: manager confirmation, viewing, video viewing, plan/layout review, or financing consultation.
+- Use soft urgency only as: current terms can change, so manager confirmation is recommended.
+- Never copy transcript prices, discounts, availability counts, bank/card/account details, payment instructions, legal/tax amounts, booking promises, signing dates, key handover timing, or private client details.
+
+Safe examples:
+- "Можу зорієнтувати по загальних умовах, а актуальну ціну та наявність підтвердить менеджер."
+- "Підкажіть, будь ласка, скільки кімнат розглядаєте і який бюджет орієнтовно?"
+- "Якщо вам зручно, можемо організувати перегляд або відеоогляд."
+- "Для точного розрахунку по єОселі/кредиту краще передати запит менеджеру."
+"""
+    content = f"{runtime_summary.strip()}\n\n---\n\n{document.content}"
+    return SourceDocument(
+        path=document.path,
+        relative_path=document.relative_path,
+        content=content,
+        sha256=hashlib.sha256(content.encode("utf-8")).hexdigest(),
+    )
 
 
 async def _get_tenant_by_slug(session: AsyncSession, slug: str) -> Tenant | None:

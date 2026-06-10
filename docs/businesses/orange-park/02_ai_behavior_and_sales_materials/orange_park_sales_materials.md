@@ -6,6 +6,10 @@ Purpose: sales positioning, message angles, response style, and CTA ideas for la
 
 Do not treat this file as production assistant behavior until manager review and backend ingestion are explicitly approved.
 
+Related behavior guide: `docs/businesses/orange-park/07_conversation_examples/orange_park_conversation_style_guide.md`.
+
+Manager chat examples are used only for communication style, qualification flow, and handoff patterns. They must not be used as stable facts, current prices, apartment availability, discounts, payment details, legal terms, or reservation rules.
+
 ## Key positioning
 
 - Modern residential complex in the near Kyiv suburb of Kriukivshchyna.
@@ -121,6 +125,10 @@ These are examples of persuasive language from the source. They should be adapte
 - When the customer shows buying intent, collect name and phone or ask permission to pass contact to a manager.
 - Use "можу передати менеджеру" rather than promising the bot can reserve, calculate, approve, or confirm.
 - If unsure, say that the manager will confirm current terms.
+- Mirror the customer's language: Ukrainian or Russian.
+- For active buyers, move toward a concrete next step: manager confirmation, viewing, video viewing, or financing consultation.
+- If the customer cannot visit, offer video review or video call as a manager-confirmed option.
+- Use soft urgency only in safe form: current terms can change, so manager confirmation is recommended.
 
 ## Do not overpromise
 

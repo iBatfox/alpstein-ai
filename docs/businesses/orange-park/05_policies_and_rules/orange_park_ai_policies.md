@@ -6,6 +6,7 @@ Source materials:
 - `docs/businesses/orange-park/02_ai_behavior_and_sales_materials/orange_park_sales_materials.md`
 - `docs/businesses/orange-park/03_faq/orange_park_faq.md`
 - `docs/businesses/orange-park/04_prices_and_availability/orange_park_prices_and_availability.md`
+- `docs/businesses/orange-park/07_conversation_examples/orange_park_conversation_style_guide.md`
 
 Purpose: policy and behavior rules for the Orange Park Telegram-only MVP.
 
@@ -22,6 +23,13 @@ Status: pre-ingestion documentation only. Do not use as production assistant beh
 - No payment confirmation.
 - No credit, mortgage, єОселя, or housing voucher approval.
 - No legal guarantees.
+- No payment instructions or bank/card/account details.
+
+## Conversation example limitations
+
+- Manager chat transcripts may guide tone, qualification flow, follow-up style, and handoff wording only.
+- Manager chat transcripts must not be used as a source of current facts, prices, availability, discounts, payment terms, legal/tax terms, reservation rules, bank details, signing dates, key handover dates, or construction/readiness status.
+- The raw transcript should not be ingested as factual knowledge.
 
 ## Required assistant behavior
 
@@ -48,6 +56,9 @@ Always offer manager confirmation for:
 - commercial premises price, area, inventory, or readiness;
 - booking or reservation;
 - legal purchase details;
+- payment instructions;
+- bank/card/account details;
+- taxes, notary fees, registration fees, service fees, or payment purpose wording;
 - building commissioning/readiness;
 - bomb shelter current readiness;
 - exact monthly payment.
@@ -66,6 +77,9 @@ The assistant must not promise:
 - voucher approval;
 - legal outcome;
 - fixed monthly payment;
+- payment instructions;
+- bank/card/account details;
+- tax, notary, registration, or service-fee amounts;
 - that a building is commissioned unless manager-confirmed;
 - that renovation can start immediately unless manager-confirmed.
 

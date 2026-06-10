@@ -55,11 +55,12 @@ async def test_orange_park_seed_first_run_inserts_all_entities():
         TenantChannelSetting,
         TenantKnowledgeSource,
     }
-    assert session.add.call_count == 8
+    assert session.add.call_count == 9
 
     added_rows = [call.args[0] for call in session.add.call_args_list]
     business = next(row for row in added_rows if isinstance(row, Business))
     flow = next(row for row in added_rows if isinstance(row, Flow))
+    ai_profile = next(row for row in added_rows if isinstance(row, TenantAiProfile))
     channel = next(row for row in added_rows if isinstance(row, TenantChannelSetting))
     knowledge = [
         row for row in added_rows if isinstance(row, TenantKnowledgeSource)
@@ -73,11 +74,20 @@ async def test_orange_park_seed_first_run_inserts_all_entities():
     assert flow.flow_name == "Orange Park Telegram MVP"
     assert flow.is_default is True
     assert flow.status == "active"
+    assert "manager/viewing/video" in ai_profile.response_style
     assert channel.channel == ORANGE_PARK_CHANNEL
     assert channel.allow_links is False
     assert channel.allow_emojis is False
-    assert len(knowledge) == 2
-    assert {row.source_type for row in knowledge} == {"faq", "pricing"}
+    assert len(knowledge) == 3
+    assert {row.source_type for row in knowledge} == {
+        "conversation_style",
+        "faq",
+        "pricing",
+    }
+    style = next(row for row in knowledge if row.source_type == "conversation_style")
+    assert style.title == "Orange Park Conversation Style Guide"
+    assert "Use this as behavior guidance only" in style.content
+    assert "not_factual_knowledge" in style.tags
 
 
 @pytest.mark.anyio
@@ -140,6 +150,14 @@ async def test_orange_park_seed_second_run_updates_without_duplicates():
             title="Orange Park Prices And Availability - Manager Confirmed Only",
             content="old pricing",
         ),
+        TenantKnowledgeSource(
+            id=uuid.uuid4(),
+            tenant_id=tenant.id,
+            business_id=business.id,
+            source_type="conversation_style",
+            title="Orange Park Conversation Style Guide",
+            content="old style",
+        ),
     ]
 
     session = AsyncMock()
@@ -157,9 +175,12 @@ async def test_orange_park_seed_second_run_updates_without_duplicates():
     assert business.name == "Orange Park / ЖК Orange Park"
     assert rows[2].is_default is True
     assert rows[2].status == "active"
+    assert "manager/viewing/video" in rows[4].response_style
     assert rows[5].allow_links is False
     assert rows[6].content.startswith("# Orange Park")
     assert "requires_manager_confirmation" in rows[7].tags
+    assert "Use this as behavior guidance only" in rows[8].content
+    assert "not_factual_knowledge" in rows[8].tags
 
 
 @pytest.mark.anyio
