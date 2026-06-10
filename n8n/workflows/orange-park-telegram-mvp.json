@@ -1,0 +1,179 @@
+{
+  "name": "orange-park-telegram-mvp",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "f2b46d7a-48c3-4f62-b62f-0b1b0f2f1001",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "orange-park-telegram-mvp-trigger",
+      "credentials": {
+        "telegramApi": {
+          "name": "Orange Park Telegram Bot"
+        }
+      },
+      "notesInFlow": true,
+      "notes": "Orange Park Telegram-only MVP trigger. Placeholder credential name only; token is stored in n8n credentials, not this export."
+    },
+    {
+      "parameters": {
+        "jsCode": "const update = $input.first().json;\n\nif (update.edited_message || update.channel_post || update.edited_channel_post) {\n  return [];\n}\n\nconst message = update.message;\nif (!message || typeof message !== 'object') {\n  return [];\n}\n\nif (message.from?.is_bot === true) {\n  return [];\n}\n\nconst chat = message.chat;\nif (!chat || chat.type !== 'private') {\n  return [];\n}\n\nconst text = message.text;\nif (!text || String(text).trim() === '') {\n  return [];\n}\n\nfunction optionalText(value) {\n  if (value == null) return null;\n  const out = String(value).trim();\n  return out === '' ? null : out;\n}\n\nfunction sanitizeRawPayload(value) {\n  if (value == null || typeof value !== 'object') {\n    return {};\n  }\n  const secretPattern = /^(token|secret|password|authorization|api[_-]?key)$/i;\n  if (Array.isArray(value)) {\n    return value.map((entry) =>\n      typeof entry === 'object' && entry !== null ? sanitizeRawPayload(entry) : entry\n    );\n  }\n  const out = {};\n  for (const [key, val] of Object.entries(value)) {\n    if (secretPattern.test(key)) {\n      out[key] = '[REDACTED]';\n    } else if (typeof val === 'object' && val !== null) {\n      out[key] = sanitizeRawPayload(val);\n    } else {\n      out[key] = val;\n    }\n  }\n  return out;\n}\n\nconst chatId = String(chat.id);\nconst from = message.from || {};\nconst telegramUserId = String(from.id);\nconst firstName = optionalText(from.first_name);\nconst lastName = optionalText(from.last_name);\nconst name = [firstName, lastName].filter(Boolean).join(' ').trim() || null;\nconst username = optionalText(from.username);\nconst timestamp = message.date ? new Date(message.date * 1000).toISOString() : new Date().toISOString();\n\nreturn [\n  {\n    json: {\n      business_id: 'orange-park',\n      channel: 'telegram',\n      customer: {\n        external_customer_id: `telegram:${telegramUserId}`,\n        name,\n        phone: null,\n        email: null\n      },\n      message: {\n        text: String(text).trim(),\n        external_message_id: `tg:${chatId}:${message.message_id}`,\n        external_conversation_id: `tg:${chatId}`,\n        timestamp,\n        raw_payload: sanitizeRawPayload({\n          provider: 'telegram',\n          update_id: update.update_id,\n          chat_id: chatId,\n          chat_type: chat.type,\n          message_id: message.message_id,\n          telegram_id: telegramUserId,\n          telegram_username: username,\n          first_name: firstName,\n          last_name: lastName\n        })\n      },\n      operator_business_context: 'Orange Park Telegram-only MVP. No Bitrix24. Do not promise exact prices, discounts, availability, booking, credit approval, or legal guarantees. For time-sensitive questions, ask for contact details and offer manager confirmation.',\n      telegram_chat_id: chatId\n    }\n  }\n];"
+      },
+      "id": "f2b46d7a-48c3-4f62-b62f-0b1b0f2f1002",
+      "name": "Normalize Telegram Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        280,
+        300
+      ],
+      "notesInFlow": true,
+      "notes": "Normalizes private Telegram text messages to backend webhook contract with business_id=orange-park."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BACKEND_BASE_URL }}/api/v1/webhook/message",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Alpstein-Webhook-Token",
+              "value": "={{ $env.N8N_BACKEND_API_TOKEN }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { business_id: $json.business_id, channel: $json.channel, customer: $json.customer, message: $json.message, operator_business_context: $json.operator_business_context } }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "f2b46d7a-48c3-4f62-b62f-0b1b0f2f1003",
+      "name": "POST Backend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        560,
+        300
+      ],
+      "onError": "continueRegularOutput",
+      "notesInFlow": true,
+      "notes": "Posts only the Orange Park Telegram MVP payload to backend. No CRM, no Bitrix24, no lead creation nodes."
+    },
+    {
+      "parameters": {
+        "jsCode": "const backend = $input.first().json;\nconst normalize = $('Normalize Telegram Message').first().json;\nconst fallback = 'Зараз не можу відповісти автоматично. Передам питання менеджеру.';\n\nfunction unwrap(value) {\n  if (!value || typeof value !== 'object') return value;\n  if (value.body && typeof value.body === 'object') return value.body;\n  if (typeof value.body === 'string') {\n    try {\n      return JSON.parse(value.body);\n    } catch {\n      return value;\n    }\n  }\n  return value;\n}\n\nconst body = unwrap(backend);\nconst reply = body?.success === true && body?.data?.reply_to_customer\n  ? String(body.data.reply_to_customer).trim()\n  : '';\n\nreturn [\n  {\n    json: {\n      telegram_chat_id: normalize.telegram_chat_id,\n      reply_to_customer: reply || fallback\n    }\n  }\n];"
+      },
+      "id": "f2b46d7a-48c3-4f62-b62f-0b1b0f2f1004",
+      "name": "Shape Telegram Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        840,
+        300
+      ],
+      "notesInFlow": true,
+      "notes": "Returns backend AI reply or a safe manager-handoff fallback when backend success is false."
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.telegram_chat_id }}",
+        "text": "={{ $json.reply_to_customer }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "f2b46d7a-48c3-4f62-b62f-0b1b0f2f1005",
+      "name": "Telegram Send Message",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1120,
+        300
+      ],
+      "continueOnFail": true,
+      "credentials": {
+        "telegramApi": {
+          "name": "Orange Park Telegram Bot"
+        }
+      },
+      "notesInFlow": true,
+      "notes": "Sends the backend reply to the original Telegram chat using the Orange Park bot credential."
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Normalize Telegram Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Telegram Message": {
+      "main": [
+        [
+          {
+            "node": "POST Backend",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST Backend": {
+      "main": [
+        [
+          {
+            "node": "Shape Telegram Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shape Telegram Reply": {
+      "main": [
+        [
+          {
+            "node": "Telegram Send Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "orange-park-telegram-mvp-template-v1",
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "id": "orange-park-telegram-mvp-template",
+  "tags": []
+}

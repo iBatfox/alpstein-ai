@@ -119,6 +119,7 @@ def _message_mocks(
     )
     message_service.save_outgoing_ai_message = AsyncMock()
     message_service.find_last_outgoing_ai_message = AsyncMock(return_value=None)
+    message_service.find_outgoing_ai_for_inbound = AsyncMock(return_value=None)
     return message_service
 
 
@@ -305,6 +306,59 @@ async def test_first_message_creates_lead_and_new_lead_notification(
     assert result.notification.should_notify_owner is True
     assert result.notification.reason == REASON_LEAD_CREATED
     lead_service.create_lead.assert_awaited_once()
+    lead_service.update_lead.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_flow_metadata_can_disable_internal_lead_creation(
+    business: Business,
+    customer: Customer,
+    conversation: Conversation,
+    incoming_message: Message,
+):
+    lead_service = _lead_service_mocks(business, customer, conversation)
+    flow_service = _flow_service_mock(business)
+    flow_service.resolve_for_webhook.return_value.metadata_ = {
+        "lead_creation_enabled": False,
+    }
+    service = WebhookMessageService(
+        business_service=MagicMock(
+            get_by_external_id=AsyncMock(return_value=business)
+        ),
+        flow_service=flow_service,
+        message_trace_service=message_trace_service_mock(),
+        delivery_visibility_service=delivery_visibility_service_mock(),
+        inbound_processing_lock_service=inbound_processing_lock_service_mock(),
+        customer_service=MagicMock(
+            get_or_create_customer=AsyncMock(return_value=customer)
+        ),
+        conversation_service=MagicMock(
+            get_or_create_open_conversation=AsyncMock(return_value=conversation)
+        ),
+        message_service=_message_mocks(
+            business,
+            conversation,
+            incoming_message,
+            is_duplicate=False,
+        ),
+        lead_service=lead_service,
+        **_ai_success_mocks(),
+    )
+    session = MagicMock()
+    session.flush = AsyncMock()
+
+    result = await service.process_incoming_message(
+        session,
+        _request(message={"text": "I'd like details, thanks."}),
+    )
+
+    assert result.lead_created is False
+    assert result.lead_updated is False
+    assert result.notify_owner is False
+    assert result.lead is None
+    assert result.notification is None
+    lead_service.find_active_lead.assert_not_awaited()
+    lead_service.create_lead.assert_not_awaited()
     lead_service.update_lead.assert_not_awaited()
 
 

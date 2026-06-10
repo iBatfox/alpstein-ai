@@ -511,16 +511,23 @@ class WebhookMessageService:
 
         delivery_event: DeliveryEvent | None = None
         try:
-            lead_outcome = await self._process_lead_for_incoming_message(
-                session,
-                tenant_id=tenant_id,
-                business=business,
-                customer=customer,
-                conversation=conversation,
-                channel=channel,
-                customer_message_text=request.message.text,
-                signals=signals,
-            )
+            if _lead_creation_enabled_for_flow(flow):
+                lead_outcome = await self._process_lead_for_incoming_message(
+                    session,
+                    tenant_id=tenant_id,
+                    business=business,
+                    customer=customer,
+                    conversation=conversation,
+                    channel=channel,
+                    customer_message_text=request.message.text,
+                    signals=signals,
+                )
+            else:
+                lead_outcome = _LeadProcessOutcome(
+                    lead_created=False,
+                    lead_updated=False,
+                    lead=None,
+                )
 
             reply_resolution = await self._resolve_reply_to_customer(
                 session,
@@ -1130,6 +1137,13 @@ def _lead_summary_from_model(lead: Lead) -> WebhookLeadSummary:
         status=lead.status,
         priority=lead.priority or "normal",
     )
+
+
+def _lead_creation_enabled_for_flow(flow: Flow) -> bool:
+    metadata = flow.metadata_ or {}
+    if not isinstance(metadata, dict):
+        return True
+    return metadata.get("lead_creation_enabled") is not False
 
 
 def _trace_fields_for_response(
