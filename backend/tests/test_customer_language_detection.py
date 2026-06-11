@@ -17,6 +17,8 @@ from app.services.customer_language_detection import (
         ("Ciao, quali sono gli orari di apertura?", "it"),
         ("Hola, ¿cuál es el horario de apertura?", "es"),
         ("Привіт, о котрій ви відкриваєтесь?", "uk"),
+        ("А що ти можеш?", "uk"),
+        ("А что ты можешь?", "ru"),
     ],
 )
 def test_detect_language_from_customer_message(text: str, expected: str):
@@ -40,6 +42,17 @@ def test_resolve_reply_language_uses_telegram_when_message_unclear():
             telegram_language_code="fr",
         )
         == "fr"
+    )
+
+
+def test_resolve_reply_language_uses_tenant_default_before_telegram_code():
+    assert (
+        resolve_reply_language(
+            customer_message_text="👍",
+            telegram_language_code="ru",
+            default_language_code="uk",
+        )
+        == "uk"
     )
 
 

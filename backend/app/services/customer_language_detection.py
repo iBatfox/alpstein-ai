@@ -32,6 +32,14 @@ _TELEGRAM_LANGUAGE_ALIASES: dict[str, str] = {
 _CYRILLIC_RE = re.compile(r"[\u0400-\u04FF]")
 _UKRAINIAN_CHARS_RE = re.compile(r"[іїєґІЇЄҐ]")
 _RUSSIAN_SPECIFIC_RE = re.compile(r"[ёъыэЁЪЫЭ]")
+_UKRAINIAN_WORD_HINT_RE = re.compile(
+    r"\b(що|ти|ціна|ціни|цінами|цікавить|будь ласка|дякую|добрий|вітаю)\b",
+    re.IGNORECASE,
+)
+_RUSSIAN_WORD_HINT_RE = re.compile(
+    r"\b(что|ты|цена|стоимость|пожалуйста|спасибо|свяжи|меня|давай|можешь)\b",
+    re.IGNORECASE,
+)
 
 _GERMAN_HINT_RE = re.compile(
     r"(ä|ö|ü|ß|\b(hallo|danke|guten|morgen|tag|abend|bitte|termin)\b)",
@@ -73,6 +81,10 @@ def detect_language_from_message_text(message_text: str) -> str | None:
         if _UKRAINIAN_CHARS_RE.search(text):
             return "uk"
         if _RUSSIAN_SPECIFIC_RE.search(text):
+            return "ru"
+        if _UKRAINIAN_WORD_HINT_RE.search(text):
+            return "uk"
+        if _RUSSIAN_WORD_HINT_RE.search(text):
             return "ru"
         return "ru"
 
@@ -118,10 +130,15 @@ def resolve_reply_language(
     *,
     customer_message_text: str,
     telegram_language_code: str | None = None,
+    default_language_code: str | None = None,
 ) -> str:
     from_text = detect_language_from_message_text(customer_message_text)
     if from_text is not None:
         return from_text
+
+    from_default = normalize_language_code(default_language_code)
+    if from_default is not None:
+        return from_default
 
     from_telegram = normalize_language_code(telegram_language_code)
     if from_telegram is not None:

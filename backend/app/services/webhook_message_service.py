@@ -2114,35 +2114,6 @@ async def _orange_park_start_language(
     return _orange_park_dialogue_language("", history=history)
 
 
-def _telegram_language_from_raw_payload(raw_payload: dict[str, Any] | None) -> str | None:
-    if not raw_payload:
-        return None
-    candidates = [
-        raw_payload.get("language_code"),
-        raw_payload.get("language"),
-    ]
-    nested = raw_payload.get("from")
-    if isinstance(nested, dict):
-        candidates.append(nested.get("language_code"))
-    message = raw_payload.get("message")
-    if isinstance(message, dict):
-        message_from = message.get("from")
-        if isinstance(message_from, dict):
-            candidates.append(message_from.get("language_code"))
-
-    for candidate in candidates:
-        if not isinstance(candidate, str):
-            continue
-        normalized = candidate.strip().casefold()
-        if normalized.startswith("uk") or normalized.startswith("ua"):
-            return "uk"
-        if normalized.startswith("en"):
-            return "en"
-        if normalized.startswith("ru"):
-            return "ru"
-    return None
-
-
 async def _archive_orange_park_pre_start_history(
     session: AsyncSession,
     *,

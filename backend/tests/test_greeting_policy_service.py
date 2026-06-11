@@ -64,3 +64,21 @@ def test_soft_return_after_inactivity():
     )
 
     assert policy.mode is GreetingMode.SOFT_RETURN
+
+
+def test_tenant_language_default_wins_over_telegram_language_for_unclear_message():
+    now = datetime(2026, 5, 25, 12, 0, 0, tzinfo=timezone.utc)
+    history = ConversationHistory(
+        messages=(
+            _msg("customer", "👍", now),
+        )
+    )
+    policy = GreetingPolicyService().resolve(
+        history=history,
+        current_customer_message="👍",
+        message_timestamp=now,
+        raw_payload={"language_code": "ru"},
+        default_language_code="uk",
+    )
+
+    assert policy.reply_language_code == "uk"

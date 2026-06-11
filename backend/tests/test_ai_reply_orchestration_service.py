@@ -61,6 +61,7 @@ def _configuration_bundle(
     tenant_id: uuid.UUID,
     business_id: uuid.UUID,
     template_id: uuid.UUID,
+    behavior: TenantBehaviorConfig | None = None,
 ) -> AiConfigurationBundle:
     return AiConfigurationBundle(
         tenant_id=tenant_id,
@@ -75,7 +76,7 @@ def _configuration_bundle(
             system_prompt="Platform safety rules.",
         ),
         business_context=TenantBusinessContextConfig(present=False),
-        behavior=TenantBehaviorConfig(present=False),
+        behavior=behavior or TenantBehaviorConfig(present=False),
         channel_rules=TenantChannelRulesConfig.missing("whatsapp"),
     )
 
@@ -374,6 +375,48 @@ async def test_generate_reply_enables_intent_policy_for_alpstein_demo(
     assert build_kwargs["alpstein_product_behavior_enabled"] is True
     assert build_kwargs["conversation_intent"] is not None
     assert build_kwargs["conversation_intent"].intent is ConversationIntent.PRICING_INTEREST
+
+
+@pytest.mark.anyio
+async def test_generate_reply_uses_tenant_language_as_default_before_telegram_language(
+    orchestrator: AiReplyOrchestrationService,
+    orchestration_mocks,
+):
+    tenant_id, business, conversation, message, template_id = _scope_entities()
+    business.external_id = "orange-park"
+    configuration = _configuration_bundle(
+        tenant_id,
+        business.id,
+        template_id,
+        behavior=TenantBehaviorConfig(present=True, language="uk"),
+    )
+    _wire_success_mocks(
+        orchestration_mocks,
+        tenant_id=tenant_id,
+        business_id=business.id,
+        template_id=template_id,
+        configuration=configuration,
+    )
+
+    await orchestrator.generate_reply(
+        AsyncMock(),
+        tenant_id=tenant_id,
+        business=business,
+        conversation=conversation,
+        message=message,
+        customer_message_text="👍",
+        channel="telegram",
+        template_key="customer_reply_v1",
+        raw_payload={"language_code": "ru"},
+    )
+
+    build_kwargs = (
+        orchestration_mocks["prompt_builder_service"]
+        .build_reply_to_customer.call_args.kwargs
+    )
+    assert build_kwargs["configuration"].behavior.language == "uk"
+    assert build_kwargs["greeting_policy"].reply_language_code == "uk"
+    assert build_kwargs["greeting_policy"].reply_language_name == "Ukrainian"
 
 
 @pytest.mark.anyio

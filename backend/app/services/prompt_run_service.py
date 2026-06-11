@@ -14,7 +14,7 @@ from app.exceptions import TenantContextError
 from app.models.prompt_run import PromptRun
 from app.services.tenant_context_validator import validate_tenant_context
 
-FINAL_PROMPT_MAX_CHARS = 16_000
+FINAL_PROMPT_MAX_CHARS = 32_000
 TRUNCATED_MARKER = " [truncated]"
 
 _SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (

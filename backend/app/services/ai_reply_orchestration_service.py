@@ -121,6 +121,7 @@ class AiReplyOrchestrationService:
             current_customer_message=customer_message_text,
             message_timestamp=message_timestamp,
             raw_payload=raw_payload,
+            default_language_code=configuration.behavior.language,
         )
         alpstein_product_behavior_enabled = alpstein_product_behavior_enabled_for_business(
             business_external_id

@@ -23,6 +23,7 @@ class GreetingPolicyService:
         current_customer_message: str,
         message_timestamp: datetime | None = None,
         raw_payload: dict | None = None,
+        default_language_code: str | None = None,
     ) -> GreetingPolicy:
         now = _coerce_utc(message_timestamp) or datetime.now(timezone.utc)
         prior_messages = _prior_messages_excluding_current(
@@ -43,6 +44,7 @@ class GreetingPolicyService:
         language_code = resolve_reply_language(
             customer_message_text=current_customer_message,
             telegram_language_code=extract_telegram_language_code(raw_payload),
+            default_language_code=default_language_code,
         )
         return GreetingPolicy(
             mode=mode,

@@ -156,6 +156,41 @@ def test_platform_sections_are_first_and_never_truncated(
     assert TRUNCATED_MARKER not in sections["task_instructions"].content
 
 
+def test_tenant_behavior_language_survives_large_business_context(
+    full_configuration: AiConfigurationBundle,
+    knowledge_result: KnowledgeRetrievalResult,
+    conversation_history: ConversationHistory,
+):
+    overloaded = AiConfigurationBundle(
+        tenant_id=full_configuration.tenant_id,
+        business_id=full_configuration.business_id,
+        channel=full_configuration.channel,
+        template_key=full_configuration.template_key,
+        platform_template=full_configuration.platform_template,
+        business_context=TenantBusinessContextConfig(
+            present=True,
+            business_description="y" * 40_000,
+        ),
+        behavior=TenantBehaviorConfig(
+            present=True,
+            tone="friendly",
+            language="uk",
+        ),
+        channel_rules=full_configuration.channel_rules,
+    )
+
+    prompt = PromptBuilderService().build_reply_to_customer(
+        configuration=overloaded,
+        knowledge=knowledge_result,
+        history=conversation_history,
+        current_customer_message="Що цінами?",
+    )
+    tenant_behavior = _section_map(prompt)["tenant_behavior"].content
+
+    assert "language: uk" in tenant_behavior
+    assert prompt.total_chars() <= PROMPT_ASSEMBLY_MAX_CHARS
+
+
 def test_task_instructions_comes_from_registry_not_tenant_config(
     full_configuration: AiConfigurationBundle,
     knowledge_result: KnowledgeRetrievalResult,

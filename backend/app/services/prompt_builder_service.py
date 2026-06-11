@@ -103,12 +103,12 @@ PLATFORM_TASK_REGISTRY: dict[str, str] = {
 }
 
 VARIABLE_SECTION_TRIM_ORDER: tuple[str, ...] = (
-    "channel_rules",
-    "tenant_behavior",
-    "tenant_business_context",
-    "business_context_source_of_truth",
     "knowledge",
     "conversation_history",
+    "channel_rules",
+    "tenant_business_context",
+    "business_context_source_of_truth",
+    "tenant_behavior",
 )
 
 
