@@ -12,7 +12,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.business import Business
-from app.models.flow import FLOW_STATUS_ACTIVE, Flow
 from app.models.tenant import Tenant
 from app.models.tenant_ai_profile import TenantAiProfile
 from app.models.tenant_business_profile import TenantBusinessProfile
@@ -24,11 +23,9 @@ ORANGE_PARK_TENANT_NAME = "Orange Park"
 ORANGE_PARK_BUSINESS_EXTERNAL_ID = "orange-park"
 ORANGE_PARK_BUSINESS_NAME = "Orange Park / ЖК Orange Park"
 ORANGE_PARK_BUSINESS_TYPE = "real_estate"
-ORANGE_PARK_LANGUAGE = "ru"
+ORANGE_PARK_LANGUAGE = "uk"
 ORANGE_PARK_TIMEZONE = "Europe/Kyiv"
 ORANGE_PARK_CHANNEL = "telegram"
-ORANGE_PARK_FLOW_KEY = "orange_park_telegram_mvp"
-ORANGE_PARK_FLOW_NAME = "Orange Park Telegram MVP"
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ORANGE_PARK_DOCS_ROOT = REPO_ROOT / "docs" / "businesses" / "orange-park"
@@ -100,7 +97,6 @@ async def seed_orange_park_configuration(
         actions=actions,
     )
     business = await _ensure_business(session, tenant=tenant, actions=actions)
-    await _ensure_default_flow(session, tenant=tenant, business=business, actions=actions)
     await _ensure_business_profile(
         session,
         tenant=tenant,
@@ -270,50 +266,6 @@ async def _ensure_business(
     return business
 
 
-async def _ensure_default_flow(
-    session: AsyncSession,
-    *,
-    tenant: Tenant,
-    business: Business,
-    actions: list[str],
-) -> Flow:
-    flow = await _get_flow_by_key(
-        session,
-        tenant_id=tenant.id,
-        business_id=business.id,
-        flow_key=ORANGE_PARK_FLOW_KEY,
-    )
-    values = {
-        "flow_name": ORANGE_PARK_FLOW_NAME,
-        "status": FLOW_STATUS_ACTIVE,
-        "is_default": True,
-        "metadata_": {
-            "seed": "orange_park_configuration",
-            "business_external_id": ORANGE_PARK_BUSINESS_EXTERNAL_ID,
-            "stage": "telegram_only_mvp",
-            "lead_creation_enabled": False,
-        },
-    }
-    if flow is None:
-        flow = Flow(
-            id=uuid.uuid4(),
-            tenant_id=tenant.id,
-            business_id=business.id,
-            flow_key=ORANGE_PARK_FLOW_KEY,
-            **values,
-        )
-        session.add(flow)
-        actions.append("created default flow")
-    else:
-        _assert_row_scope(flow, tenant_id=tenant.id, business_id=business.id)
-        flow.flow_key = ORANGE_PARK_FLOW_KEY
-        for field_name, value in values.items():
-            setattr(flow, field_name, value)
-        actions.append("updated default flow")
-    await session.flush()
-    return flow
-
-
 async def _ensure_business_profile(
     session: AsyncSession,
     *,
@@ -338,7 +290,19 @@ async def _ensure_business_profile(
         "business_limitations": (
             "Telegram MVP only. No booking, no live pricing, no live availability, "
             "no CRM integration, no credit/єОселя/voucher approval, no legal guarantees. "
-            "Manager confirmation is required for unstable data."
+            "Manager confirmation is required for unstable data. Reply quality rule: "
+            "do not repeat address/location after it was already answered in the current "
+            "conversation; when the customer gives budget, area, payment, phone, or "
+            "handoff criteria, answer only those criteria in 1-3 short Telegram sentences. "
+            "Do not say the request was passed or thank for a phone number before the "
+            "customer actually provides a phone number. If customer says they are "
+            "waiting for the manager call, reply only: Дякую. Запит передано менеджеру. "
+            "Очікуйте дзвінок. If customer agrees to handoff with short intent like "
+            "давай, з'єднуй, так, ок, or добре, ask only for phone. If customer asks "
+            "for phone/contact details and no official Orange Park contact is present "
+            "in the current business context, ask the customer to leave their phone; "
+            "do not invent contacts. Never repeat the same refusal or manager-confirmation "
+            "loop twice."
         ),
         "city": "Kriukivshchyna",
         "region": "Kyiv Oblast",
@@ -380,7 +344,9 @@ async def _ensure_ai_profile(
     values = {
         "profile_name": "Orange Park Telegram MVP",
         "tone": "professional, consultative, friendly",
-        "response_style": "no emojis; no exact availability; ask 1 question; offer manager/viewing/video",
+        "response_style": (
+            "1-3 short; no repeat address; criteria only; ask phone; no loops; phone close"
+        ),
         "language": ORANGE_PARK_LANGUAGE,
         "ask_for_name": True,
         "ask_for_phone": True,
@@ -421,10 +387,21 @@ async def _ensure_ai_profile(
             "payment instructions",
             "bank or card details",
             "tax, notary, registration, or service-fee amounts",
+            "repeating address or location after it was already answered",
+            "restating location when customer gives budget, area, payment, or handoff criteria",
+            "verbose manager handoff wording",
+            "open-ended closing after phone is collected",
+            "saying request was passed before phone number is collected",
+            "thanking for a phone number before the customer provides one",
+            "open-ended extra sentence when customer is waiting for manager call",
+            "long explanation after short handoff intent like давай or з'єднуй",
+            "repeating the same manager-confirmation or refusal block twice",
+            "inventing Orange Park phone, manager contact, or contact details",
+            "giving manager phone when official contact is absent from business context",
         ],
         "fallback_response": (
-            "Дякуємо за звернення. Я передам запит менеджеру Orange Park, "
-            "щоб він підтвердив актуальні деталі."
+            "Дякуємо за звернення. Передаю запит менеджеру Orange Park, "
+            "щоб він уточнив актуальні деталі. Очікуйте дзвінок."
         ),
         "metadata_": _metadata_for_documents(
             sales_materials,
@@ -434,6 +411,25 @@ async def _ensure_ai_profile(
             telegram_only_mvp=True,
             lead_creation_enabled=False,
             conversation_style_source="included_as_behavior_guidance",
+            behavior_rules=[
+                "Ukrainian /start and first greeting by default.",
+                "After customer message, mirror Ukrainian or Russian.",
+                "Never output English unless customer writes English.",
+                "Never mix languages or use hybrid words.",
+                "Answer the immediate question first, then ask one useful qualification question.",
+                "Keep Telegram replies concise: 1-3 short sentences.",
+                "Use conversation history to avoid repeating facts.",
+                "If address or location was already answered, do not repeat it when customer gives budget, area, payment, or handoff criteria.",
+                "If customer gives new buying criteria, respond only to those criteria.",
+                "Do not say request was passed and do not thank for phone before customer provides a phone number.",
+                "If customer says they are waiting for manager call, reply only: Дякую. Запит передано менеджеру. Очікуйте дзвінок.",
+                "Do not overuse manager-confirmation wording.",
+                "After phone is collected, use concise closing: Дякую. Запит передано менеджеру. Очікуйте дзвінок.",
+                "Short handoff intent such as давай, з'єднуй, так, ок, or добре means: ask only for phone if phone is not collected.",
+                "Contact requests such as номер телефону, дай контакти, дай дані, номер, or телефон менеджера mean: if no official contact exists in current business context, reply exactly: Залиште, будь ласка, ваш номер телефону — менеджер зв’яжеться з вами напряму.",
+                "Never invent Orange Park phone numbers or manager contacts.",
+                "Never repeat the same refusal or manager-confirmation loop twice.",
+            ],
         ),
     }
     if profile is None:
@@ -475,6 +471,13 @@ async def _ensure_channel_setting(
         "metadata_": {
             "stage": "telegram_only_mvp",
             "credential_storage": "external_runtime_only",
+            "default_start_language": ORANGE_PARK_LANGUAGE,
+            "start_greeting": (
+                "Вітаю! Я асистент ЖК Orange Park. Допоможу зорієнтуватися "
+                "по комплексу, квартирах, умовах купівлі та передам запит "
+                "менеджеру, якщо потрібні актуальні ціни чи наявність. "
+                "Що вас цікавить?"
+            ),
         },
     }
     if setting is None:
@@ -556,21 +559,42 @@ def _conversation_style_runtime_document(document: SourceDocument) -> SourceDocu
 
 Use this as behavior guidance only, not as stable factual knowledge.
 
-- Mirror the customer's language: Ukrainian or Russian.
+- Telegram /start and the first greeting must be Ukrainian by default.
+- Use this /start greeting: "Вітаю! Я асистент ЖК Orange Park. Допоможу зорієнтуватися по комплексу, квартирах, умовах купівлі та передам запит менеджеру, якщо потрібні актуальні ціни чи наявність. Що вас цікавить?"
+- After the customer writes, mirror the customer's language: Ukrainian or Russian.
+- Never output English unless the customer explicitly writes in English.
+- Never mix languages in the same sentence and never use Ukrainian-English or Russian-English hybrid words.
 - Keep Telegram replies warm, practical, concise, and consultative.
+- Keep most Telegram replies to 1-3 short sentences.
 - Answer the immediate question first, then ask one useful qualification question.
+- Use conversation history to avoid repeating facts already provided in the current conversation.
+- Do not repeat location, apartment types, payment options, or other facts unless the customer asks again.
+- If address or location was already answered in this conversation, do not repeat it when the customer later gives budget, area, payment, or handoff criteria.
+- If the customer gives new buying criteria, respond only to those criteria instead of restating old facts.
+- If the customer agrees to handoff but has not sent a phone number, ask for the phone number; do not say the request was passed yet.
+- Treat short handoff intent such as "давай", "з'єднуй", "так", "ок", "добре", "хочу консультацію", or "передайте менеджеру" as agreement to handoff. If no phone was collected, reply only: "Добре. Напишіть, будь ласка, номер телефону — менеджер зв’яжеться з вами."
+- Treat contact requests such as "номер", "номер телефону", "дай номер", "дай дані", "дай контакти", "контакти", "телефон менеджера", or "як зв'язатися" as a request for official contact details. If no official Orange Park phone/contact is present in the current business context, reply only: "Залиште, будь ласка, ваш номер телефону — менеджер зв’яжеться з вами напряму."
+- Do not thank the customer for a phone number until the customer actually provides one.
+- If customer says they are waiting for manager call, reply only: "Дякую. Запит передано менеджеру. Очікуйте дзвінок."
+- Never invent Orange Park phone numbers, manager contacts, contact links, or sales-office contacts.
+- Never repeat the same refusal or manager-confirmation block twice; after one such message, ask for phone, ask one missing qualifier, or close after phone.
 - For apartment interest, ask about room count, purpose, budget, payment route, and viewing/video preference.
 - For availability questions, do not invent exact options. Offer manager confirmation and ask what room count or format the customer wants.
-- For price, discount, installment, єОселя, credit, payment, legal, documents, readiness, or reservation questions, explain that a manager must confirm current details.
+- For price, discount, installment, єОселя, credit, payment, legal, documents, readiness, or reservation questions, give safe general context first, then explain that a manager will confirm current details.
 - Offer a concrete next step: manager confirmation, viewing, video viewing, plan/layout review, or financing consultation.
+- Do not overuse phrases like "потрібно підтвердження від менеджера" or "можу організувати консультацію".
+- After collecting a phone number, acknowledge it, summarize the request briefly, and close naturally in one short reply.
+- Do not mention CRM, lead creation, or internal workflow details.
 - Use soft urgency only as: current terms can change, so manager confirmation is recommended.
 - Never copy transcript prices, discounts, availability counts, bank/card/account details, payment instructions, legal/tax amounts, booking promises, signing dates, key handover timing, or private client details.
 
 Safe examples:
-- "Можу зорієнтувати по загальних умовах, а актуальну ціну та наявність підтвердить менеджер."
-- "Підкажіть, будь ласка, скільки кімнат розглядаєте і який бюджет орієнтовно?"
-- "Якщо вам зручно, можемо організувати перегляд або відеоогляд."
-- "Для точного розрахунку по єОселі/кредиту краще передати запит менеджеру."
+- "ЖК Orange Park розташований у Крюківщині, вул. Одеська, 23, приблизно 5 км від Києва. У матеріалах комплексу є 1-кімнатні квартири, але актуальну наявність і вартість підтверджує менеджер. Яку площу або бюджет ви розглядаєте?"
+- "Зрозуміло: шукаєте 1-кімнатну 40-45 м2 до 1 600 000 грн, бажано у розтермінування. Актуальні варіанти й умови треба перевірити у менеджера. Напишіть, будь ласка, номер телефону - передам запит."
+- "Добре. Напишіть, будь ласка, номер телефону — менеджер зв’яжеться з вами."
+- "Залиште, будь ласка, ваш номер телефону — менеджер зв’яжеться з вами напряму."
+- "Дякую. Запит передано менеджеру: 1-кімнатна 40-45 м2 до 1 600 000 грн, цікавить розтермінування. Очікуйте дзвінок."
+- "Дякую. Запит передано менеджеру. Очікуйте дзвінок."
 """
     content = f"{runtime_summary.strip()}\n\n---\n\n{document.content}"
     return SourceDocument(
@@ -592,25 +616,6 @@ async def _get_business_by_external_id(
 ) -> Business | None:
     result = await session.execute(
         select(Business).where(Business.external_id == external_id).limit(1)
-    )
-    return result.scalar_one_or_none()
-
-
-async def _get_flow_by_key(
-    session: AsyncSession,
-    *,
-    tenant_id: uuid.UUID,
-    business_id: uuid.UUID,
-    flow_key: str,
-) -> Flow | None:
-    result = await session.execute(
-        select(Flow)
-        .where(
-            Flow.tenant_id == tenant_id,
-            Flow.business_id == business_id,
-            Flow.flow_key == flow_key,
-        )
-        .limit(1)
     )
     return result.scalar_one_or_none()
 
@@ -695,8 +700,7 @@ def _assert_business_belongs_to_tenant(business: Business, tenant: Tenant) -> No
 
 
 def _assert_row_scope(
-    row: Flow
-    | TenantBusinessProfile
+    row: TenantBusinessProfile
     | TenantAiProfile
     | TenantChannelSetting
     | TenantKnowledgeSource,
@@ -719,6 +723,30 @@ def _business_description(facts: SourceDocument) -> str:
         "project facts from the prepared source document, but prices, discounts, "
         "availability, financing, booking, and legal details require manager "
         "confirmation.\n\n"
+        "Response quality rules for this business context:\n"
+        "- If address or location was already answered in the current conversation, "
+        "do not repeat it unless the customer asks about location again.\n"
+        "- When the customer gives budget, area, payment, phone number, or handoff "
+        "criteria, respond only to those criteria.\n"
+        "- If the customer agrees to handoff but has not sent a phone number, ask for "
+        "the phone number; do not say the request was passed yet.\n"
+        "- Short handoff intent such as \"давай\", \"з'єднуй\", \"так\", \"ок\", "
+        "or \"добре\" means: if no phone was collected, reply only: "
+        "\"Добре. Напишіть, будь ласка, номер телефону — менеджер зв’яжеться з вами.\"\n"
+        "- Contact requests such as \"номер телефону\", \"дай контакти\", "
+        "\"дай дані\", \"номер\", or \"телефон менеджера\" mean: if no official "
+        "Orange Park phone/contact is present in the current business context, "
+        "reply only: \"Залиште, будь ласка, ваш номер телефону — менеджер зв’яжеться "
+        "з вами напряму.\"\n"
+        "- Never invent Orange Park phone numbers, manager contacts, contact links, "
+        "or sales-office contacts.\n"
+        "- Never repeat the same refusal or manager-confirmation block twice; after "
+        "one such message, ask for phone, ask one missing qualifier, or close after phone.\n"
+        "- If customer says they are waiting for manager call, reply only: "
+        "\"Дякую. Запит передано менеджеру. Очікуйте дзвінок.\"\n"
+        "- Keep Telegram replies to 1-3 short sentences.\n"
+        "- After phone is collected, close with concise wording like: "
+        "\"Дякую. Запит передано менеджеру. Очікуйте дзвінок.\"\n\n"
         f"Prepared factual source:\n{facts.content}"
     )
 
