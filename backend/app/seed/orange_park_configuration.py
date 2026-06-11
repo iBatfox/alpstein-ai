@@ -302,7 +302,10 @@ async def _ensure_business_profile(
             "for phone/contact details and no official Orange Park contact is present "
             "in the current business context, ask the customer to leave their phone; "
             "do not invent contacts. Never repeat the same refusal or manager-confirmation "
-            "loop twice."
+            "loop twice. Orange Park Telegram stage 1 collects structured contact data "
+            "before manager handoff: first_name, last_name, phone, Telegram id or username "
+            "when available, and interest summary. If phone is already provided, ask only "
+            "for missing first and last name. Do not create or mention external CRM leads."
         ),
         "city": "Kriukivshchyna",
         "region": "Kyiv Oblast",
@@ -398,6 +401,9 @@ async def _ensure_ai_profile(
             "repeating the same manager-confirmation or refusal block twice",
             "inventing Orange Park phone, manager contact, or contact details",
             "giving manager phone when official contact is absent from business context",
+            "English reply after Ukrainian or Russian phone number turn",
+            "saying manager request was passed before first name, last name, and phone are collected",
+            "external CRM lead creation or external CRM mention in Orange Park Telegram stage 1",
         ],
         "fallback_response": (
             "Дякуємо за звернення. Передаю запит менеджеру Orange Park, "
@@ -429,6 +435,13 @@ async def _ensure_ai_profile(
                 "Contact requests such as номер телефону, дай контакти, дай дані, номер, or телефон менеджера mean: if no official contact exists in current business context, reply exactly: Залиште, будь ласка, ваш номер телефону — менеджер зв’яжеться з вами напряму.",
                 "Never invent Orange Park phone numbers or manager contacts.",
                 "Never repeat the same refusal or manager-confirmation loop twice.",
+                "Orange Park Telegram stage 1 contact form in Russian: Пожалуйста, оставьте данные в таком формате:\n\nИмя:\nФамилия:\nТелефон:",
+                "Orange Park Telegram stage 1 contact form in Ukrainian: Будь ласка, залиште дані у такому форматі:\n\nІмʼя:\nПрізвище:\nТелефон:",
+                "If phone is already provided in Russian context, reply: Спасибо, номер получил. Напишите, пожалуйста, имя и фамилию.",
+                "If phone is already provided in Ukrainian context, reply: Дякую, номер отримав. Напишіть, будь ласка, імʼя та прізвище.",
+                "Minimum Orange Park stage 1 lead fields: first_name, last_name, phone, telegram_id or telegram_username when available, and interest summary.",
+                "Do not say the manager request was passed until first name, last name, and phone are collected.",
+                "Do not create or mention external CRM leads in Orange Park Telegram stage 1.",
             ],
         ),
     }
@@ -574,10 +587,17 @@ Use this as behavior guidance only, not as stable factual knowledge.
 - If the customer agrees to handoff but has not sent a phone number, ask for the phone number; do not say the request was passed yet.
 - Treat short handoff intent such as "давай", "з'єднуй", "так", "ок", "добре", "хочу консультацію", or "передайте менеджеру" as agreement to handoff. If no phone was collected, reply only: "Добре. Напишіть, будь ласка, номер телефону — менеджер зв’яжеться з вами."
 - Treat contact requests such as "номер", "номер телефону", "дай номер", "дай дані", "дай контакти", "контакти", "телефон менеджера", or "як зв'язатися" as a request for official contact details. If no official Orange Park phone/contact is present in the current business context, reply only: "Залиште, будь ласка, ваш номер телефону — менеджер зв’яжеться з вами напряму."
+- For Orange Park Telegram stage 1, collect a structured contact form before saying a request was passed to the manager.
+- Russian contact form: "Пожалуйста, оставьте данные в таком формате:\n\nИмя:\nФамилия:\nТелефон:"
+- Ukrainian contact form: "Будь ласка, залиште дані у такому форматі:\n\nІмʼя:\nПрізвище:\nТелефон:"
+- If the customer already sent a phone number in Russian context, reply: "Спасибо, номер получил. Напишите, пожалуйста, имя и фамилию."
+- If the customer already sent a phone number in Ukrainian context, reply: "Дякую, номер отримав. Напишіть, будь ласка, імʼя та прізвище."
+- Minimum stage-1 lead data: first name, last name, phone, Telegram id or username when available, and interest summary from the conversation.
 - Do not thank the customer for a phone number until the customer actually provides one.
 - If customer says they are waiting for manager call, reply only: "Дякую. Запит передано менеджеру. Очікуйте дзвінок."
 - Never invent Orange Park phone numbers, manager contacts, contact links, or sales-office contacts.
 - Never repeat the same refusal or manager-confirmation block twice; after one such message, ask for phone, ask one missing qualifier, or close after phone.
+- Do not create or mention external CRM leads in stage 1.
 - For apartment interest, ask about room count, purpose, budget, payment route, and viewing/video preference.
 - For availability questions, do not invent exact options. Offer manager confirmation and ask what room count or format the customer wants.
 - For price, discount, installment, єОселя, credit, payment, legal, documents, readiness, or reservation questions, give safe general context first, then explain that a manager will confirm current details.
@@ -593,6 +613,10 @@ Safe examples:
 - "Зрозуміло: шукаєте 1-кімнатну 40-45 м2 до 1 600 000 грн, бажано у розтермінування. Актуальні варіанти й умови треба перевірити у менеджера. Напишіть, будь ласка, номер телефону - передам запит."
 - "Добре. Напишіть, будь ласка, номер телефону — менеджер зв’яжеться з вами."
 - "Залиште, будь ласка, ваш номер телефону — менеджер зв’яжеться з вами напряму."
+- "Пожалуйста, оставьте данные в таком формате:\n\nИмя:\nФамилия:\nТелефон:"
+- "Будь ласка, залиште дані у такому форматі:\n\nІмʼя:\nПрізвище:\nТелефон:"
+- "Спасибо, номер получил. Напишите, пожалуйста, имя и фамилию."
+- "Дякую, номер отримав. Напишіть, будь ласка, імʼя та прізвище."
 - "Дякую. Запит передано менеджеру: 1-кімнатна 40-45 м2 до 1 600 000 грн, цікавить розтермінування. Очікуйте дзвінок."
 - "Дякую. Запит передано менеджеру. Очікуйте дзвінок."
 """
@@ -738,10 +762,23 @@ def _business_description(facts: SourceDocument) -> str:
         "Orange Park phone/contact is present in the current business context, "
         "reply only: \"Залиште, будь ласка, ваш номер телефону — менеджер зв’яжеться "
         "з вами напряму.\"\n"
+        "- Orange Park Telegram stage 1 contact collection requires first_name, "
+        "last_name, phone, Telegram id or username when available, and interest "
+        "summary from the conversation before saying the request was passed. "
+        "If phone is already provided, ask only for missing first and last name.\n"
+        "- Russian contact form: \"Пожалуйста, оставьте данные в таком формате:\\n\\n"
+        "Имя:\\nФамилия:\\nТелефон:\"\n"
+        "- Ukrainian contact form: \"Будь ласка, залиште дані у такому форматі:\\n\\n"
+        "Імʼя:\\nПрізвище:\\nТелефон:\"\n"
+        "- If the customer already sent a phone number in Russian context, reply: "
+        "\"Спасибо, номер получил. Напишите, пожалуйста, имя и фамилию.\"\n"
+        "- If the customer already sent a phone number in Ukrainian context, reply: "
+        "\"Дякую, номер отримав. Напишіть, будь ласка, імʼя та прізвище.\"\n"
         "- Never invent Orange Park phone numbers, manager contacts, contact links, "
         "or sales-office contacts.\n"
         "- Never repeat the same refusal or manager-confirmation block twice; after "
         "one such message, ask for phone, ask one missing qualifier, or close after phone.\n"
+        "- Do not create or mention external CRM leads in Orange Park Telegram stage 1.\n"
         "- If customer says they are waiting for manager call, reply only: "
         "\"Дякую. Запит передано менеджеру. Очікуйте дзвінок.\"\n"
         "- Keep Telegram replies to 1-3 short sentences.\n"

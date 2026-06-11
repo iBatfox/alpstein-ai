@@ -1,6 +1,7 @@
 import logging
 import uuid
 import json
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from types import SimpleNamespace
@@ -81,6 +82,48 @@ DUPLICATE_SAFE_ACKNOWLEDGMENT = (
 STUB_REPLY_TO_CUSTOMER = DUPLICATE_SAFE_ACKNOWLEDGMENT
 
 CUSTOMER_NOTE_MAX_LENGTH = 2000
+ORANGE_PARK_BUSINESS_EXTERNAL_ID = "orange-park"
+ORANGE_PARK_CONTACT_COLLECTION_STAGE = "orange_park_telegram_stage1_contact_form"
+
+_PHONE_NUMBER_PATTERN = re.compile(r"(?<!\w)\+?\d[\d\s().-]{7,}\d(?!\w)")
+_RUSSIAN_MARKERS = (
+    "свяж",
+    "соедин",
+    "меня",
+    "пожалуйста",
+    "спасибо",
+    "фамил",
+    "менеджером",
+)
+_UKRAINIAN_MARKERS = (
+    "зв'яж",
+    "звʼяж",
+    "з'єдн",
+    "зʼєдн",
+    "будь ласка",
+    "дякую",
+    "прізви",
+)
+_HANDOFF_MARKERS = (
+    "свяж",
+    "соедин",
+    "менеджер",
+    "консультац",
+    "давай",
+    "з'єдн",
+    "зʼєдн",
+    "передайте",
+    "передай",
+)
+_CONTACT_REQUEST_MARKERS = (
+    "номер",
+    "телефон",
+    "контакт",
+    "дані",
+    "данные",
+    "дай дан",
+    "дай контакт",
+)
 
 
 @dataclass(frozen=True)
@@ -530,7 +573,9 @@ class WebhookMessageService:
 
         delivery_event: DeliveryEvent | None = None
         try:
-            if _lead_creation_enabled_for_flow(flow):
+            if _lead_creation_enabled_for_flow(
+                flow
+            ) and not _orange_park_stage1_contact_collection_only(business, channel):
                 lead_outcome = await self._process_lead_for_incoming_message(
                     session,
                     tenant_id=tenant_id,
@@ -753,16 +798,23 @@ class WebhookMessageService:
             raw_payload=request.message.raw_payload,
             observability=observability,
         )
-        lead_outcome = await self._process_lead_for_incoming_message(
-            session,
-            tenant_id=tenant_id,
-            business=business,
-            customer=customer,
-            conversation=conversation,
-            channel=channel,
-            customer_message_text=request.message.text,
-            signals=signals,
-        )
+        if _orange_park_stage1_contact_collection_only(business, channel):
+            lead_outcome = _LeadProcessOutcome(
+                lead_created=False,
+                lead_updated=False,
+                lead=None,
+            )
+        else:
+            lead_outcome = await self._process_lead_for_incoming_message(
+                session,
+                tenant_id=tenant_id,
+                business=business,
+                customer=customer,
+                conversation=conversation,
+                channel=channel,
+                customer_message_text=request.message.text,
+                signals=signals,
+            )
         notification_decision = self.notification_policy_service.decide(
             is_duplicate=False,
             lead_created=lead_outcome.lead_created,
@@ -878,6 +930,20 @@ class WebhookMessageService:
         observability: ObservabilityContext | None = None,
         flow_id: uuid.UUID | None = None,
     ) -> _ReplyResolution:
+        orange_park_reply = await self._resolve_orange_park_contact_collection_reply(
+            session,
+            tenant_id=tenant_id,
+            business=business,
+            conversation=conversation,
+            customer=customer,
+            incoming_message=incoming_message,
+            customer_message_text=customer_message_text,
+            channel=channel,
+            flow_id=flow_id,
+        )
+        if orange_park_reply is not None:
+            return orange_park_reply
+
         orchestration_outcome = await self.ai_reply_coordinator.execute_for_incoming_message(
             session,
             is_duplicate=is_duplicate,
@@ -980,6 +1046,58 @@ class WebhookMessageService:
             prompt_run_id=prompt_run_id,
         )
 
+    async def _resolve_orange_park_contact_collection_reply(
+        self,
+        session: AsyncSession,
+        *,
+        tenant_id: uuid.UUID,
+        business: object,
+        conversation: Conversation,
+        customer: object,
+        incoming_message: Message,
+        customer_message_text: str,
+        channel: str,
+        flow_id: uuid.UUID | None,
+    ) -> _ReplyResolution | None:
+        if not _orange_park_stage1_contact_collection_only(business, channel):
+            return None
+
+        history = await self.message_service.load_recent_conversation_history(
+            session,
+            tenant_id=tenant_id,
+            business_id=business.id,
+            conversation_id=conversation.id,
+        )
+        reply_text, metadata = _orange_park_contact_collection_reply_and_metadata(
+            customer_message_text,
+            history=history,
+        )
+        if reply_text is None:
+            return None
+
+        _set_message_metadata(incoming_message, metadata)
+        await session.flush()
+        outbound_message = await self.message_service.save_outgoing_ai_message(
+            session,
+            tenant_id=tenant_id,
+            business=business,
+            conversation=conversation,
+            customer=customer,
+            message_text=reply_text,
+            channel=channel,
+            ai_metadata={
+                "orange_park_contact_collection": True,
+                "stage": ORANGE_PARK_CONTACT_COLLECTION_STAGE,
+                "used_fallback": False,
+            },
+            flow_id=flow_id,
+        )
+        return _ReplyResolution(
+            reply_to_customer=reply_text,
+            ai_failed=False,
+            outbound_message_id=outbound_message.id,
+        )
+
     async def _resolve_reply_to_customer_legacy(
         self,
         session: AsyncSession,
@@ -996,6 +1114,18 @@ class WebhookMessageService:
         raw_payload: dict[str, Any] | None = None,
         observability: ObservabilityContext | None = None,
     ) -> _ReplyResolution:
+        orange_park_reply = await _resolve_orange_park_contact_collection_reply_legacy(
+            session,
+            tenant_id=tenant_id,
+            business=business,
+            conversation=conversation,
+            incoming_message=incoming_message,
+            customer_message_text=customer_message_text,
+            channel=channel,
+        )
+        if orange_park_reply is not None:
+            return orange_park_reply
+
         coordinator = AiReplyOrchestrationCoordinator(
             AiReplyOrchestrationService(
                 message_service=_LegacyMessageHistoryService(),
@@ -1726,6 +1856,212 @@ def _lead_summary_from_model(lead: Lead) -> WebhookLeadSummary:
         id=str(lead.id),
         status=lead.status,
         priority=lead.priority or "normal",
+    )
+
+
+async def _resolve_orange_park_contact_collection_reply_legacy(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    business: object,
+    conversation: object,
+    incoming_message: object,
+    customer_message_text: str,
+    channel: str,
+) -> _ReplyResolution | None:
+    if not _orange_park_stage1_contact_collection_only(business, channel):
+        return None
+
+    history = await _LegacyMessageHistoryService().load_recent_conversation_history(
+        session,
+        tenant_id=tenant_id,
+        business_id=business.id,
+        conversation_id=conversation.id,
+    )
+    reply_text, metadata = _orange_park_contact_collection_reply_and_metadata(
+        customer_message_text,
+        history=history,
+    )
+    if reply_text is None:
+        return None
+
+    await _legacy_set_message_metadata(
+        session,
+        tenant_id=tenant_id,
+        business_id=business.id,
+        message=incoming_message,
+        metadata=metadata,
+    )
+    outbound_message = await _legacy_save_outgoing_ai_message(
+        session,
+        tenant_id=tenant_id,
+        business_id=business.id,
+        conversation_id=conversation.id,
+        message_text=reply_text,
+        channel=channel,
+        ai_metadata={
+            "orange_park_contact_collection": True,
+            "stage": ORANGE_PARK_CONTACT_COLLECTION_STAGE,
+            "used_fallback": False,
+        },
+    )
+    return _ReplyResolution(
+        reply_to_customer=reply_text,
+        ai_failed=False,
+        outbound_message_id=outbound_message.id,
+    )
+
+
+def _orange_park_contact_collection_reply_and_metadata(
+    customer_message_text: str,
+    *,
+    history: ConversationHistory,
+) -> tuple[str | None, dict[str, Any]]:
+    phone = _extract_phone_number(customer_message_text)
+    language = _orange_park_dialogue_language(
+        customer_message_text,
+        history=history,
+    )
+    metadata: dict[str, Any] = {
+        "orange_park_contact_collection": {
+            "stage": ORANGE_PARK_CONTACT_COLLECTION_STAGE,
+            "minimum_fields": [
+                "first_name",
+                "last_name",
+                "phone",
+                "telegram_id_or_username",
+                "interest_summary",
+            ],
+            "external_crm_stage": "disabled_stage_1",
+        }
+    }
+
+    if phone is not None:
+        metadata["orange_park_contact_collection"].update(
+            {
+                "intent": "phone_provided_missing_name",
+                "phone": phone,
+                "missing_fields": ["first_name", "last_name"],
+            }
+        )
+        if language == "ru":
+            return (
+                "Спасибо, номер получил. Напишите, пожалуйста, имя и фамилию.",
+                metadata,
+            )
+        return (
+            "Дякую, номер отримав. Напишіть, будь ласка, імʼя та прізвище.",
+            metadata,
+        )
+
+    if _is_contact_collection_trigger(customer_message_text):
+        metadata["orange_park_contact_collection"].update(
+            {
+                "intent": "contact_collection_requested",
+                "missing_fields": ["first_name", "last_name", "phone"],
+            }
+        )
+        if language == "ru":
+            return (
+                "Пожалуйста, оставьте данные в таком формате:\n\n"
+                "Имя:\n"
+                "Фамилия:\n"
+                "Телефон:",
+                metadata,
+            )
+        return (
+            "Будь ласка, залиште дані у такому форматі:\n\n"
+            "Імʼя:\n"
+            "Прізвище:\n"
+            "Телефон:",
+            metadata,
+        )
+
+    return None, metadata
+
+
+def _orange_park_stage1_contact_collection_only(
+    business: object,
+    channel: str,
+) -> bool:
+    return (
+        getattr(business, "external_id", None) == ORANGE_PARK_BUSINESS_EXTERNAL_ID
+        and channel == "telegram"
+    )
+
+
+def _extract_phone_number(text_value: str) -> str | None:
+    match = _PHONE_NUMBER_PATTERN.search(text_value)
+    if match is None:
+        return None
+    return match.group(0).strip()
+
+
+def _is_contact_collection_trigger(text_value: str) -> bool:
+    normalized = text_value.casefold()
+    return any(marker in normalized for marker in _HANDOFF_MARKERS) or any(
+        marker in normalized for marker in _CONTACT_REQUEST_MARKERS
+    )
+
+
+def _orange_park_dialogue_language(
+    customer_message_text: str,
+    *,
+    history: ConversationHistory,
+) -> str:
+    samples = [
+        message.message_text
+        for message in history.messages
+        if message.sender_type == "customer"
+    ]
+    samples.append(customer_message_text)
+
+    for text_value in reversed(samples):
+        normalized = text_value.casefold()
+        if any(marker in normalized for marker in _RUSSIAN_MARKERS) or any(
+            char in normalized for char in ("ы", "э", "ё", "ъ")
+        ):
+            return "ru"
+        if any(marker in normalized for marker in _UKRAINIAN_MARKERS) or any(
+            char in normalized for char in ("і", "ї", "є", "ґ")
+        ):
+            return "uk"
+    return "uk"
+
+
+def _set_message_metadata(message: Message, metadata: dict[str, Any]) -> None:
+    existing = message.metadata_ or {}
+    message.metadata_ = {**existing, **metadata}
+
+
+async def _legacy_set_message_metadata(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    business_id: uuid.UUID,
+    message: object,
+    metadata: dict[str, Any],
+) -> None:
+    message_id = getattr(message, "id")
+    existing = getattr(message, "metadata_", None) or {}
+    merged = {**existing, **metadata}
+    setattr(message, "metadata_", merged)
+    await session.execute(
+        text(
+            """
+            update messages
+            set metadata = cast(:metadata as jsonb)
+            where id = :message_id
+              and tenant_id = :tenant_id
+              and business_id = :business_id
+            """
+        ),
+        {
+            "metadata": json.dumps(merged),
+            "message_id": message_id,
+            "tenant_id": tenant_id,
+            "business_id": business_id,
+        },
     )
 
 

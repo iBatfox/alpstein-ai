@@ -83,6 +83,8 @@ async def test_orange_park_seed_first_run_inserts_all_entities():
         "Залиште, будь ласка, ваш номер телефону — менеджер зв’яжеться з вами напряму."
         in business_profile.business_description
     )
+    assert "first_name, last_name, phone" in business_profile.business_description
+    assert "If phone is already provided" in business_profile.business_description
     assert "Never invent Orange Park phone numbers" in (
         business_profile.business_description
     )
@@ -354,6 +356,17 @@ async def test_orange_park_seed_enforces_language_repetition_and_phone_closing_r
     assert "giving manager phone when official contact is absent from business context" in (
         ai_profile.forbidden_promises
     )
+    assert "English reply after Ukrainian or Russian phone number turn" in (
+        ai_profile.forbidden_promises
+    )
+    assert (
+        "saying manager request was passed before first name, last name, and phone are collected"
+        in ai_profile.forbidden_promises
+    )
+    assert (
+        "external CRM lead creation or external CRM mention in Orange Park Telegram stage 1"
+        in ai_profile.forbidden_promises
+    )
     assert "Ukrainian /start and first greeting by default." in (
         ai_profile.metadata_["behavior_rules"]
     )
@@ -391,6 +404,30 @@ async def test_orange_park_seed_enforces_language_repetition_and_phone_closing_r
     assert "Never repeat the same refusal or manager-confirmation loop twice." in (
         ai_profile.metadata_["behavior_rules"]
     )
+    assert (
+        "Orange Park Telegram stage 1 contact form in Russian: Пожалуйста, оставьте данные в таком формате:\n\nИмя:\nФамилия:\nТелефон:"
+        in ai_profile.metadata_["behavior_rules"]
+    )
+    assert (
+        "Orange Park Telegram stage 1 contact form in Ukrainian: Будь ласка, залиште дані у такому форматі:\n\nІмʼя:\nПрізвище:\nТелефон:"
+        in ai_profile.metadata_["behavior_rules"]
+    )
+    assert (
+        "If phone is already provided in Russian context, reply: Спасибо, номер получил. Напишите, пожалуйста, имя и фамилию."
+        in ai_profile.metadata_["behavior_rules"]
+    )
+    assert (
+        "If phone is already provided in Ukrainian context, reply: Дякую, номер отримав. Напишіть, будь ласка, імʼя та прізвище."
+        in ai_profile.metadata_["behavior_rules"]
+    )
+    assert (
+        "Minimum Orange Park stage 1 lead fields: first_name, last_name, phone, telegram_id or telegram_username when available, and interest summary."
+        in ai_profile.metadata_["behavior_rules"]
+    )
+    assert (
+        "Do not say the manager request was passed until first name, last name, and phone are collected."
+        in ai_profile.metadata_["behavior_rules"]
+    )
     assert "hesitуйте" not in ai_profile.response_style
 
     assert channel.metadata_["default_start_language"] == "uk"
@@ -420,6 +457,19 @@ async def test_orange_park_seed_enforces_language_repetition_and_phone_closing_r
         "Залиште, будь ласка, ваш номер телефону — менеджер зв’яжеться з вами напряму."
         in style.content
     )
+    assert "Пожалуйста, оставьте данные в таком формате" in style.content
+    assert "Имя:" in style.content
+    assert "Фамилия:" in style.content
+    assert "Будь ласка, залиште дані у такому форматі" in style.content
+    assert "Імʼя:" in style.content
+    assert "Прізвище:" in style.content
+    assert "Спасибо, номер получил. Напишите, пожалуйста, имя и фамилию." in (
+        style.content
+    )
+    assert "Дякую, номер отримав. Напишіть, будь ласка, імʼя та прізвище." in (
+        style.content
+    )
+    assert "Minimum stage-1 lead data" in style.content
     assert "Never invent Orange Park phone numbers" in style.content
     assert "Never repeat the same refusal or manager-confirmation block twice" in (
         style.content
