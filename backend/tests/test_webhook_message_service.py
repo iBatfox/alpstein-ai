@@ -20,7 +20,10 @@ from app.schemas.ai_reply import AiReplyResult
 from app.schemas.ai_reply_orchestration import AiReplyOrchestrationOutcome
 from app.services.ai_reply_orchestration_coordinator import REASON_AI_CHAIN_EXECUTED
 from app.services.flow_service import LegacyWebhookFlow
-from app.services.webhook_message_service import WebhookMessageService
+from app.services.webhook_message_service import (
+    WebhookMessageService,
+    _orange_park_contact_collection_reply_and_metadata,
+)
 from tests.test_webhook_message_ai_wiring import _flow_service_mock
 from tests.webhook_test_helpers import (
     delivery_visibility_service_mock,
@@ -28,10 +31,27 @@ from tests.webhook_test_helpers import (
     message_trace_service_mock,
 )
 
+ORANGE_PARK_START_WELCOME_UK = (
+    "Добрий день! 👋\n\n"
+    "Я AI-асистент ЖК Orange Park.\n\n"
+    "Можу допомогти з інформацією про комплекс, квартири, комерційні приміщення "
+    "та умови придбання, а також передати ваш запит менеджеру.\n\n"
+    "Що вас цікавить?\n"
+    "🏡 Квартира\n"
+    "🏢 Комерційне приміщення\n"
+    "💳 Умови покупки / розтермінування"
+)
+
 
 def _none_result() -> MagicMock:
     result = MagicMock()
     result.scalar_one_or_none.return_value = None
+    return result
+
+
+def _execute_mappings(rows):
+    result = MagicMock()
+    result.mappings.return_value.all.return_value = rows
     return result
 
 
@@ -111,6 +131,42 @@ def _orange_park_request(message_text: str) -> NormalizedWebhookMessageRequest:
             },
         }
     )
+
+
+def test_orange_park_contact_form_defaults_to_ukrainian_for_ambiguous_handoff():
+    reply, metadata = _orange_park_contact_collection_reply_and_metadata(
+        "Давай",
+        history=ConversationHistory.empty(),
+    )
+
+    assert reply == (
+        "Будь ласка, залиште дані у такому форматі:\n\n"
+        "Ім'я:\n"
+        "Прізвище:\n"
+        "Телефон:"
+    )
+    assert "Пожалуйста" not in reply
+    assert "Please" not in reply
+    assert metadata["orange_park_contact_collection"]["missing_fields"] == [
+        "first_name",
+        "last_name",
+        "phone",
+    ]
+
+
+def test_orange_park_phone_followup_defaults_to_ukrainian_without_language_context():
+    reply, metadata = _orange_park_contact_collection_reply_and_metadata(
+        "+41798232786",
+        history=ConversationHistory.empty(),
+    )
+
+    assert reply == "Дякую, номер отримав. Напишіть, будь ласка, ім'я та прізвище."
+    assert "Спасибо" not in reply
+    assert "Thanks" not in reply
+    assert metadata["orange_park_contact_collection"]["missing_fields"] == [
+        "first_name",
+        "last_name",
+    ]
 
 
 @pytest.fixture
@@ -297,7 +353,7 @@ async def test_orange_park_telegram_start_skips_ai_and_archives_prior_history():
     )
     session = MagicMock()
     session.flush = AsyncMock()
-    session.execute = AsyncMock()
+    session.execute = AsyncMock(side_effect=[_execute_mappings([]), MagicMock()])
 
     result = await service.process_incoming_message(
         session,
@@ -318,17 +374,15 @@ async def test_orange_park_telegram_start_skips_ai_and_archives_prior_history():
     )
 
     assert result.lead_created is False
-    assert result.reply_to_customer.startswith(
-        "Добрый день! Я AI-ассистент ЖК Orange Park."
-    )
+    assert result.reply_to_customer == ORANGE_PARK_START_WELCOME_UK
     assert "I'm here" not in result.reply_to_customer
     assert "What are you interested" not in result.reply_to_customer
     assert incoming.metadata_["orange_park_start_reset"] == {
         "stage": "orange_park_telegram_start_reset",
         "excluded_previous_history": True,
-        "language": "ru",
+        "language": "uk",
     }
-    archive_call = session.execute.await_args_list[0]
+    archive_call = session.execute.await_args_list[1]
     assert "update messages" in str(archive_call.args[0])
     assert "excluded_from_prompt_history" in archive_call.args[1]["metadata"]
     assert archive_call.args[1]["current_message_id"] == incoming.id

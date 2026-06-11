@@ -91,9 +91,20 @@ ORANGE_PARK_START_WELCOME_RU = (
     "Что вас интересует: квартира, коммерческое помещение или условия покупки?"
 )
 ORANGE_PARK_START_WELCOME_UK = (
-    "Добрий день! Я AI-асистент ЖК Orange Park. Можу допомогти з інформацією "
-    "про комплекс, квартири, умови покупки та передати запит менеджеру.\n\n"
-    "Що вас цікавить: квартира, комерційне приміщення чи умови покупки?"
+    "Добрий день! 👋\n\n"
+    "Я AI-асистент ЖК Orange Park.\n\n"
+    "Можу допомогти з інформацією про комплекс, квартири, комерційні приміщення "
+    "та умови придбання, а також передати ваш запит менеджеру.\n\n"
+    "Що вас цікавить?\n"
+    "🏡 Квартира\n"
+    "🏢 Комерційне приміщення\n"
+    "💳 Умови покупки / розтермінування"
+)
+ORANGE_PARK_START_WELCOME_EN = (
+    "Good afternoon! I am the AI assistant for Orange Park residential complex. "
+    "I can help with information about the complex, apartments, purchase terms, "
+    "and pass a request to a manager.\n\n"
+    "What are you interested in: an apartment, commercial premises, or purchase terms?"
 )
 
 _PHONE_NUMBER_PATTERN = re.compile(r"(?<!\w)\+?\d[\d\s().-]{7,}\d(?!\w)")
@@ -114,6 +125,14 @@ _UKRAINIAN_MARKERS = (
     "будь ласка",
     "дякую",
     "прізви",
+)
+_ENGLISH_MARKERS = (
+    "hello",
+    "hi",
+    "manager",
+    "price",
+    "contact",
+    "phone",
 )
 _HANDOFF_MARKERS = (
     "свяж",
@@ -1098,9 +1117,11 @@ class WebhookMessageService:
             raw_payload=raw_payload,
         )
         reply_text = (
-            ORANGE_PARK_START_WELCOME_UK
-            if language == "uk"
-            else ORANGE_PARK_START_WELCOME_RU
+            ORANGE_PARK_START_WELCOME_RU
+            if language == "ru"
+            else ORANGE_PARK_START_WELCOME_EN
+            if language == "en"
+            else ORANGE_PARK_START_WELCOME_UK
         )
         await _archive_orange_park_pre_start_history(
             session,
@@ -1990,9 +2011,11 @@ async def _resolve_orange_park_start_reply_legacy(
         raw_payload=raw_payload,
     )
     reply_text = (
-        ORANGE_PARK_START_WELCOME_UK
-        if language == "uk"
-        else ORANGE_PARK_START_WELCOME_RU
+        ORANGE_PARK_START_WELCOME_RU
+        if language == "ru"
+        else ORANGE_PARK_START_WELCOME_EN
+        if language == "en"
+        else ORANGE_PARK_START_WELCOME_UK
     )
     await _archive_orange_park_pre_start_history(
         session,
@@ -2054,10 +2077,6 @@ async def _orange_park_start_language(
     current_message_id: uuid.UUID,
     raw_payload: dict[str, Any] | None,
 ) -> str:
-    payload_language = _telegram_language_from_raw_payload(raw_payload)
-    if payload_language is not None:
-        return payload_language
-
     rows = (
         await session.execute(
             text(
@@ -2117,6 +2136,8 @@ def _telegram_language_from_raw_payload(raw_payload: dict[str, Any] | None) -> s
         normalized = candidate.strip().casefold()
         if normalized.startswith("uk") or normalized.startswith("ua"):
             return "uk"
+        if normalized.startswith("en"):
+            return "en"
         if normalized.startswith("ru"):
             return "ru"
     return None
@@ -2246,8 +2267,13 @@ def _orange_park_contact_collection_reply_and_metadata(
                 "Спасибо, номер получил. Напишите, пожалуйста, имя и фамилию.",
                 metadata,
             )
+        if language == "en":
+            return (
+                "Thanks, I received your number. Please send your first and last name.",
+                metadata,
+            )
         return (
-            "Дякую, номер отримав. Напишіть, будь ласка, імʼя та прізвище.",
+            "Дякую, номер отримав. Напишіть, будь ласка, ім'я та прізвище.",
             metadata,
         )
 
@@ -2266,9 +2292,17 @@ def _orange_park_contact_collection_reply_and_metadata(
                 "Телефон:",
                 metadata,
             )
+        if language == "en":
+            return (
+                "Please leave your details in this format:\n\n"
+                "First name:\n"
+                "Last name:\n"
+                "Phone:",
+                metadata,
+            )
         return (
             "Будь ласка, залиште дані у такому форматі:\n\n"
-            "Імʼя:\n"
+            "Ім'я:\n"
             "Прізвище:\n"
             "Телефон:",
             metadata,
@@ -2319,11 +2353,23 @@ def _orange_park_dialogue_language(
             char in normalized for char in ("ы", "э", "ё", "ъ")
         ):
             return "ru"
+        if _is_clearly_english(normalized):
+            return "en"
         if any(marker in normalized for marker in _UKRAINIAN_MARKERS) or any(
             char in normalized for char in ("і", "ї", "є", "ґ")
         ):
             return "uk"
     return "uk"
+
+
+def _is_clearly_english(normalized_text: str) -> bool:
+    ascii_letters = sum(1 for char in normalized_text if "a" <= char <= "z")
+    if ascii_letters < 4:
+        return False
+    has_cyrillic = any("а" <= char <= "я" or char in "іїєґё" for char in normalized_text)
+    if has_cyrillic:
+        return False
+    return any(marker in normalized_text for marker in _ENGLISH_MARKERS)
 
 
 def _set_message_metadata(message: Message, metadata: dict[str, Any]) -> None:

@@ -436,9 +436,9 @@ async def _ensure_ai_profile(
                 "Never invent Orange Park phone numbers or manager contacts.",
                 "Never repeat the same refusal or manager-confirmation loop twice.",
                 "Orange Park Telegram stage 1 contact form in Russian: Пожалуйста, оставьте данные в таком формате:\n\nИмя:\nФамилия:\nТелефон:",
-                "Orange Park Telegram stage 1 contact form in Ukrainian: Будь ласка, залиште дані у такому форматі:\n\nІмʼя:\nПрізвище:\nТелефон:",
+                "Orange Park Telegram stage 1 contact form in Ukrainian: Будь ласка, залиште дані у такому форматі:\n\nІм'я:\nПрізвище:\nТелефон:",
                 "If phone is already provided in Russian context, reply: Спасибо, номер получил. Напишите, пожалуйста, имя и фамилию.",
-                "If phone is already provided in Ukrainian context, reply: Дякую, номер отримав. Напишіть, будь ласка, імʼя та прізвище.",
+                "If phone is already provided in Ukrainian context, reply: Дякую, номер отримав. Напишіть, будь ласка, ім'я та прізвище.",
                 "Minimum Orange Park stage 1 lead fields: first_name, last_name, phone, telegram_id or telegram_username when available, and interest summary.",
                 "Do not say the manager request was passed until first name, last name, and phone are collected.",
                 "Do not create or mention external CRM leads in Orange Park Telegram stage 1.",
@@ -486,10 +486,15 @@ async def _ensure_channel_setting(
             "credential_storage": "external_runtime_only",
             "default_start_language": ORANGE_PARK_LANGUAGE,
             "start_greeting": (
-                "Вітаю! Я асистент ЖК Orange Park. Допоможу зорієнтуватися "
-                "по комплексу, квартирах, умовах купівлі та передам запит "
-                "менеджеру, якщо потрібні актуальні ціни чи наявність. "
-                "Що вас цікавить?"
+                "Добрий день! 👋\n\n"
+                "Я AI-асистент ЖК Orange Park.\n\n"
+                "Можу допомогти з інформацією про комплекс, квартири, "
+                "комерційні приміщення та умови придбання, а також передати "
+                "ваш запит менеджеру.\n\n"
+                "Що вас цікавить?\n"
+                "🏡 Квартира\n"
+                "🏢 Комерційне приміщення\n"
+                "💳 Умови покупки / розтермінування"
             ),
         },
     }
@@ -573,7 +578,17 @@ def _conversation_style_runtime_document(document: SourceDocument) -> SourceDocu
 Use this as behavior guidance only, not as stable factual knowledge.
 
 - Telegram /start and the first greeting must be Ukrainian by default.
-- Use this /start greeting: "Вітаю! Я асистент ЖК Orange Park. Допоможу зорієнтуватися по комплексу, квартирах, умовах купівлі та передам запит менеджеру, якщо потрібні актуальні ціни чи наявність. Що вас цікавить?"
+- Use this /start greeting:
+"Добрий день! 👋
+
+Я AI-асистент ЖК Orange Park.
+
+Можу допомогти з інформацією про комплекс, квартири, комерційні приміщення та умови придбання, а також передати ваш запит менеджеру.
+
+Що вас цікавить?
+🏡 Квартира
+🏢 Комерційне приміщення
+💳 Умови покупки / розтермінування"
 - After the customer writes, mirror the customer's language: Ukrainian or Russian.
 - Never output English unless the customer explicitly writes in English.
 - Never mix languages in the same sentence and never use Ukrainian-English or Russian-English hybrid words.
@@ -589,9 +604,9 @@ Use this as behavior guidance only, not as stable factual knowledge.
 - Treat contact requests such as "номер", "номер телефону", "дай номер", "дай дані", "дай контакти", "контакти", "телефон менеджера", or "як зв'язатися" as a request for official contact details. If no official Orange Park phone/contact is present in the current business context, reply only: "Залиште, будь ласка, ваш номер телефону — менеджер зв’яжеться з вами напряму."
 - For Orange Park Telegram stage 1, collect a structured contact form before saying a request was passed to the manager.
 - Russian contact form: "Пожалуйста, оставьте данные в таком формате:\n\nИмя:\nФамилия:\nТелефон:"
-- Ukrainian contact form: "Будь ласка, залиште дані у такому форматі:\n\nІмʼя:\nПрізвище:\nТелефон:"
+- Ukrainian contact form: "Будь ласка, залиште дані у такому форматі:\n\nІм'я:\nПрізвище:\nТелефон:"
 - If the customer already sent a phone number in Russian context, reply: "Спасибо, номер получил. Напишите, пожалуйста, имя и фамилию."
-- If the customer already sent a phone number in Ukrainian context, reply: "Дякую, номер отримав. Напишіть, будь ласка, імʼя та прізвище."
+- If the customer already sent a phone number in Ukrainian context, reply: "Дякую, номер отримав. Напишіть, будь ласка, ім'я та прізвище."
 - Minimum stage-1 lead data: first name, last name, phone, Telegram id or username when available, and interest summary from the conversation.
 - Do not thank the customer for a phone number until the customer actually provides one.
 - If customer says they are waiting for manager call, reply only: "Дякую. Запит передано менеджеру. Очікуйте дзвінок."
@@ -614,9 +629,9 @@ Safe examples:
 - "Добре. Напишіть, будь ласка, номер телефону — менеджер зв’яжеться з вами."
 - "Залиште, будь ласка, ваш номер телефону — менеджер зв’яжеться з вами напряму."
 - "Пожалуйста, оставьте данные в таком формате:\n\nИмя:\nФамилия:\nТелефон:"
-- "Будь ласка, залиште дані у такому форматі:\n\nІмʼя:\nПрізвище:\nТелефон:"
+- "Будь ласка, залиште дані у такому форматі:\n\nІм'я:\nПрізвище:\nТелефон:"
 - "Спасибо, номер получил. Напишите, пожалуйста, имя и фамилию."
-- "Дякую, номер отримав. Напишіть, будь ласка, імʼя та прізвище."
+- "Дякую, номер отримав. Напишіть, будь ласка, ім'я та прізвище."
 - "Дякую. Запит передано менеджеру: 1-кімнатна 40-45 м2 до 1 600 000 грн, цікавить розтермінування. Очікуйте дзвінок."
 - "Дякую. Запит передано менеджеру. Очікуйте дзвінок."
 """
@@ -769,11 +784,11 @@ def _business_description(facts: SourceDocument) -> str:
         "- Russian contact form: \"Пожалуйста, оставьте данные в таком формате:\\n\\n"
         "Имя:\\nФамилия:\\nТелефон:\"\n"
         "- Ukrainian contact form: \"Будь ласка, залиште дані у такому форматі:\\n\\n"
-        "Імʼя:\\nПрізвище:\\nТелефон:\"\n"
+        "Ім'я:\\nПрізвище:\\nТелефон:\"\n"
         "- If the customer already sent a phone number in Russian context, reply: "
         "\"Спасибо, номер получил. Напишите, пожалуйста, имя и фамилию.\"\n"
         "- If the customer already sent a phone number in Ukrainian context, reply: "
-        "\"Дякую, номер отримав. Напишіть, будь ласка, імʼя та прізвище.\"\n"
+        "\"Дякую, номер отримав. Напишіть, будь ласка, ім'я та прізвище.\"\n"
         "- Never invent Orange Park phone numbers, manager contacts, contact links, "
         "or sales-office contacts.\n"
         "- Never repeat the same refusal or manager-confirmation block twice; after "

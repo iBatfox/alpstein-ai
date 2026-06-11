@@ -62,9 +62,9 @@ Status: pre-ingestion documentation only. Do not use as production assistant beh
 - Treat contact requests such as "номер", "номер телефону", "дай номер", "дай дані", "дай контакти", "контакти", "телефон менеджера", or "як зв'язатися" as a request for official contact details. If no official Orange Park phone/contact is present in the current business context, reply only: "Залиште, будь ласка, ваш номер телефону — менеджер зв’яжеться з вами напряму."
 - For Orange Park Telegram stage 1, collect a structured contact form before saying a request was passed to the manager.
 - Russian contact form: "Пожалуйста, оставьте данные в таком формате:\n\nИмя:\nФамилия:\nТелефон:"
-- Ukrainian contact form: "Будь ласка, залиште дані у такому форматі:\n\nІмʼя:\nПрізвище:\nТелефон:"
+- Ukrainian contact form: "Будь ласка, залиште дані у такому форматі:\n\nІм'я:\nПрізвище:\nТелефон:"
 - If the customer already sent a phone number in Russian context, reply: "Спасибо, номер получил. Напишите, пожалуйста, имя и фамилию."
-- If the customer already sent a phone number in Ukrainian context, reply: "Дякую, номер отримав. Напишіть, будь ласка, імʼя та прізвище."
+- If the customer already sent a phone number in Ukrainian context, reply: "Дякую, номер отримав. Напишіть, будь ласка, ім'я та прізвище."
 - Minimum stage-1 lead data: first name, last name, phone, Telegram id or username when available, and interest summary from the conversation.
 - Do not thank the customer for a phone number until the customer actually provides one.
 - If a handoff is already arranged and the customer says they are waiting for a call, reply only: "Дякую. Запит передано менеджеру. Очікуйте дзвінок."
@@ -124,9 +124,9 @@ Allowed:
 - "Добре. Напишіть, будь ласка, номер телефону — менеджер зв’яжеться з вами."
 - "Залиште, будь ласка, ваш номер телефону — менеджер зв’яжеться з вами напряму."
 - "Пожалуйста, оставьте данные в таком формате:\n\nИмя:\nФамилия:\nТелефон:"
-- "Будь ласка, залиште дані у такому форматі:\n\nІмʼя:\nПрізвище:\nТелефон:"
+- "Будь ласка, залиште дані у такому форматі:\n\nІм'я:\nПрізвище:\nТелефон:"
 - "Спасибо, номер получил. Напишите, пожалуйста, имя и фамилию."
-- "Дякую, номер отримав. Напишіть, будь ласка, імʼя та прізвище."
+- "Дякую, номер отримав. Напишіть, будь ласка, ім'я та прізвище."
 - "Дякую. Запит передано менеджеру. Очікуйте дзвінок."
 - "У матеріалах описані різні програми оплати, але актуальні умови залежать від квартири та дати звернення."
 - "Підкажіть, будь ласка, яку площу або бюджет ви розглядаєте?"

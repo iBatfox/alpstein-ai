@@ -105,7 +105,10 @@ async def test_orange_park_seed_first_run_inserts_all_entities():
     assert channel.allow_links is False
     assert channel.allow_emojis is False
     assert channel.metadata_["default_start_language"] == "uk"
-    assert channel.metadata_["start_greeting"].startswith("Вітаю!")
+    assert channel.metadata_["start_greeting"].startswith("Добрий день! 👋")
+    assert "🏡 Квартира" in channel.metadata_["start_greeting"]
+    assert "🏢 Комерційне приміщення" in channel.metadata_["start_greeting"]
+    assert "💳 Умови покупки / розтермінування" in channel.metadata_["start_greeting"]
     assert len(knowledge) == 3
     assert {row.source_type for row in knowledge} == {
         "conversation_style",
@@ -409,7 +412,7 @@ async def test_orange_park_seed_enforces_language_repetition_and_phone_closing_r
         in ai_profile.metadata_["behavior_rules"]
     )
     assert (
-        "Orange Park Telegram stage 1 contact form in Ukrainian: Будь ласка, залиште дані у такому форматі:\n\nІмʼя:\nПрізвище:\nТелефон:"
+        "Orange Park Telegram stage 1 contact form in Ukrainian: Будь ласка, залиште дані у такому форматі:\n\nІм'я:\nПрізвище:\nТелефон:"
         in ai_profile.metadata_["behavior_rules"]
     )
     assert (
@@ -417,7 +420,7 @@ async def test_orange_park_seed_enforces_language_repetition_and_phone_closing_r
         in ai_profile.metadata_["behavior_rules"]
     )
     assert (
-        "If phone is already provided in Ukrainian context, reply: Дякую, номер отримав. Напишіть, будь ласка, імʼя та прізвище."
+        "If phone is already provided in Ukrainian context, reply: Дякую, номер отримав. Напишіть, будь ласка, ім'я та прізвище."
         in ai_profile.metadata_["behavior_rules"]
     )
     assert (
@@ -432,9 +435,13 @@ async def test_orange_park_seed_enforces_language_repetition_and_phone_closing_r
 
     assert channel.metadata_["default_start_language"] == "uk"
     assert "Hello! Welcome" not in channel.metadata_["start_greeting"]
-    assert channel.metadata_["start_greeting"].startswith("Вітаю!")
+    assert channel.metadata_["start_greeting"].startswith("Добрий день! 👋")
+    assert "Я AI-асистент ЖК Orange Park." in channel.metadata_["start_greeting"]
+    assert "🏡 Квартира" in channel.metadata_["start_greeting"]
 
     assert "Telegram /start and the first greeting must be Ukrainian" in style.content
+    assert "Добрий день! 👋" in style.content
+    assert "💳 Умови покупки / розтермінування" in style.content
     assert "Never output English unless the customer explicitly writes in English" in (
         style.content
     )
@@ -461,12 +468,12 @@ async def test_orange_park_seed_enforces_language_repetition_and_phone_closing_r
     assert "Имя:" in style.content
     assert "Фамилия:" in style.content
     assert "Будь ласка, залиште дані у такому форматі" in style.content
-    assert "Імʼя:" in style.content
+    assert "Ім'я:" in style.content
     assert "Прізвище:" in style.content
     assert "Спасибо, номер получил. Напишите, пожалуйста, имя и фамилию." in (
         style.content
     )
-    assert "Дякую, номер отримав. Напишіть, будь ласка, імʼя та прізвище." in (
+    assert "Дякую, номер отримав. Напишіть, будь ласка, ім'я та прізвище." in (
         style.content
     )
     assert "Minimum stage-1 lead data" in style.content
