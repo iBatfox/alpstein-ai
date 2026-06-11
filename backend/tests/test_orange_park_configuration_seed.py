@@ -98,6 +98,19 @@ async def test_orange_park_seed_first_run_inserts_all_entities():
     assert "Ukrainian /start and first greeting by default." in (
         ai_profile.metadata_["behavior_rules"]
     )
+    assert "Default language is Ukrainian for Orange Park." in (
+        ai_profile.metadata_["behavior_rules"]
+    )
+    assert (
+        "After customer message, keep Ukrainian unless the customer clearly writes Russian or English."
+        in ai_profile.metadata_["behavior_rules"]
+    )
+    assert "Mirror Russian only when the customer's message is clearly Russian." in (
+        ai_profile.metadata_["behavior_rules"]
+    )
+    assert "Mirror English only when the customer's message is clearly English." in (
+        ai_profile.metadata_["behavior_rules"]
+    )
     assert "Never output English unless customer writes English." in (
         ai_profile.metadata_["behavior_rules"]
     )
@@ -416,11 +429,11 @@ async def test_orange_park_seed_enforces_language_repetition_and_phone_closing_r
         in ai_profile.metadata_["behavior_rules"]
     )
     assert (
-        "If phone is already provided in Russian context, reply: Спасибо, номер получил. Напишите, пожалуйста, имя и фамилию."
+        "If phone is already provided in clearly Russian context, reply: Спасибо, номер получил. Напишите, пожалуйста, имя и фамилию."
         in ai_profile.metadata_["behavior_rules"]
     )
     assert (
-        "If phone is already provided in Ukrainian context, reply: Дякую, номер отримав. Напишіть, будь ласка, ім'я та прізвище."
+        "If phone is already provided in Ukrainian/default context, reply: Дякую, номер отримав. Напишіть, будь ласка, ім'я та прізвище."
         in ai_profile.metadata_["behavior_rules"]
     )
     assert (

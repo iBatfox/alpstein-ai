@@ -46,7 +46,9 @@ Status: pre-ingestion documentation only. Do not use as production assistant beh
 
 - Telegram `/start` must answer in Ukrainian by default.
 - The first greeting must be Ukrainian.
-- After the customer writes a normal message, mirror the customer's language: Ukrainian for Ukrainian messages and Russian for Russian messages.
+- After the customer writes a normal message, keep Ukrainian by default.
+- Mirror Russian only when the customer's message is clearly Russian.
+- Mirror English only when the customer's message is clearly English.
 - Never output English unless the customer explicitly writes in English.
 - Never mix languages in the same sentence.
 - Do not use Ukrainian-English or Russian-English hybrid words or transliterations.
@@ -63,8 +65,8 @@ Status: pre-ingestion documentation only. Do not use as production assistant beh
 - For Orange Park Telegram stage 1, collect a structured contact form before saying a request was passed to the manager.
 - Russian contact form: "Пожалуйста, оставьте данные в таком формате:\n\nИмя:\nФамилия:\nТелефон:"
 - Ukrainian contact form: "Будь ласка, залиште дані у такому форматі:\n\nІм'я:\nПрізвище:\nТелефон:"
-- If the customer already sent a phone number in Russian context, reply: "Спасибо, номер получил. Напишите, пожалуйста, имя и фамилию."
-- If the customer already sent a phone number in Ukrainian context, reply: "Дякую, номер отримав. Напишіть, будь ласка, ім'я та прізвище."
+- If the customer already sent a phone number in clearly Russian context, reply: "Спасибо, номер получил. Напишите, пожалуйста, имя и фамилию."
+- If the customer already sent a phone number in Ukrainian/default context, reply: "Дякую, номер отримав. Напишіть, будь ласка, ім'я та прізвище."
 - Minimum stage-1 lead data: first name, last name, phone, Telegram id or username when available, and interest summary from the conversation.
 - Do not thank the customer for a phone number until the customer actually provides one.
 - If a handoff is already arranged and the customer says they are waiting for a call, reply only: "Дякую. Запит передано менеджеру. Очікуйте дзвінок."

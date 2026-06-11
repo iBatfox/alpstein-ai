@@ -419,7 +419,10 @@ async def _ensure_ai_profile(
             conversation_style_source="included_as_behavior_guidance",
             behavior_rules=[
                 "Ukrainian /start and first greeting by default.",
-                "After customer message, mirror Ukrainian or Russian.",
+                "Default language is Ukrainian for Orange Park.",
+                "After customer message, keep Ukrainian unless the customer clearly writes Russian or English.",
+                "Mirror Russian only when the customer's message is clearly Russian.",
+                "Mirror English only when the customer's message is clearly English.",
                 "Never output English unless customer writes English.",
                 "Never mix languages or use hybrid words.",
                 "Answer the immediate question first, then ask one useful qualification question.",
@@ -437,8 +440,8 @@ async def _ensure_ai_profile(
                 "Never repeat the same refusal or manager-confirmation loop twice.",
                 "Orange Park Telegram stage 1 contact form in Russian: Пожалуйста, оставьте данные в таком формате:\n\nИмя:\nФамилия:\nТелефон:",
                 "Orange Park Telegram stage 1 contact form in Ukrainian: Будь ласка, залиште дані у такому форматі:\n\nІм'я:\nПрізвище:\nТелефон:",
-                "If phone is already provided in Russian context, reply: Спасибо, номер получил. Напишите, пожалуйста, имя и фамилию.",
-                "If phone is already provided in Ukrainian context, reply: Дякую, номер отримав. Напишіть, будь ласка, ім'я та прізвище.",
+                "If phone is already provided in clearly Russian context, reply: Спасибо, номер получил. Напишите, пожалуйста, имя и фамилию.",
+                "If phone is already provided in Ukrainian/default context, reply: Дякую, номер отримав. Напишіть, будь ласка, ім'я та прізвище.",
                 "Minimum Orange Park stage 1 lead fields: first_name, last_name, phone, telegram_id or telegram_username when available, and interest summary.",
                 "Do not say the manager request was passed until first name, last name, and phone are collected.",
                 "Do not create or mention external CRM leads in Orange Park Telegram stage 1.",
@@ -589,7 +592,9 @@ Use this as behavior guidance only, not as stable factual knowledge.
 🏡 Квартира
 🏢 Комерційне приміщення
 💳 Умови покупки / розтермінування"
-- After the customer writes, mirror the customer's language: Ukrainian or Russian.
+- After the customer writes, keep Ukrainian by default.
+- Mirror Russian only when the customer's message is clearly Russian.
+- Mirror English only when the customer's message is clearly English.
 - Never output English unless the customer explicitly writes in English.
 - Never mix languages in the same sentence and never use Ukrainian-English or Russian-English hybrid words.
 - Keep Telegram replies warm, practical, concise, and consultative.
@@ -785,9 +790,9 @@ def _business_description(facts: SourceDocument) -> str:
         "Имя:\\nФамилия:\\nТелефон:\"\n"
         "- Ukrainian contact form: \"Будь ласка, залиште дані у такому форматі:\\n\\n"
         "Ім'я:\\nПрізвище:\\nТелефон:\"\n"
-        "- If the customer already sent a phone number in Russian context, reply: "
+        "- If the customer already sent a phone number in clearly Russian context, reply: "
         "\"Спасибо, номер получил. Напишите, пожалуйста, имя и фамилию.\"\n"
-        "- If the customer already sent a phone number in Ukrainian context, reply: "
+        "- If the customer already sent a phone number in Ukrainian/default context, reply: "
         "\"Дякую, номер отримав. Напишіть, будь ласка, ім'я та прізвище.\"\n"
         "- Never invent Orange Park phone numbers, manager contacts, contact links, "
         "or sales-office contacts.\n"
