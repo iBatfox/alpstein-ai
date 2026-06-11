@@ -220,6 +220,124 @@ async def test_process_incoming_message_orchestrates_services(
 
 
 @pytest.mark.anyio
+async def test_orange_park_telegram_start_skips_ai_and_archives_prior_history():
+    business = Business(
+        id=uuid.uuid4(),
+        tenant_id=uuid.uuid4(),
+        external_id="orange-park",
+        name="Orange Park",
+    )
+    customer = Customer(
+        id=uuid.uuid4(),
+        tenant_id=business.tenant_id,
+        business_id=business.id,
+        external_customer_id="tg-orange-park-customer",
+        source_channel="telegram",
+    )
+    conversation = Conversation(
+        id=uuid.uuid4(),
+        tenant_id=business.tenant_id,
+        business_id=business.id,
+        flow_id=uuid.uuid4(),
+        customer_id=customer.id,
+        channel="telegram",
+        status="open",
+    )
+    incoming = Message(
+        id=uuid.uuid4(),
+        tenant_id=business.tenant_id,
+        business_id=business.id,
+        conversation_id=conversation.id,
+        sender_type="customer",
+        direction="incoming",
+        channel="telegram",
+        message_text="/start",
+    )
+    outgoing = Message(
+        id=uuid.uuid4(),
+        tenant_id=business.tenant_id,
+        business_id=business.id,
+        conversation_id=conversation.id,
+        sender_type="ai",
+        direction="outgoing",
+        channel="telegram",
+        message_text="",
+    )
+    message_service = MagicMock()
+    message_service.save_incoming_customer_message = AsyncMock(
+        return_value=IncomingMessageSaveResult(message=incoming, is_duplicate=False)
+    )
+    message_service.load_recent_conversation_history = AsyncMock(
+        return_value=ConversationHistory(
+            messages=(
+                ConversationHistoryMessage(
+                    sender_type="customer",
+                    message_text="old stale message",
+                    created_at=datetime(2026, 5, 21, 9, 59, 0),
+                ),
+            )
+        )
+    )
+    message_service.save_outgoing_ai_message = AsyncMock(return_value=outgoing)
+    lead_service = _lead_service_mock(business, customer, conversation)
+    ai_reply_coordinator = _success_ai_coordinator()
+    service = WebhookMessageService(
+        business_service=MagicMock(get_by_external_id=AsyncMock(return_value=business)),
+        flow_service=_flow_service_mock(business),
+        customer_service=MagicMock(get_or_create_customer=AsyncMock(return_value=customer)),
+        conversation_service=MagicMock(
+            get_or_create_open_conversation=AsyncMock(return_value=conversation)
+        ),
+        message_service=message_service,
+        lead_service=lead_service,
+        ai_reply_coordinator=ai_reply_coordinator,
+        message_trace_service=message_trace_service_mock(),
+        delivery_visibility_service=delivery_visibility_service_mock(),
+        inbound_processing_lock_service=inbound_processing_lock_service_mock(),
+    )
+    session = MagicMock()
+    session.flush = AsyncMock()
+    session.execute = AsyncMock()
+
+    result = await service.process_incoming_message(
+        session,
+        NormalizedWebhookMessageRequest.model_validate(
+            {
+                "business_id": "orange-park",
+                "channel": "telegram",
+                "customer": {"external_customer_id": "tg-orange-park-customer"},
+                "message": {
+                    "text": "/start",
+                    "external_message_id": f"tg:orange-park:{uuid.uuid4()}",
+                    "external_conversation_id": "tg:orange-park-start-test",
+                    "timestamp": "2026-05-21T10:00:00Z",
+                    "raw_payload": {"language_code": "ru"},
+                },
+            }
+        ),
+    )
+
+    assert result.lead_created is False
+    assert result.reply_to_customer.startswith(
+        "Добрый день! Я AI-ассистент ЖК Orange Park."
+    )
+    assert "I'm here" not in result.reply_to_customer
+    assert "What are you interested" not in result.reply_to_customer
+    assert incoming.metadata_["orange_park_start_reset"] == {
+        "stage": "orange_park_telegram_start_reset",
+        "excluded_previous_history": True,
+        "language": "ru",
+    }
+    archive_call = session.execute.await_args_list[0]
+    assert "update messages" in str(archive_call.args[0])
+    assert "excluded_from_prompt_history" in archive_call.args[1]["metadata"]
+    assert archive_call.args[1]["current_message_id"] == incoming.id
+    message_service.load_recent_conversation_history.assert_not_awaited()
+    lead_service.create_lead.assert_not_awaited()
+    ai_reply_coordinator.execute_for_incoming_message.assert_not_awaited()
+
+
+@pytest.mark.anyio
 async def test_orange_park_telegram_handoff_asks_russian_contact_form_without_lead():
     business = Business(
         id=uuid.uuid4(),

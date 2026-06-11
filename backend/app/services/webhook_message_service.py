@@ -84,6 +84,17 @@ STUB_REPLY_TO_CUSTOMER = DUPLICATE_SAFE_ACKNOWLEDGMENT
 CUSTOMER_NOTE_MAX_LENGTH = 2000
 ORANGE_PARK_BUSINESS_EXTERNAL_ID = "orange-park"
 ORANGE_PARK_CONTACT_COLLECTION_STAGE = "orange_park_telegram_stage1_contact_form"
+ORANGE_PARK_START_RESET_STAGE = "orange_park_telegram_start_reset"
+ORANGE_PARK_START_WELCOME_RU = (
+    "Добрый день! Я AI-ассистент ЖК Orange Park. Могу помочь с информацией о "
+    "комплексе, квартирах, условиях покупки и передать запрос менеджеру.\n\n"
+    "Что вас интересует: квартира, коммерческое помещение или условия покупки?"
+)
+ORANGE_PARK_START_WELCOME_UK = (
+    "Добрий день! Я AI-асистент ЖК Orange Park. Можу допомогти з інформацією "
+    "про комплекс, квартири, умови покупки та передати запит менеджеру.\n\n"
+    "Що вас цікавить: квартира, комерційне приміщення чи умови покупки?"
+)
 
 _PHONE_NUMBER_PATTERN = re.compile(r"(?<!\w)\+?\d[\d\s().-]{7,}\d(?!\w)")
 _RUSSIAN_MARKERS = (
@@ -930,6 +941,21 @@ class WebhookMessageService:
         observability: ObservabilityContext | None = None,
         flow_id: uuid.UUID | None = None,
     ) -> _ReplyResolution:
+        orange_park_start = await self._resolve_orange_park_start_reply(
+            session,
+            tenant_id=tenant_id,
+            business=business,
+            conversation=conversation,
+            customer=customer,
+            incoming_message=incoming_message,
+            customer_message_text=customer_message_text,
+            channel=channel,
+            raw_payload=raw_payload,
+            flow_id=flow_id,
+        )
+        if orange_park_start is not None:
+            return orange_park_start
+
         orange_park_reply = await self._resolve_orange_park_contact_collection_reply(
             session,
             tenant_id=tenant_id,
@@ -1046,6 +1072,75 @@ class WebhookMessageService:
             prompt_run_id=prompt_run_id,
         )
 
+    async def _resolve_orange_park_start_reply(
+        self,
+        session: AsyncSession,
+        *,
+        tenant_id: uuid.UUID,
+        business: object,
+        conversation: Conversation,
+        customer: object,
+        incoming_message: Message,
+        customer_message_text: str,
+        channel: str,
+        raw_payload: dict[str, Any] | None,
+        flow_id: uuid.UUID | None,
+    ) -> _ReplyResolution | None:
+        if not _orange_park_start_applies(business, channel, customer_message_text):
+            return None
+
+        language = await _orange_park_start_language(
+            session,
+            tenant_id=tenant_id,
+            business_id=business.id,
+            conversation_id=conversation.id,
+            current_message_id=incoming_message.id,
+            raw_payload=raw_payload,
+        )
+        reply_text = (
+            ORANGE_PARK_START_WELCOME_UK
+            if language == "uk"
+            else ORANGE_PARK_START_WELCOME_RU
+        )
+        await _archive_orange_park_pre_start_history(
+            session,
+            tenant_id=tenant_id,
+            business_id=business.id,
+            conversation_id=conversation.id,
+            current_message_id=incoming_message.id,
+        )
+        _set_message_metadata(
+            incoming_message,
+            {
+                "orange_park_start_reset": {
+                    "stage": ORANGE_PARK_START_RESET_STAGE,
+                    "excluded_previous_history": True,
+                    "language": language,
+                }
+            },
+        )
+        await session.flush()
+        outbound_message = await self.message_service.save_outgoing_ai_message(
+            session,
+            tenant_id=tenant_id,
+            business=business,
+            conversation=conversation,
+            customer=customer,
+            message_text=reply_text,
+            channel=channel,
+            ai_metadata={
+                "orange_park_start_reset": True,
+                "stage": ORANGE_PARK_START_RESET_STAGE,
+                "used_fallback": False,
+            },
+            flow_id=flow_id,
+        )
+        return _ReplyResolution(
+            reply_to_customer=reply_text,
+            ai_failed=False,
+            outbound_message_id=outbound_message.id,
+        )
+
     async def _resolve_orange_park_contact_collection_reply(
         self,
         session: AsyncSession,
@@ -1114,6 +1209,19 @@ class WebhookMessageService:
         raw_payload: dict[str, Any] | None = None,
         observability: ObservabilityContext | None = None,
     ) -> _ReplyResolution:
+        orange_park_start = await _resolve_orange_park_start_reply_legacy(
+            session,
+            tenant_id=tenant_id,
+            business=business,
+            conversation=conversation,
+            incoming_message=incoming_message,
+            customer_message_text=customer_message_text,
+            channel=channel,
+            raw_payload=raw_payload,
+        )
+        if orange_park_start is not None:
+            return orange_park_start
+
         orange_park_reply = await _resolve_orange_park_contact_collection_reply_legacy(
             session,
             tenant_id=tenant_id,
@@ -1856,6 +1964,195 @@ def _lead_summary_from_model(lead: Lead) -> WebhookLeadSummary:
         id=str(lead.id),
         status=lead.status,
         priority=lead.priority or "normal",
+    )
+
+
+async def _resolve_orange_park_start_reply_legacy(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    business: object,
+    conversation: object,
+    incoming_message: object,
+    customer_message_text: str,
+    channel: str,
+    raw_payload: dict[str, Any] | None,
+) -> _ReplyResolution | None:
+    if not _orange_park_start_applies(business, channel, customer_message_text):
+        return None
+
+    language = await _orange_park_start_language(
+        session,
+        tenant_id=tenant_id,
+        business_id=business.id,
+        conversation_id=conversation.id,
+        current_message_id=incoming_message.id,
+        raw_payload=raw_payload,
+    )
+    reply_text = (
+        ORANGE_PARK_START_WELCOME_UK
+        if language == "uk"
+        else ORANGE_PARK_START_WELCOME_RU
+    )
+    await _archive_orange_park_pre_start_history(
+        session,
+        tenant_id=tenant_id,
+        business_id=business.id,
+        conversation_id=conversation.id,
+        current_message_id=incoming_message.id,
+    )
+    await _legacy_set_message_metadata(
+        session,
+        tenant_id=tenant_id,
+        business_id=business.id,
+        message=incoming_message,
+        metadata={
+            "orange_park_start_reset": {
+                "stage": ORANGE_PARK_START_RESET_STAGE,
+                "excluded_previous_history": True,
+                "language": language,
+            }
+        },
+    )
+    outbound_message = await _legacy_save_outgoing_ai_message(
+        session,
+        tenant_id=tenant_id,
+        business_id=business.id,
+        conversation_id=conversation.id,
+        message_text=reply_text,
+        channel=channel,
+        ai_metadata={
+            "orange_park_start_reset": True,
+            "stage": ORANGE_PARK_START_RESET_STAGE,
+            "used_fallback": False,
+        },
+    )
+    return _ReplyResolution(
+        reply_to_customer=reply_text,
+        ai_failed=False,
+        outbound_message_id=outbound_message.id,
+    )
+
+
+def _orange_park_start_applies(
+    business: object,
+    channel: str,
+    customer_message_text: str,
+) -> bool:
+    if not _orange_park_stage1_contact_collection_only(business, channel):
+        return False
+    normalized = customer_message_text.strip()
+    return normalized == "/start" or normalized.startswith("/start ")
+
+
+async def _orange_park_start_language(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    business_id: uuid.UUID,
+    conversation_id: uuid.UUID,
+    current_message_id: uuid.UUID,
+    raw_payload: dict[str, Any] | None,
+) -> str:
+    payload_language = _telegram_language_from_raw_payload(raw_payload)
+    if payload_language is not None:
+        return payload_language
+
+    rows = (
+        await session.execute(
+            text(
+                """
+                select message_text
+                from messages
+                where tenant_id = :tenant_id
+                  and business_id = :business_id
+                  and conversation_id = :conversation_id
+                  and id <> :current_message_id
+                  and sender_type = 'customer'
+                  and direction = 'incoming'
+                order by created_at desc
+                limit 10
+                """
+            ),
+            {
+                "tenant_id": tenant_id,
+                "business_id": business_id,
+                "conversation_id": conversation_id,
+                "current_message_id": current_message_id,
+            },
+        )
+    ).mappings().all()
+    history = ConversationHistory(
+        messages=tuple(
+            ConversationHistoryMessage(
+                sender_type="customer",
+                message_text=row["message_text"],
+                created_at=datetime.utcnow(),
+            )
+            for row in rows
+        )
+    )
+    return _orange_park_dialogue_language("", history=history)
+
+
+def _telegram_language_from_raw_payload(raw_payload: dict[str, Any] | None) -> str | None:
+    if not raw_payload:
+        return None
+    candidates = [
+        raw_payload.get("language_code"),
+        raw_payload.get("language"),
+    ]
+    nested = raw_payload.get("from")
+    if isinstance(nested, dict):
+        candidates.append(nested.get("language_code"))
+    message = raw_payload.get("message")
+    if isinstance(message, dict):
+        message_from = message.get("from")
+        if isinstance(message_from, dict):
+            candidates.append(message_from.get("language_code"))
+
+    for candidate in candidates:
+        if not isinstance(candidate, str):
+            continue
+        normalized = candidate.strip().casefold()
+        if normalized.startswith("uk") or normalized.startswith("ua"):
+            return "uk"
+        if normalized.startswith("ru"):
+            return "ru"
+    return None
+
+
+async def _archive_orange_park_pre_start_history(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    business_id: uuid.UUID,
+    conversation_id: uuid.UUID,
+    current_message_id: uuid.UUID,
+) -> None:
+    await session.execute(
+        text(
+            """
+            update messages
+            set metadata = coalesce(metadata, '{}'::jsonb) || cast(:metadata as jsonb)
+            where tenant_id = :tenant_id
+              and business_id = :business_id
+              and conversation_id = :conversation_id
+              and id <> :current_message_id
+            """
+        ),
+        {
+            "metadata": json.dumps(
+                {
+                    "excluded_from_prompt_history": True,
+                    "excluded_by_orange_park_start_reset": True,
+                }
+            ),
+            "tenant_id": tenant_id,
+            "business_id": business_id,
+            "conversation_id": conversation_id,
+            "current_message_id": current_message_id,
+        },
     )
 
 
