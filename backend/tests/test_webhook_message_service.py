@@ -15,6 +15,7 @@ from app.services.conversation_service import NEW_CONVERSATION_STATUS, Conversat
 from app.schemas.ai_reply import AiReplyResult
 from app.schemas.ai_reply_orchestration import AiReplyOrchestrationOutcome
 from app.services.ai_reply_orchestration_coordinator import REASON_AI_CHAIN_EXECUTED
+from app.services.flow_service import LegacyWebhookFlow
 from app.services.webhook_message_service import WebhookMessageService
 from tests.test_webhook_message_ai_wiring import _flow_service_mock
 from tests.webhook_test_helpers import (
@@ -196,6 +197,43 @@ async def test_process_incoming_message_orchestrates_services(
 
 
 @pytest.mark.anyio
+async def test_process_incoming_message_uses_legacy_branch_when_flow_table_absent(
+    business: Business,
+):
+    legacy_flow = LegacyWebhookFlow(
+        id=uuid.uuid4(),
+        tenant_id=business.tenant_id,
+        business_id=business.id,
+    )
+    business_service = MagicMock()
+    business_service.get_by_external_id = AsyncMock(return_value=business)
+    flow_service = MagicMock()
+    flow_service.resolve_for_webhook = AsyncMock(return_value=legacy_flow)
+    service = WebhookMessageService(
+        business_service=business_service,
+        flow_service=flow_service,
+    )
+    legacy_result = object()
+    service._process_incoming_message_legacy = AsyncMock(return_value=legacy_result)
+    session = MagicMock()
+
+    result = await service.process_incoming_message(session, _request())
+
+    assert result is legacy_result
+    flow_service.resolve_for_webhook.assert_awaited_once_with(
+        session,
+        tenant_id=business.tenant_id,
+        business_id=business.id,
+        flow_key=None,
+    )
+    service._process_incoming_message_legacy.assert_awaited_once()
+    legacy_kwargs = service._process_incoming_message_legacy.await_args.kwargs
+    assert legacy_kwargs["tenant_id"] == business.tenant_id
+    assert legacy_kwargs["business"] is business
+    assert legacy_kwargs["flow"] is legacy_flow
+
+
+@pytest.mark.anyio
 async def test_process_incoming_message_returns_duplicate_flag(
     business: Business,
     customer: Customer,
@@ -216,6 +254,7 @@ async def test_process_incoming_message_returns_duplicate_flag(
         return_value=IncomingMessageSaveResult(message=message, is_duplicate=True)
     )
     message_service.find_last_outgoing_ai_message = AsyncMock(return_value=None)
+    message_service.find_outgoing_ai_for_inbound = AsyncMock(return_value=None)
     ai_reply_coordinator = MagicMock(
         execute_for_incoming_message=AsyncMock(
             return_value=AiReplyOrchestrationOutcome(

@@ -1,9 +1,12 @@
 import logging
 import uuid
+import json
 from dataclasses import dataclass
 from datetime import datetime
+from types import SimpleNamespace
 from typing import Any
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.conversation import Conversation
@@ -27,13 +30,14 @@ from app.seed.dev_ai_configuration import PROMPT_TEMPLATE_CUSTOMER_REPLY_KEY
 from app.services.ai_configuration_service import AiConfigurationService
 from app.services.ai_reply_fallback_service import AiReplyFallbackService
 from app.services.ai_reply_orchestration_coordinator import AiReplyOrchestrationCoordinator
+from app.services.ai_reply_orchestration_service import AiReplyOrchestrationService
 from app.services.business_service import BusinessService
 from app.services.conversation_service import ConversationService
-from app.services.flow_service import FlowService
+from app.services.flow_service import FlowService, LegacyWebhookFlow
 from app.services.customer_service import CustomerService
 from app.services.lead_service import LeadService
 from app.services.lead_signal_detection_service import LeadSignalDetectionService
-from app.services.message_service import MessageService
+from app.services.message_service import IncomingMessageSaveResult, MessageService
 from app.core.config import settings
 from app.services.delivery_visibility_service import DeliveryVisibilityService
 from app.services.instagram_outbound_dedup_service import InstagramOutboundDedupService
@@ -60,6 +64,10 @@ from app.services.message_trace_service import (
 )
 from app.services.notification_policy_service import NotificationPolicyService
 from app.services.tenant_context_validator import validate_tenant_context
+from app.schemas.conversation_context import (
+    ConversationHistory,
+    ConversationHistoryMessage,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +87,7 @@ CUSTOMER_NOTE_MAX_LENGTH = 2000
 class WebhookMessageProcessResult:
     conversation: Conversation
     message: Message
-    flow: Flow
+    flow: Flow | LegacyWebhookFlow
     is_duplicate: bool
     reply_to_customer: str
     lead_created: bool
@@ -246,6 +254,17 @@ class WebhookMessageService:
             business_id=business.id,
             flow_key=request.flow_key,
         )
+        if isinstance(flow, LegacyWebhookFlow):
+            return await self._process_incoming_message_legacy(
+                session,
+                request,
+                observability=observability,
+                business=business,
+                tenant_id=tenant_id,
+                channel=channel,
+                flow=flow,
+            )
+
         observability = observability.with_flow(
             flow_id=flow.id,
             flow_key=flow.flow_key,
@@ -640,6 +659,136 @@ class WebhookMessageService:
             instagram_outbound_allowed=instagram_outbound_allowed,
         )
 
+    async def _process_incoming_message_legacy(
+        self,
+        session: AsyncSession,
+        request: NormalizedWebhookMessageRequest,
+        *,
+        observability: ObservabilityContext,
+        business: object,
+        tenant_id: uuid.UUID,
+        channel: str,
+        flow: LegacyWebhookFlow,
+    ) -> WebhookMessageProcessResult:
+        observability = observability.with_flow(
+            flow_id=flow.id,
+            flow_key=flow.flow_key,
+        )
+        customer = await self.customer_service.get_or_create_customer(
+            session,
+            tenant_id=tenant_id,
+            business_id=business.id,
+            source_channel=channel,
+            phone=request.customer.phone,
+            external_customer_id=request.customer.external_customer_id,
+            name=request.customer.name,
+            email=request.customer.email,
+        )
+        conversation = await _legacy_get_or_create_open_conversation(
+            session,
+            tenant_id=tenant_id,
+            business_id=business.id,
+            customer_id=customer.id,
+            channel=channel,
+            external_conversation_id=request.message.external_conversation_id,
+        )
+        save_result = await _legacy_save_incoming_customer_message(
+            session,
+            tenant_id=tenant_id,
+            business_id=business.id,
+            conversation_id=conversation.id,
+            message_text=request.message.text,
+            channel=channel,
+            external_message_id=request.message.external_message_id,
+            raw_payload=request.message.raw_payload,
+        )
+        conversation.last_message_at = _message_timestamp(request.message)
+        await _legacy_update_conversation_last_message_at(
+            session,
+            conversation_id=conversation.id,
+            last_message_at=conversation.last_message_at,
+        )
+        observability = observability.with_session(
+            conversation_id=conversation.id,
+            inbound_message_id=save_result.message.id,
+            is_duplicate=save_result.is_duplicate,
+        )
+
+        if save_result.is_duplicate:
+            reply_text = await _legacy_find_last_outgoing_ai_message_text(
+                session,
+                tenant_id=tenant_id,
+                business_id=business.id,
+                conversation_id=conversation.id,
+            )
+            return WebhookMessageProcessResult(
+                conversation=conversation,
+                message=save_result.message,
+                flow=flow,
+                is_duplicate=True,
+                reply_to_customer=reply_text or DUPLICATE_SAFE_ACKNOWLEDGMENT,
+                lead_created=False,
+                lead_updated=False,
+                notify_owner=False,
+                lead=None,
+                notification=None,
+                correlation_id=observability.correlation_id,
+                instagram_outbound_allowed=None,
+            )
+
+        signals = self.lead_signal_detection_service.detect(
+            customer_message_text=request.message.text,
+        )
+        reply_resolution = await self._resolve_reply_to_customer_legacy(
+            session,
+            tenant_id=tenant_id,
+            business=business,
+            conversation=conversation,
+            customer=customer,
+            incoming_message=save_result.message,
+            customer_message_text=request.message.text,
+            channel=channel,
+            operator_business_context=request.operator_business_context,
+            message_timestamp=request.message.timestamp,
+            raw_payload=request.message.raw_payload,
+            observability=observability,
+        )
+        lead_outcome = await self._process_lead_for_incoming_message(
+            session,
+            tenant_id=tenant_id,
+            business=business,
+            customer=customer,
+            conversation=conversation,
+            channel=channel,
+            customer_message_text=request.message.text,
+            signals=signals,
+        )
+        notification_decision = self.notification_policy_service.decide(
+            is_duplicate=False,
+            lead_created=lead_outcome.lead_created,
+            lead_updated=lead_outcome.lead_updated,
+            urgent_detected=signals.urgent_detected,
+            handoff_requested=signals.handoff_requested,
+            ai_failed=reply_resolution.ai_failed,
+        )
+        return WebhookMessageProcessResult(
+            conversation=conversation,
+            message=save_result.message,
+            flow=flow,
+            is_duplicate=False,
+            reply_to_customer=reply_resolution.reply_to_customer,
+            lead_created=lead_outcome.lead_created,
+            lead_updated=lead_outcome.lead_updated,
+            notify_owner=notification_decision.should_notify_owner,
+            lead=_lead_summary_from_model(lead_outcome.lead)
+            if lead_outcome.lead is not None
+            else None,
+            notification=_notification_from_decision(notification_decision),
+            correlation_id=observability.correlation_id,
+            outbound_message_id=reply_resolution.outbound_message_id,
+            instagram_outbound_allowed=None,
+        )
+
     async def _process_lead_for_incoming_message(
         self,
         session: AsyncSession,
@@ -829,6 +978,100 @@ class WebhookMessageService:
             ai_failed=False,
             langfuse_trace_id=langfuse_trace_id,
             prompt_run_id=prompt_run_id,
+        )
+
+    async def _resolve_reply_to_customer_legacy(
+        self,
+        session: AsyncSession,
+        *,
+        tenant_id: uuid.UUID,
+        business: object,
+        conversation: object,
+        customer: object,
+        incoming_message: object,
+        customer_message_text: str,
+        channel: str,
+        operator_business_context: str | None = None,
+        message_timestamp: datetime | None = None,
+        raw_payload: dict[str, Any] | None = None,
+        observability: ObservabilityContext | None = None,
+    ) -> _ReplyResolution:
+        coordinator = AiReplyOrchestrationCoordinator(
+            AiReplyOrchestrationService(
+                message_service=_LegacyMessageHistoryService(),
+            )
+        )
+        orchestration_outcome = await coordinator.execute_for_incoming_message(
+            session,
+            is_duplicate=False,
+            tenant_id=tenant_id,
+            business=business,
+            conversation=conversation,
+            message=incoming_message,
+            customer_message_text=customer_message_text,
+            channel=channel,
+            template_key=PROMPT_TEMPLATE_CUSTOMER_REPLY_KEY,
+            operator_business_context=operator_business_context,
+            message_timestamp=message_timestamp,
+            raw_payload=raw_payload,
+            observability=observability,
+        )
+        ai_reply = orchestration_outcome.ai_reply
+        if ai_reply is not None and _ai_reply_text_is_usable(ai_reply):
+            reply_text = ai_reply.text.strip()
+            outbound_message = await _legacy_save_outgoing_ai_message(
+                session,
+                tenant_id=tenant_id,
+                business_id=business.id,
+                conversation_id=conversation.id,
+                message_text=reply_text,
+                channel=channel,
+                ai_metadata=_ai_reply_metadata(ai_reply, used_fallback=False),
+            )
+            return _ReplyResolution(
+                reply_to_customer=reply_text,
+                ai_failed=False,
+                outbound_message_id=outbound_message.id,
+                langfuse_trace_id=orchestration_outcome.langfuse_trace_id,
+                prompt_run_id=ai_reply.prompt_run_id,
+            )
+
+        configuration = await self.ai_configuration_service.load_for_message(
+            session,
+            tenant_id=tenant_id,
+            business_id=business.id,
+            channel=channel,
+            template_key=PROMPT_TEMPLATE_CUSTOMER_REPLY_KEY,
+        )
+        fallback_decision = self.ai_fallback_service.decide(
+            ai_reply=ai_reply,
+            behavior=configuration.behavior,
+            channel=channel,
+        )
+        if fallback_decision.should_reply and fallback_decision.fallback_text:
+            outbound_message = await _legacy_save_outgoing_ai_message(
+                session,
+                tenant_id=tenant_id,
+                business_id=business.id,
+                conversation_id=conversation.id,
+                message_text=fallback_decision.fallback_text,
+                channel=channel,
+                ai_metadata=_ai_reply_metadata(ai_reply, used_fallback=True)
+                if ai_reply is not None
+                else {"used_fallback": True},
+            )
+            return _ReplyResolution(
+                reply_to_customer=fallback_decision.fallback_text,
+                ai_failed=True,
+                outbound_message_id=outbound_message.id,
+                langfuse_trace_id=orchestration_outcome.langfuse_trace_id,
+                prompt_run_id=ai_reply.prompt_run_id if ai_reply is not None else None,
+            )
+        return _ReplyResolution(
+            reply_to_customer=DUPLICATE_SAFE_ACKNOWLEDGMENT,
+            ai_failed=False,
+            langfuse_trace_id=orchestration_outcome.langfuse_trace_id,
+            prompt_run_id=ai_reply.prompt_run_id if ai_reply is not None else None,
         )
 
     async def _record_webhook_replay_event(
@@ -1091,6 +1334,353 @@ class WebhookMessageService:
             inbound_message_id=incoming_message.id,
         )
         return inbound_reply is not None
+
+
+class _LegacyMessageHistoryService:
+    async def load_recent_conversation_history(
+        self,
+        session: AsyncSession,
+        *,
+        tenant_id: uuid.UUID,
+        business_id: uuid.UUID,
+        conversation_id: uuid.UUID,
+        limit: int = 20,
+    ) -> ConversationHistory:
+        rows = (
+            await session.execute(
+                text(
+                    """
+                    select sender_type, message_text, created_at, metadata
+                    from messages
+                    where tenant_id = :tenant_id
+                      and business_id = :business_id
+                      and conversation_id = :conversation_id
+                    order by created_at desc
+                    limit :limit
+                    """
+                ),
+                {
+                    "tenant_id": tenant_id,
+                    "business_id": business_id,
+                    "conversation_id": conversation_id,
+                    "limit": max(1, min(limit, 20)),
+                },
+            )
+        ).mappings().all()
+        if not rows:
+            return ConversationHistory.empty()
+        messages = []
+        for row in reversed(rows):
+            metadata = row["metadata"] or {}
+            if metadata.get("excluded_from_prompt_history") is True:
+                continue
+            messages.append(
+                ConversationHistoryMessage(
+                    sender_type=row["sender_type"],
+                    message_text=row["message_text"],
+                    created_at=row["created_at"],
+                )
+            )
+        return ConversationHistory(messages=tuple(messages))
+
+
+async def _legacy_get_or_create_open_conversation(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    business_id: uuid.UUID,
+    customer_id: uuid.UUID,
+    channel: str,
+    external_conversation_id: str | None,
+) -> SimpleNamespace:
+    normalized_external_id = _normalize_legacy_string(external_conversation_id)
+    if normalized_external_id is not None:
+        row = (
+            await session.execute(
+                text(
+                    """
+                    select id, tenant_id, business_id, customer_id, channel,
+                           external_conversation_id, status, is_ai_active,
+                           last_message_at, created_at, updated_at
+                    from conversations
+                    where tenant_id = :tenant_id
+                      and business_id = :business_id
+                      and channel = :channel
+                      and external_conversation_id = :external_conversation_id
+                      and status in ('open', 'waiting_for_customer', 'waiting_for_owner')
+                    order by last_message_at desc nulls last, created_at desc
+                    limit 1
+                    """
+                ),
+                {
+                    "tenant_id": tenant_id,
+                    "business_id": business_id,
+                    "channel": channel,
+                    "external_conversation_id": normalized_external_id,
+                },
+            )
+        ).mappings().first()
+    else:
+        row = (
+            await session.execute(
+                text(
+                    """
+                    select id, tenant_id, business_id, customer_id, channel,
+                           external_conversation_id, status, is_ai_active,
+                           last_message_at, created_at, updated_at
+                    from conversations
+                    where tenant_id = :tenant_id
+                      and business_id = :business_id
+                      and customer_id = :customer_id
+                      and channel = :channel
+                      and status in ('open', 'waiting_for_customer', 'waiting_for_owner')
+                    order by last_message_at desc nulls last, created_at desc
+                    limit 1
+                    """
+                ),
+                {
+                    "tenant_id": tenant_id,
+                    "business_id": business_id,
+                    "customer_id": customer_id,
+                    "channel": channel,
+                },
+            )
+        ).mappings().first()
+    if row is not None:
+        return _legacy_namespace(row)
+
+    conversation_id = uuid.uuid4()
+    row = (
+        await session.execute(
+            text(
+                """
+                insert into conversations (
+                    id, tenant_id, business_id, customer_id, channel,
+                    external_conversation_id, status, is_ai_active
+                )
+                values (
+                    :id, :tenant_id, :business_id, :customer_id, :channel,
+                    :external_conversation_id, 'open', true
+                )
+                returning id, tenant_id, business_id, customer_id, channel,
+                          external_conversation_id, status, is_ai_active,
+                          last_message_at, created_at, updated_at
+                """
+            ),
+            {
+                "id": conversation_id,
+                "tenant_id": tenant_id,
+                "business_id": business_id,
+                "customer_id": customer_id,
+                "channel": channel,
+                "external_conversation_id": normalized_external_id,
+            },
+        )
+    ).mappings().one()
+    return _legacy_namespace(row)
+
+
+async def _legacy_save_incoming_customer_message(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    business_id: uuid.UUID,
+    conversation_id: uuid.UUID,
+    message_text: str,
+    channel: str,
+    external_message_id: str | None,
+    raw_payload: dict[str, Any] | None,
+) -> IncomingMessageSaveResult:
+    stored_external_id = _normalize_legacy_string(external_message_id)
+    if stored_external_id is not None:
+        existing = (
+            await session.execute(
+                text(
+                    """
+                    select id, tenant_id, business_id, conversation_id,
+                           sender_type, direction, channel, message_text,
+                           message_type, external_message_id, raw_payload,
+                           ai_metadata, metadata, created_at
+                    from messages
+                    where tenant_id = :tenant_id
+                      and business_id = :business_id
+                      and conversation_id = :conversation_id
+                      and sender_type = 'customer'
+                      and direction = 'incoming'
+                      and external_message_id = :external_message_id
+                    limit 1
+                    """
+                ),
+                {
+                    "tenant_id": tenant_id,
+                    "business_id": business_id,
+                    "conversation_id": conversation_id,
+                    "external_message_id": stored_external_id,
+                },
+            )
+        ).mappings().first()
+        if existing is not None:
+            return IncomingMessageSaveResult(
+                message=_legacy_message_namespace(existing),
+                is_duplicate=True,
+            )
+
+    row = (
+        await session.execute(
+            text(
+                """
+                insert into messages (
+                    id, tenant_id, business_id, conversation_id, sender_type,
+                    direction, channel, message_text, message_type,
+                    external_message_id, raw_payload
+                )
+                values (
+                    :id, :tenant_id, :business_id, :conversation_id, 'customer',
+                    'incoming', :channel, :message_text, 'text',
+                    :external_message_id, cast(:raw_payload as jsonb)
+                )
+                returning id, tenant_id, business_id, conversation_id,
+                          sender_type, direction, channel, message_text,
+                          message_type, external_message_id, raw_payload,
+                          ai_metadata, metadata, created_at
+                """
+            ),
+            {
+                "id": uuid.uuid4(),
+                "tenant_id": tenant_id,
+                "business_id": business_id,
+                "conversation_id": conversation_id,
+                "channel": channel,
+                "message_text": message_text,
+                "external_message_id": stored_external_id,
+                "raw_payload": json.dumps(raw_payload) if raw_payload is not None else None,
+            },
+        )
+    ).mappings().one()
+    return IncomingMessageSaveResult(
+        message=_legacy_message_namespace(row),
+        is_duplicate=False,
+    )
+
+
+async def _legacy_save_outgoing_ai_message(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    business_id: uuid.UUID,
+    conversation_id: uuid.UUID,
+    message_text: str,
+    channel: str,
+    ai_metadata: dict[str, Any] | None,
+) -> SimpleNamespace:
+    row = (
+        await session.execute(
+            text(
+                """
+                insert into messages (
+                    id, tenant_id, business_id, conversation_id, sender_type,
+                    direction, channel, message_text, message_type, ai_metadata
+                )
+                values (
+                    :id, :tenant_id, :business_id, :conversation_id, 'ai',
+                    'outgoing', :channel, :message_text, 'text',
+                    cast(:ai_metadata as jsonb)
+                )
+                returning id, tenant_id, business_id, conversation_id,
+                          sender_type, direction, channel, message_text,
+                          message_type, external_message_id, raw_payload,
+                          ai_metadata, metadata, created_at
+                """
+            ),
+            {
+                "id": uuid.uuid4(),
+                "tenant_id": tenant_id,
+                "business_id": business_id,
+                "conversation_id": conversation_id,
+                "channel": channel,
+                "message_text": message_text,
+                "ai_metadata": json.dumps(ai_metadata) if ai_metadata is not None else None,
+            },
+        )
+    ).mappings().one()
+    return _legacy_message_namespace(row)
+
+
+async def _legacy_update_conversation_last_message_at(
+    session: AsyncSession,
+    *,
+    conversation_id: uuid.UUID,
+    last_message_at: datetime,
+) -> None:
+    await session.execute(
+        text(
+            """
+            update conversations
+            set last_message_at = :last_message_at,
+                updated_at = now()
+            where id = :conversation_id
+            """
+        ),
+        {
+            "conversation_id": conversation_id,
+            "last_message_at": last_message_at,
+        },
+    )
+
+
+async def _legacy_find_last_outgoing_ai_message_text(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    business_id: uuid.UUID,
+    conversation_id: uuid.UUID,
+) -> str | None:
+    row = (
+        await session.execute(
+            text(
+                """
+                select message_text
+                from messages
+                where tenant_id = :tenant_id
+                  and business_id = :business_id
+                  and conversation_id = :conversation_id
+                  and sender_type = 'ai'
+                  and direction = 'outgoing'
+                order by created_at desc
+                limit 1
+                """
+            ),
+            {
+                "tenant_id": tenant_id,
+                "business_id": business_id,
+                "conversation_id": conversation_id,
+            },
+        )
+    ).mappings().first()
+    if row is None:
+        return None
+    text_value = row["message_text"]
+    return text_value.strip() if text_value and text_value.strip() else None
+
+
+def _legacy_namespace(row: object) -> SimpleNamespace:
+    return SimpleNamespace(**dict(row))
+
+
+def _legacy_message_namespace(row: object) -> SimpleNamespace:
+    data = dict(row)
+    data.setdefault("idempotency_key", None)
+    data.setdefault("metadata_", data.pop("metadata", None))
+    if "metadata" in data:
+        data.pop("metadata")
+    return SimpleNamespace(**data)
+
+
+def _normalize_legacy_string(value: str | None) -> str | None:
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped if stripped else None
 
 
 def _ai_reply_text_is_usable(ai_reply: AiReplyResult) -> bool:
