@@ -276,7 +276,19 @@ async def test_process_incoming_message_orchestrates_services(
 
 
 @pytest.mark.anyio
-async def test_orange_park_telegram_start_skips_ai_and_archives_prior_history():
+@pytest.mark.parametrize(
+    ("raw_payload", "previous_customer_message"),
+    [
+        ({"language_code": "uk"}, "old stale message"),
+        ({"language_code": "ru"}, "old stale message"),
+        ({}, "old stale message"),
+        ({"language_code": "ru"}, "Свяжи меня с менеджером"),
+    ],
+)
+async def test_orange_park_telegram_start_always_ukrainian_and_skips_ai(
+    raw_payload,
+    previous_customer_message: str,
+):
     business = Business(
         id=uuid.uuid4(),
         tenant_id=uuid.uuid4(),
@@ -328,7 +340,7 @@ async def test_orange_park_telegram_start_skips_ai_and_archives_prior_history():
             messages=(
                 ConversationHistoryMessage(
                     sender_type="customer",
-                    message_text="old stale message",
+                    message_text=previous_customer_message,
                     created_at=datetime(2026, 5, 21, 9, 59, 0),
                 ),
             )
@@ -353,7 +365,7 @@ async def test_orange_park_telegram_start_skips_ai_and_archives_prior_history():
     )
     session = MagicMock()
     session.flush = AsyncMock()
-    session.execute = AsyncMock(side_effect=[_execute_mappings([]), MagicMock()])
+    session.execute = AsyncMock(return_value=MagicMock())
 
     result = await service.process_incoming_message(
         session,
@@ -367,7 +379,7 @@ async def test_orange_park_telegram_start_skips_ai_and_archives_prior_history():
                     "external_message_id": f"tg:orange-park:{uuid.uuid4()}",
                     "external_conversation_id": "tg:orange-park-start-test",
                     "timestamp": "2026-05-21T10:00:00Z",
-                    "raw_payload": {"language_code": "ru"},
+                    "raw_payload": raw_payload,
                 },
             }
         ),
@@ -382,7 +394,7 @@ async def test_orange_park_telegram_start_skips_ai_and_archives_prior_history():
         "excluded_previous_history": True,
         "language": "uk",
     }
-    archive_call = session.execute.await_args_list[1]
+    archive_call = session.execute.await_args_list[0]
     assert "update messages" in str(archive_call.args[0])
     assert "excluded_from_prompt_history" in archive_call.args[1]["metadata"]
     assert archive_call.args[1]["current_message_id"] == incoming.id

@@ -85,11 +85,6 @@ CUSTOMER_NOTE_MAX_LENGTH = 2000
 ORANGE_PARK_BUSINESS_EXTERNAL_ID = "orange-park"
 ORANGE_PARK_CONTACT_COLLECTION_STAGE = "orange_park_telegram_stage1_contact_form"
 ORANGE_PARK_START_RESET_STAGE = "orange_park_telegram_start_reset"
-ORANGE_PARK_START_WELCOME_RU = (
-    "Добрый день! Я AI-ассистент ЖК Orange Park. Могу помочь с информацией о "
-    "комплексе, квартирах, условиях покупки и передать запрос менеджеру.\n\n"
-    "Что вас интересует: квартира, коммерческое помещение или условия покупки?"
-)
 ORANGE_PARK_START_WELCOME_UK = (
     "Добрий день! 👋\n\n"
     "Я AI-асистент ЖК Orange Park.\n\n"
@@ -99,12 +94,6 @@ ORANGE_PARK_START_WELCOME_UK = (
     "🏡 Квартира\n"
     "🏢 Комерційне приміщення\n"
     "💳 Умови покупки / розтермінування"
-)
-ORANGE_PARK_START_WELCOME_EN = (
-    "Good afternoon! I am the AI assistant for Orange Park residential complex. "
-    "I can help with information about the complex, apartments, purchase terms, "
-    "and pass a request to a manager.\n\n"
-    "What are you interested in: an apartment, commercial premises, or purchase terms?"
 )
 
 _PHONE_NUMBER_PATTERN = re.compile(r"(?<!\w)\+?\d[\d\s().-]{7,}\d(?!\w)")
@@ -1108,21 +1097,7 @@ class WebhookMessageService:
         if not _orange_park_start_applies(business, channel, customer_message_text):
             return None
 
-        language = await _orange_park_start_language(
-            session,
-            tenant_id=tenant_id,
-            business_id=business.id,
-            conversation_id=conversation.id,
-            current_message_id=incoming_message.id,
-            raw_payload=raw_payload,
-        )
-        reply_text = (
-            ORANGE_PARK_START_WELCOME_RU
-            if language == "ru"
-            else ORANGE_PARK_START_WELCOME_EN
-            if language == "en"
-            else ORANGE_PARK_START_WELCOME_UK
-        )
+        reply_text = ORANGE_PARK_START_WELCOME_UK
         await _archive_orange_park_pre_start_history(
             session,
             tenant_id=tenant_id,
@@ -1136,7 +1111,7 @@ class WebhookMessageService:
                 "orange_park_start_reset": {
                     "stage": ORANGE_PARK_START_RESET_STAGE,
                     "excluded_previous_history": True,
-                    "language": language,
+                    "language": "uk",
                 }
             },
         )
@@ -2002,21 +1977,7 @@ async def _resolve_orange_park_start_reply_legacy(
     if not _orange_park_start_applies(business, channel, customer_message_text):
         return None
 
-    language = await _orange_park_start_language(
-        session,
-        tenant_id=tenant_id,
-        business_id=business.id,
-        conversation_id=conversation.id,
-        current_message_id=incoming_message.id,
-        raw_payload=raw_payload,
-    )
-    reply_text = (
-        ORANGE_PARK_START_WELCOME_RU
-        if language == "ru"
-        else ORANGE_PARK_START_WELCOME_EN
-        if language == "en"
-        else ORANGE_PARK_START_WELCOME_UK
-    )
+    reply_text = ORANGE_PARK_START_WELCOME_UK
     await _archive_orange_park_pre_start_history(
         session,
         tenant_id=tenant_id,
@@ -2033,7 +1994,7 @@ async def _resolve_orange_park_start_reply_legacy(
             "orange_park_start_reset": {
                 "stage": ORANGE_PARK_START_RESET_STAGE,
                 "excluded_previous_history": True,
-                "language": language,
+                "language": "uk",
             }
         },
     )
@@ -2066,52 +2027,6 @@ def _orange_park_start_applies(
         return False
     normalized = customer_message_text.strip()
     return normalized == "/start" or normalized.startswith("/start ")
-
-
-async def _orange_park_start_language(
-    session: AsyncSession,
-    *,
-    tenant_id: uuid.UUID,
-    business_id: uuid.UUID,
-    conversation_id: uuid.UUID,
-    current_message_id: uuid.UUID,
-    raw_payload: dict[str, Any] | None,
-) -> str:
-    rows = (
-        await session.execute(
-            text(
-                """
-                select message_text
-                from messages
-                where tenant_id = :tenant_id
-                  and business_id = :business_id
-                  and conversation_id = :conversation_id
-                  and id <> :current_message_id
-                  and sender_type = 'customer'
-                  and direction = 'incoming'
-                order by created_at desc
-                limit 10
-                """
-            ),
-            {
-                "tenant_id": tenant_id,
-                "business_id": business_id,
-                "conversation_id": conversation_id,
-                "current_message_id": current_message_id,
-            },
-        )
-    ).mappings().all()
-    history = ConversationHistory(
-        messages=tuple(
-            ConversationHistoryMessage(
-                sender_type="customer",
-                message_text=row["message_text"],
-                created_at=datetime.utcnow(),
-            )
-            for row in rows
-        )
-    )
-    return _orange_park_dialogue_language("", history=history)
 
 
 async def _archive_orange_park_pre_start_history(
