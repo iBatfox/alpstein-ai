@@ -229,6 +229,35 @@ def test_orange_park_general_question_does_not_trigger_contact_collection():
     assert "intent" not in metadata["orange_park_contact_collection"]
 
 
+@pytest.mark.parametrize(
+    "message_text",
+    (
+        "Які є варіанти до 100000 грн?",
+        "Покажіть квартири до 1600000",
+        "Які є варіанти?",
+        "Що є в наявності?",
+    ),
+)
+def test_orange_park_budget_and_current_options_use_telegram_contact_button(
+    message_text: str,
+):
+    reply, metadata = _orange_park_contact_collection_reply_and_metadata(
+        message_text,
+        history=ConversationHistory.empty(),
+    )
+
+    assert reply == (
+        "Актуальні варіанти в межах бюджету підтвердить менеджер.\n\n"
+        "Для зв'язку з менеджером, будь ласка, натисніть кнопку "
+        "«📱 Поділитися номером»."
+    )
+    assert "Напишіть, будь ласка, номер телефону" not in reply
+    assert metadata["orange_park_contact_collection"]["intent"] == (
+        "budget_or_current_options_requires_manager"
+    )
+    assert metadata["orange_park_contact_collection"]["telegram_contact_request"] is True
+
+
 def _area_question_history() -> ConversationHistory:
     return ConversationHistory(
         messages=(
@@ -659,7 +688,26 @@ async def test_orange_park_telegram_start_always_ukrainian_and_skips_ai(
 
 
 @pytest.mark.anyio
-async def test_orange_park_telegram_handoff_asks_russian_contact_form_without_lead():
+@pytest.mark.parametrize(
+    ("message_text", "expected_reply"),
+    (
+        (
+            "Свяжи меня с менеджером",
+            "Для зв'язку з менеджером, будь ласка, натисніть кнопку "
+            "«📱 Поділитися номером».",
+        ),
+        (
+            "Які є варіанти до 100000 грн?",
+            "Актуальні варіанти в межах бюджету підтвердить менеджер.\n\n"
+            "Для зв'язку з менеджером, будь ласка, натисніть кнопку "
+            "«📱 Поділитися номером».",
+        ),
+    ),
+)
+async def test_orange_park_telegram_handoff_uses_contact_button_without_lead(
+    message_text: str,
+    expected_reply: str,
+):
     business = Business(
         id=uuid.uuid4(),
         tenant_id=uuid.uuid4(),
@@ -690,7 +738,7 @@ async def test_orange_park_telegram_handoff_asks_russian_contact_form_without_le
         sender_type="customer",
         direction="incoming",
         channel="telegram",
-        message_text="Свяжи меня с менеджером",
+        message_text=message_text,
     )
     outgoing = Message(
         id=uuid.uuid4(),
@@ -711,7 +759,7 @@ async def test_orange_park_telegram_handoff_asks_russian_contact_form_without_le
             messages=(
                 ConversationHistoryMessage(
                     sender_type="customer",
-                    message_text="Свяжи меня с менеджером",
+                    message_text=message_text,
                     created_at=datetime(2026, 5, 21, 10, 0, 0),
                 ),
             )
@@ -739,14 +787,11 @@ async def test_orange_park_telegram_handoff_asks_russian_contact_form_without_le
 
     result = await service.process_incoming_message(
         session,
-        _orange_park_request("Свяжи меня с менеджером"),
+        _orange_park_request(message_text),
     )
 
     assert result.lead_created is False
-    assert result.reply_to_customer == (
-        "Для зв'язку з менеджером, будь ласка, натисніть кнопку "
-        "«📱 Поділитися номером»."
-    )
+    assert result.reply_to_customer == expected_reply
     assert "Thank" not in result.reply_to_customer
     assert "Phone" not in result.reply_to_customer
     assert "Телефон:" not in result.reply_to_customer

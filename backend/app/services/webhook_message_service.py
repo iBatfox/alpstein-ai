@@ -102,6 +102,10 @@ ORANGE_PARK_CONTACT_BUTTON_REPLY_UK = (
     "Для зв'язку з менеджером, будь ласка, натисніть кнопку "
     "«📱 Поділитися номером»."
 )
+ORANGE_PARK_BUDGET_CONTACT_BUTTON_REPLY_UK = (
+    "Актуальні варіанти в межах бюджету підтвердить менеджер.\n\n"
+    f"{ORANGE_PARK_CONTACT_BUTTON_REPLY_UK}"
+)
 ORANGE_PARK_CONTACT_RECEIVED_REPLY_UK = (
     "Дякуємо. Запит передано менеджеру. Очікуйте дзвінок."
 )
@@ -164,6 +168,23 @@ _CONTACT_REQUEST_MARKERS = (
     "данные",
     "дай дан",
     "дай контакт",
+)
+_ORANGE_PARK_CURRENT_OPTIONS_MARKERS = (
+    "які є варіанти",
+    "які варіанти",
+    "що є в наявності",
+    "що в наявності",
+    "актуальні варіанти",
+    "наявні варіанти",
+    "ціна",
+    "ціни",
+    "вартість",
+    "скільки кошту",
+    "бюджет",
+)
+_ORANGE_PARK_BUDGET_LIMIT_RE = re.compile(
+    r"(?<!\w)до\s+\d[\d\s]*(?:грн|₴|uah)?(?!\w)",
+    re.IGNORECASE,
 )
 
 
@@ -2353,6 +2374,16 @@ def _orange_park_contact_collection_reply_and_metadata(
         )
         return ORANGE_PARK_CONTACT_BUTTON_REPLY_UK, metadata
 
+    if _is_orange_park_budget_or_current_options_intent(customer_message_text):
+        metadata["orange_park_contact_collection"].update(
+            {
+                "intent": "budget_or_current_options_requires_manager",
+                "missing_fields": ["telegram_contact"],
+                "telegram_contact_request": True,
+            }
+        )
+        return ORANGE_PARK_BUDGET_CONTACT_BUTTON_REPLY_UK, metadata
+
     if _is_contact_collection_trigger(customer_message_text):
         metadata["orange_park_contact_collection"].update(
             {
@@ -2465,6 +2496,13 @@ def _is_contact_collection_trigger(text_value: str) -> bool:
         marker in normalized for marker in _HANDOFF_MARKERS
     ) or any(
         marker in normalized for marker in _CONTACT_REQUEST_MARKERS
+    )
+
+
+def _is_orange_park_budget_or_current_options_intent(text_value: str) -> bool:
+    normalized = " ".join(text_value.casefold().split())
+    return _ORANGE_PARK_BUDGET_LIMIT_RE.search(normalized) is not None or any(
+        marker in normalized for marker in _ORANGE_PARK_CURRENT_OPTIONS_MARKERS
     )
 
 
