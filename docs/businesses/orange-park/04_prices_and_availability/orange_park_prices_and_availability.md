@@ -16,15 +16,6 @@ All prices, discounts, availability, financing conditions, credit terms, voucher
 
 The AI assistant must not present this data as current fact. It may only mention that such programs or options are described in source materials and offer manager confirmation.
 
-## AI usage rules
-
-- AI may mention only general availability of programs: full payment, installment, єОселя, PrivatBank credit, housing vouchers, and commercial-premises consultation.
-- AI must not promise exact price, exact price per m2, apartment availability, remaining unit count, discount, financing approval, or monthly payment.
-- AI must offer manager confirmation for price, apartment availability, discounts, installment terms, єОселя, PrivatBank credit, vouchers, commercial premises, and readiness status.
-- AI should collect contact info before handoff where appropriate: name, phone, desired apartment type, budget, payment route, and preferred contact channel.
-- AI must not guarantee reservation, bank approval, єОселя eligibility, voucher approval, or legal purchase outcome.
-- AI must not reuse stale promotional counts like "only 3 left" or "only 4 left" unless manager confirms them for the current date.
-
 ## Pricing claims found in source
 
 These values are extracted from source material and require fresh manager confirmation:
@@ -174,32 +165,6 @@ These are extracted for manager confirmation:
   - large parking zone.
 - Commercial inventory, price, area, readiness, and terms are not stable in the prepared docs and require manager confirmation.
 
-## Suggested bot responses for price/availability questions
-
-### Customer asks: "Сколько стоит квартира?"
-
-Цена зависит от планировки, площади, дома, этажа, готовности и актуальных акций. Я могу передать запрос менеджеру, чтобы он проверил текущую цену и доступные варианты. Подскажите, пожалуйста, сколько комнат рассматриваете и какой бюджет?
-
-### Customer asks: "Есть ли квартиры в наличии?"
-
-Наличие быстро меняется, поэтому точные варианты подтверждает менеджер. Напишите, пожалуйста, желаемое количество комнат, бюджет и удобный номер телефона — менеджер подберет актуальные квартиры.
-
-### Customer asks: "Какая скидка сейчас действует?"
-
-В материалах есть разные акционные условия, но скидки зависят от даты обращения и конкретной квартиры. Менеджер подтвердит актуальную акцию. Хотите, чтобы я передал ваш запрос?
-
-### Customer asks: "Можно в рассрочку?"
-
-В материалах указана возможность рассрочки, но условия зависят от квартиры и первого взноса. Менеджер рассчитает актуальный вариант под ваш бюджет.
-
-### Customer asks: "Подходит ли єОселя?"
-
-В материалах указаны программы єОселя, но eligibility и подходящие квартиры должен подтвердить менеджер. Я могу передать заявку на проверку.
-
-### Customer asks: "Есть коммерческие помещения?"
-
-Да, в материалах указаны коммерческие помещения. Актуальные площади, цены и условия подтвердит менеджер. Подскажите, для какого бизнеса рассматриваете помещение и какая площадь нужна?
-
 ## Unclear/conflicting source data
 
 - Distance to метро Теремки appears as 6.5 км and 7 км.
@@ -234,29 +199,3 @@ Before production use, confirm:
 - Current commercial premises price, area, electrical capacity, and readiness.
 - Whether traffic, resident-family, and "20+ businesses" claims are approved for sales use.
 - Official manager-approved wording for handoff, lead capture, and disclaimers.
-
-## Suggested Bitrix24 lead fields from this doc
-
-- `lead_source`: Telegram bot / website / manual / other.
-- `project`: Orange Park.
-- `business_external_id`: orange-park.
-- `customer_name`.
-- `customer_phone`.
-- `customer_language`: Ukrainian / Russian / other.
-- `interest_type`: apartment / commercial premises / financing / viewing / callback.
-- `apartment_type`: 1-room / 2-room / 3-room / 4-room / two-level / patio / unknown.
-- `desired_area_m2`.
-- `desired_budget`.
-- `payment_route`: full payment / installment / єОселя / PrivatBank credit / voucher / unknown.
-- `first_payment_available`.
-- `needs_price_confirmation`: yes/no.
-- `needs_availability_confirmation`: yes/no.
-- `needs_discount_confirmation`: yes/no.
-- `needs_financing_consultation`: yes/no.
-- `commercial_business_type`.
-- `commercial_desired_area_m2`.
-- `preferred_contact_channel`: Telegram / phone / Viber / WhatsApp / other.
-- `requested_materials`: video / layout / price list / financing calculation / commercial offer.
-- `manager_notes`.
-- `source_question_or_intent`.
-- `handoff_priority`: normal / hot / urgent.

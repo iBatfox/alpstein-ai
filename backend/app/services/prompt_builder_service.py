@@ -487,6 +487,11 @@ def _build_tenant_behavior(config: TenantBehaviorConfig) -> str:
     _append_bool_field(parts, "handoff_enabled", config.handoff_enabled)
     _append_json_field(parts, "handoff_keywords", config.handoff_keywords)
     _append_json_field(parts, "forbidden_promises", config.forbidden_promises)
+    _append_field(parts, "fallback_response", config.fallback_response)
+    if config.metadata:
+        behavior_instructions = config.metadata.get("behavior_instructions")
+        if isinstance(behavior_instructions, str):
+            _append_field(parts, "behavior_instructions", behavior_instructions)
 
     return _join_reference_lines(parts)
 

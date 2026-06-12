@@ -305,13 +305,8 @@ Do not use without fresh manager confirmation:
 - єОселя 3% / 7% terms.
 - Housing vouchers up to 2,000,000 грн.
 
-## AI usage constraints
+## Data classification
 
-- Do not invent prices.
-- Do not invent apartment availability.
-- Do not invent active promotions.
-- Do not promise mortgage, єОселя, voucher, or bank approval.
-- Do not guarantee booking, purchase approval, or exact monthly payment.
-- If a customer asks for price, availability, discount, payment schedule, credit, voucher, or єОселя eligibility, collect contact details and hand off to a manager or say that the manager will confirm current terms.
-- Do not use marketing claims as facts.
-- Do not treat PDF promotional language as legally binding.
+- Stable project facts may be used as business context.
+- Prices, availability, promotions, financing terms, readiness, and legal details are unstable and require current manager data.
+- Marketing claims are source material, not verified operational facts.

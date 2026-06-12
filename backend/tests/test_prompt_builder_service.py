@@ -191,6 +191,46 @@ def test_tenant_behavior_language_survives_large_business_context(
     assert prompt.total_chars() <= PROMPT_ASSEMBLY_MAX_CHARS
 
 
+def test_tenant_behavior_instructions_are_emitted_from_profile_metadata(
+    full_configuration: AiConfigurationBundle,
+    knowledge_result: KnowledgeRetrievalResult,
+    conversation_history: ConversationHistory,
+):
+    configuration = AiConfigurationBundle(
+        tenant_id=full_configuration.tenant_id,
+        business_id=full_configuration.business_id,
+        channel=full_configuration.channel,
+        template_key=full_configuration.template_key,
+        platform_template=full_configuration.platform_template,
+        business_context=full_configuration.business_context,
+        behavior=TenantBehaviorConfig(
+            present=True,
+            tone="consultative",
+            language="uk",
+            fallback_response="Fallback reply.",
+            metadata={
+                "behavior_instructions": (
+                    "Use native Telegram contact sharing. "
+                    "Do not ask customer to type phone manually."
+                )
+            },
+        ),
+        channel_rules=full_configuration.channel_rules,
+    )
+
+    prompt = PromptBuilderService().build_reply_to_customer(
+        configuration=configuration,
+        knowledge=knowledge_result,
+        history=conversation_history,
+        current_customer_message="Потрібен менеджер",
+    )
+    behavior = _section_map(prompt)["tenant_behavior"].content
+
+    assert "fallback_response: Fallback reply." in behavior
+    assert "Use native Telegram contact sharing." in behavior
+    assert "Do not ask customer to type phone manually." in behavior
+
+
 def test_task_instructions_comes_from_registry_not_tenant_config(
     full_configuration: AiConfigurationBundle,
     knowledge_result: KnowledgeRetrievalResult,

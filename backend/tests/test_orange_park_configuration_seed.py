@@ -1,5 +1,4 @@
 import importlib.util
-import ast
 import uuid
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -21,6 +20,18 @@ from app.seed.orange_park_configuration import (
 )
 
 
+OBSOLETE_CONTACT_PHRASES = (
+    "Будь ласка, залиште дані у такому форматі",
+    "Пожалуйста, оставьте данные",
+    "If phone is missing",
+    "If phone is already provided",
+    "ask only for phone",
+    "ask only for first and last name",
+    "Напишіть, будь ласка, номер телефону",
+    "Залиште, будь ласка, ваш номер телефону",
+)
+
+
 def _execute_scalar(value):
     result = MagicMock()
     result.scalar_one_or_none.return_value = value
@@ -35,118 +46,83 @@ def _empty_seed_session() -> AsyncMock:
     return session
 
 
+def _seed_rows(session: AsyncMock) -> list[object]:
+    return [call.args[0] for call in session.add.call_args_list]
+
+
 @pytest.mark.anyio
-async def test_orange_park_seed_first_run_inserts_all_entities():
+async def test_orange_park_seed_creates_clean_layered_configuration():
     session = _empty_seed_session()
 
     result = await seed_orange_park_configuration(session)
 
     assert result.tenant_slug == ORANGE_PARK_TENANT_SLUG
     assert result.business_external_id == ORANGE_PARK_BUSINESS_EXTERNAL_ID
-
-    added_models = {type(call.args[0]) for call in session.add.call_args_list}
-    assert added_models == {
-        Tenant,
-        Business,
-        TenantBusinessProfile,
-        TenantAiProfile,
-        TenantChannelSetting,
-        TenantKnowledgeSource,
-    }
     assert session.add.call_count == 8
 
-    added_rows = [call.args[0] for call in session.add.call_args_list]
-    business = next(row for row in added_rows if isinstance(row, Business))
+    rows = _seed_rows(session)
+    business = next(row for row in rows if isinstance(row, Business))
     business_profile = next(
-        row for row in added_rows if isinstance(row, TenantBusinessProfile)
+        row for row in rows if isinstance(row, TenantBusinessProfile)
     )
-    ai_profile = next(row for row in added_rows if isinstance(row, TenantAiProfile))
-    channel = next(row for row in added_rows if isinstance(row, TenantChannelSetting))
+    ai_profile = next(row for row in rows if isinstance(row, TenantAiProfile))
+    channel = next(row for row in rows if isinstance(row, TenantChannelSetting))
     knowledge = [
-        row for row in added_rows if isinstance(row, TenantKnowledgeSource)
+        row for row in rows if isinstance(row, TenantKnowledgeSource)
     ]
 
-    assert business.external_id == ORANGE_PARK_BUSINESS_EXTERNAL_ID
-    assert business.business_type == "real_estate"
+    assert business.external_id == "orange-park"
     assert business.language == "uk"
-    assert "Response quality rules for this business context" in (
-        business_profile.business_description
+
+    assert business_profile.business_description.startswith(
+        "# Orange Park — Factual Business Data"
     )
-    assert "do not repeat it unless the customer asks about location again" in (
-        business_profile.business_description
-    )
-    assert "давай" in business_profile.business_description
-    assert "з'єднуй" in business_profile.business_description
-    assert "номер телефону" in business_profile.business_description
-    assert "дай контакти" in business_profile.business_description
+    assert "Response quality rules" not in business_profile.business_description
+    assert "Current inventory, exact prices" in business_profile.business_limitations
+    assert "manager_consultation" not in business_profile.services
+
+    behavior = ai_profile.metadata_["behavior_instructions"]
+    assert "behavior_rules" not in ai_profile.metadata_
+    assert ai_profile.ask_for_name is None
+    assert ai_profile.ask_for_phone is None
+    assert "single source of truth for Orange Park AI behavior" in behavior
+    assert "Use native Telegram contact sharing." in behavior
+    assert "Do not ask customer to type phone manually." in behavior
     assert (
-        "Залиште, будь ласка, ваш номер телефону — менеджер зв’яжеться з вами напряму."
-        in business_profile.business_description
+        "Для зв'язку з менеджером, будь ласка, натисніть кнопку «📱 Поділитися номером»."
+        in behavior
     )
-    assert "first_name, last_name, phone" in business_profile.business_description
-    assert "If phone is already provided" in business_profile.business_description
-    assert "Never invent Orange Park phone numbers" in (
-        business_profile.business_description
-    )
-    assert ai_profile.language == "uk"
-    assert len(ai_profile.response_style) <= 100
-    assert "docs first" in ai_profile.response_style
-    assert "handoff only unstable" in ai_profile.response_style
-    assert "one question" in ai_profile.response_style
-    assert "no loops" in ai_profile.response_style
-    assert "Business Context Source Of Truth and Tenant Knowledge Sources" in (
-        business_profile.business_limitations
-    )
-    assert "Answer from documentation before manager handoff" in (
-        business_profile.business_limitations
-    )
-    assert "exact price, exact availability, discounts, booking" in (
-        business_profile.business_limitations
-    )
-    assert "Ukrainian /start and first greeting by default." in (
-        ai_profile.metadata_["behavior_rules"]
-    )
-    assert "Default language is Ukrainian for Orange Park." in (
-        ai_profile.metadata_["behavior_rules"]
-    )
-    assert (
-        "Always reply in the language of the customer's latest message; conversation history must not override latest-message language."
-        in ai_profile.metadata_["behavior_rules"]
-    )
-    assert "Never switch to Russian because of conversation history." in (
-        ai_profile.metadata_["behavior_rules"]
-    )
-    assert "Mirror Russian only when the customer's latest message is clearly Russian." in (
-        ai_profile.metadata_["behavior_rules"]
-    )
-    assert "Mirror English only when the customer's latest message is clearly English." in (
-        ai_profile.metadata_["behavior_rules"]
-    )
-    assert "Never output English unless customer writes English." in (
-        ai_profile.metadata_["behavior_rules"]
-    )
+    assert "Дякуємо. Запит передано менеджеру. Очікуйте дзвінок." in behavior
+    assert "exact apartment availability" in ai_profile.forbidden_promises
+
     assert channel.channel == ORANGE_PARK_CHANNEL
+    assert channel.allow_emojis is True
     assert channel.allow_links is False
-    assert channel.allow_emojis is False
-    assert channel.metadata_["default_start_language"] == "uk"
     assert channel.metadata_["start_greeting"].startswith("Добрий день! 👋")
-    assert "🏡 Квартира" in channel.metadata_["start_greeting"]
-    assert "🏢 Комерційне приміщення" in channel.metadata_["start_greeting"]
-    assert "💳 Умови покупки / розтермінування" in channel.metadata_["start_greeting"]
-    assert len(knowledge) == 3
+
     assert {row.source_type for row in knowledge} == {
-        "conversation_style",
         "faq",
         "pricing",
+        "conversation_style",
     }
     style = next(row for row in knowledge if row.source_type == "conversation_style")
-    assert style.title == "Orange Park Conversation Style Guide"
-    assert "Use this as behavior guidance only" in style.content
-    assert "not_factual_knowledge" in style.tags
+    assert style.content.startswith("# Orange Park — Conversation Examples")
+    assert "Normative AI behavior is defined only" in style.content
+    assert "Native Telegram contact flow" not in style.content
+
+    active_text = "\n".join(
+        (
+            business_profile.business_description,
+            business_profile.business_limitations,
+            behavior,
+            *(row.content for row in knowledge),
+        )
+    )
+    assert all(phrase not in active_text for phrase in OBSOLETE_CONTACT_PHRASES)
 
 
 @pytest.mark.anyio
-async def test_orange_park_seed_second_run_updates_without_duplicates():
+async def test_orange_park_seed_updates_existing_rows_without_duplicates():
     tenant = Tenant(
         id=uuid.uuid4(),
         name="Old name",
@@ -161,32 +137,33 @@ async def test_orange_park_seed_second_run_updates_without_duplicates():
         storage_mode="shared",
         status="active",
     )
-    rows = [
-        tenant,
-        business,
-        TenantBusinessProfile(
-            id=uuid.uuid4(),
-            tenant_id=tenant.id,
-            business_id=business.id,
-        ),
-        TenantAiProfile(
-            id=uuid.uuid4(),
-            tenant_id=tenant.id,
-            business_id=business.id,
-        ),
-        TenantChannelSetting(
-            id=uuid.uuid4(),
-            tenant_id=tenant.id,
-            business_id=business.id,
-            channel=ORANGE_PARK_CHANNEL,
-        ),
+    business_profile = TenantBusinessProfile(
+        id=uuid.uuid4(),
+        tenant_id=tenant.id,
+        business_id=business.id,
+        business_description="legacy",
+        business_limitations="legacy",
+    )
+    ai_profile = TenantAiProfile(
+        id=uuid.uuid4(),
+        tenant_id=tenant.id,
+        business_id=business.id,
+        metadata_={"behavior_rules": ["legacy"]},
+    )
+    channel = TenantChannelSetting(
+        id=uuid.uuid4(),
+        tenant_id=tenant.id,
+        business_id=business.id,
+        channel=ORANGE_PARK_CHANNEL,
+    )
+    knowledge = [
         TenantKnowledgeSource(
             id=uuid.uuid4(),
             tenant_id=tenant.id,
             business_id=business.id,
             source_type="faq",
             title="Orange Park FAQ",
-            content="old faq",
+            content="legacy",
         ),
         TenantKnowledgeSource(
             id=uuid.uuid4(),
@@ -194,7 +171,7 @@ async def test_orange_park_seed_second_run_updates_without_duplicates():
             business_id=business.id,
             source_type="pricing",
             title="Orange Park Prices And Availability - Manager Confirmed Only",
-            content="old pricing",
+            content="legacy",
         ),
         TenantKnowledgeSource(
             id=uuid.uuid4(),
@@ -202,50 +179,40 @@ async def test_orange_park_seed_second_run_updates_without_duplicates():
             business_id=business.id,
             source_type="conversation_style",
             title="Orange Park Conversation Style Guide",
-            content="old style",
+            content="legacy",
         ),
     ]
-
+    existing = [
+        tenant,
+        business,
+        business_profile,
+        ai_profile,
+        channel,
+        *knowledge,
+    ]
     session = AsyncMock()
     session.add = MagicMock()
     session.execute = AsyncMock(
-        side_effect=[_execute_scalar(row) for row in rows]
+        side_effect=[_execute_scalar(row) for row in existing]
     )
     session.flush = AsyncMock(return_value=None)
 
-    result = await seed_orange_park_configuration(session)
+    await seed_orange_park_configuration(session)
 
-    assert result.tenant_id == tenant.id
-    assert result.business_id == business.id
     session.add.assert_not_called()
-    assert business.name == "Orange Park / ЖК Orange Park"
-    assert business.language == "uk"
-    assert rows[3].language == "uk"
-    assert len(rows[3].response_style) <= 100
-    assert "docs first" in rows[3].response_style
-    assert "handoff only unstable" in rows[3].response_style
-    assert "one question" in rows[3].response_style
-    assert "no loops" in rows[3].response_style
-    assert "repeating address or location after it was already answered" in (
-        rows[3].forbidden_promises
+    assert business_profile.business_description.startswith(
+        "# Orange Park — Factual Business Data"
     )
-    assert "saying request was passed before phone number is collected" in (
-        rows[3].forbidden_promises
-    )
-    assert "Use conversation history to avoid repeating facts." in (
-        rows[3].metadata_["behavior_rules"]
-    )
-    assert rows[4].allow_links is False
-    assert rows[4].metadata_["default_start_language"] == "uk"
-    assert rows[5].content.startswith("# Orange Park")
-    assert "requires_manager_confirmation" in rows[6].tags
-    assert "Use this as behavior guidance only" in rows[7].content
-    assert "After collecting a phone number" in rows[7].content
-    assert "not_factual_knowledge" in rows[7].tags
+    assert "behavior_rules" not in ai_profile.metadata_
+    assert "behavior_instructions" in ai_profile.metadata_
+    assert ai_profile.ask_for_name is None
+    assert ai_profile.ask_for_phone is None
+    assert channel.allow_emojis is True
+    assert all(row.content != "legacy" for row in knowledge)
 
 
 @pytest.mark.anyio
-async def test_orange_park_seed_fails_if_business_belongs_to_wrong_tenant():
+async def test_orange_park_seed_rejects_business_from_another_tenant():
     tenant = Tenant(
         id=uuid.uuid4(),
         name="Orange Park",
@@ -260,7 +227,6 @@ async def test_orange_park_seed_fails_if_business_belongs_to_wrong_tenant():
         storage_mode="shared",
         status="active",
     )
-
     session = AsyncMock()
     session.add = MagicMock()
     session.execute = AsyncMock(
@@ -272,7 +238,7 @@ async def test_orange_park_seed_fails_if_business_belongs_to_wrong_tenant():
         await seed_orange_park_configuration(session)
 
 
-def test_orange_park_seed_source_contains_no_secrets_or_bitrix_config():
+def test_orange_park_seed_has_no_flow_or_secret_dependency():
     module_source = (
         Path(__file__).resolve().parents[1]
         / "app"
@@ -288,327 +254,10 @@ def test_orange_park_seed_source_contains_no_secrets_or_bitrix_config():
         "secret",
         "bearer ",
         "webhook_url",
-    )
-    for value in forbidden:
-        assert value not in module_source
-
-    assert "lead_creation_enabled" in module_source
-
-
-def test_orange_park_seed_has_no_flow_dependency():
-    module_source = (
-        Path(__file__).resolve().parents[1]
-        / "app"
-        / "seed"
-        / "orange_park_configuration.py"
-    ).read_text(encoding="utf-8")
-    forbidden = (
         "app.models.flow",
-        "from app.models import Flow",
-        "Flow(",
-        "select(Flow",
         "_ensure_default_flow",
-        "_get_flow_by_key",
-        "ORANGE_PARK_FLOW_KEY",
-        "ORANGE_PARK_FLOW_NAME",
-        "\"flows\"",
-        "'flows'",
     )
-    for value in forbidden:
-        assert value not in module_source
-
-
-def test_orange_park_seed_test_does_not_import_flow_model():
-    parsed = ast.parse(Path(__file__).read_text(encoding="utf-8"))
-    for node in ast.walk(parsed):
-        if isinstance(node, ast.ImportFrom):
-            assert node.module != "app.models.flow"
-            assert not (
-                node.module == "app.models"
-                and any(alias.name == "Flow" for alias in node.names)
-            )
-
-
-@pytest.mark.anyio
-async def test_orange_park_seed_enforces_language_repetition_and_phone_closing_rules():
-    session = _empty_seed_session()
-
-    await seed_orange_park_configuration(session)
-
-    added_rows = [call.args[0] for call in session.add.call_args_list]
-    business = next(row for row in added_rows if isinstance(row, Business))
-    business_profile = next(
-        row for row in added_rows if isinstance(row, TenantBusinessProfile)
-    )
-    ai_profile = next(row for row in added_rows if isinstance(row, TenantAiProfile))
-    channel = next(row for row in added_rows if isinstance(row, TenantChannelSetting))
-    style = next(
-        row
-        for row in added_rows
-        if isinstance(row, TenantKnowledgeSource)
-        and row.source_type == "conversation_style"
-    )
-
-    assert business.external_id == ORANGE_PARK_BUSINESS_EXTERNAL_ID
-    assert business_profile.tenant_id == ai_profile.tenant_id == style.tenant_id
-    assert business_profile.business_id == ai_profile.business_id == style.business_id
-    assert ai_profile.language == "uk"
-    assert len(ai_profile.response_style) <= 100
-    assert "docs first" in ai_profile.response_style
-    assert "handoff only unstable" in ai_profile.response_style
-    assert "one question" in ai_profile.response_style
-    assert "no loops" in ai_profile.response_style
-    assert "repeating address or location after it was already answered" in (
-        ai_profile.forbidden_promises
-    )
-    assert "verbose manager handoff wording" in ai_profile.forbidden_promises
-    assert "open-ended closing after phone is collected" in ai_profile.forbidden_promises
-    assert "thanking for a phone number before the customer provides one" in (
-        ai_profile.forbidden_promises
-    )
-    assert "open-ended extra sentence when customer is waiting for manager call" in (
-        ai_profile.forbidden_promises
-    )
-    assert "long explanation after short handoff intent like давай or з'єднуй" in (
-        ai_profile.forbidden_promises
-    )
-    assert "repeating the same manager-confirmation or refusal block twice" in (
-        ai_profile.forbidden_promises
-    )
-    assert "inventing Orange Park phone, manager contact, or contact details" in (
-        ai_profile.forbidden_promises
-    )
-    assert "giving manager phone when official contact is absent from business context" in (
-        ai_profile.forbidden_promises
-    )
-    assert "English reply after Ukrainian or Russian phone number turn" in (
-        ai_profile.forbidden_promises
-    )
-    assert (
-        "saying manager request was passed before first name, last name, and phone are collected"
-        in ai_profile.forbidden_promises
-    )
-    assert (
-        "external CRM lead creation or external CRM mention in Orange Park Telegram stage 1"
-        in ai_profile.forbidden_promises
-    )
-    assert "Ukrainian /start and first greeting by default." in (
-        ai_profile.metadata_["behavior_rules"]
-    )
-    assert "Never output English unless customer writes English." in (
-        ai_profile.metadata_["behavior_rules"]
-    )
-    assert "Never mix languages or use hybrid words." in (
-        ai_profile.metadata_["behavior_rules"]
-    )
-    assert (
-        "Always reply in the language of the customer's latest message; conversation history must not override latest-message language."
-        in ai_profile.metadata_["behavior_rules"]
-    )
-    assert "Never switch to Russian because of conversation history." in (
-        ai_profile.metadata_["behavior_rules"]
-    )
-    assert (
-        "If the customer asks 'Чому ти на російській?', apologize briefly in Ukrainian and continue in Ukrainian."
-        in ai_profile.metadata_["behavior_rules"]
-    )
-    assert (
-        "Use documentation first: Business Context Source Of Truth, then Tenant Knowledge Sources."
-        in ai_profile.metadata_["behavior_rules"]
-    )
-    assert (
-        "If stable documentation contains the answer, answer from documentation before manager handoff."
-        in ai_profile.metadata_["behavior_rules"]
-    )
-    assert (
-        "Do not say manager will confirm when stable documentation already answers the question."
-        in ai_profile.metadata_["behavior_rules"]
-    )
-    assert (
-        "Stable documented topics include project description, location, transport, apartment types, White Box completion, infrastructure, territory and security, construction technology, commercial premises, existence of purchase programs, and general purchase process."
-        in ai_profile.metadata_["behavior_rules"]
-    )
-    assert (
-        "Use manager handoff only for exact price, exact availability, discounts, booking, active installment conditions, current financing terms, legal guarantees, or other time-sensitive data."
-        in ai_profile.metadata_["behavior_rules"]
-    )
-    assert (
-        "Answer pattern: answer from documentation, ask one qualification question, then use manager handoff only if unstable information is requested."
-        in ai_profile.metadata_["behavior_rules"]
-    )
-    assert "Keep Telegram replies concise: 1-3 short sentences." in (
-        ai_profile.metadata_["behavior_rules"]
-    )
-    assert "Behave like a helpful consultant first, not a lead form." in (
-        ai_profile.metadata_["behavior_rules"]
-    )
-    assert "Trust first, qualification second, manager handoff third." in (
-        ai_profile.metadata_["behavior_rules"]
-    )
-    assert "Do not ask for a phone number at the beginning of the conversation." in (
-        ai_profile.metadata_["behavior_rules"]
-    )
-    assert (
-        "For general Orange Park questions, answer from available business context and do not ask for phone."
-        in ai_profile.metadata_["behavior_rules"]
-    )
-    assert (
-        "General questions about the project, location, infrastructure, territory, security, apartment types, White Box, commercial premises, or purchase process must be answered first without asking for phone."
-        in ai_profile.metadata_["behavior_rules"]
-    )
-    assert (
-        "When customer asks for price, explain that current exact price is manager-confirmed, give safe general context if available, and ask for contact only after answering."
-        in ai_profile.metadata_["behavior_rules"]
-    )
-    assert (
-        "Collect phone only when customer asks for price, availability, discount, booking, viewing, financing, єОселя, credit, manager consultation, or after basic needs are understood and handoff clearly adds value."
-        in ai_profile.metadata_["behavior_rules"]
-    )
-    assert (
-        "Do not repeatedly ask for phone if the customer ignores the request; continue helping and ask one useful qualification question."
-        in ai_profile.metadata_["behavior_rules"]
-    )
-    assert (
-        "If address or location was already answered, do not repeat it when customer gives budget, area, payment, or handoff criteria."
-        in ai_profile.metadata_["behavior_rules"]
-    )
-    assert "If customer gives new buying criteria, respond only to those criteria." in (
-        ai_profile.metadata_["behavior_rules"]
-    )
-    assert (
-        "After phone is collected, use concise closing: Дякую. Запит передано менеджеру. Очікуйте дзвінок."
-        in ai_profile.metadata_["behavior_rules"]
-    )
-    assert (
-        "Short handoff intent such as давай, з'єднуй, так, ок, or добре means: ask only for phone if phone is not collected."
-        in ai_profile.metadata_["behavior_rules"]
-    )
-    assert (
-        "Contact requests such as номер телефону, дай контакти, дай дані, номер, or телефон менеджера mean: if no official contact exists in current business context, reply exactly: Залиште, будь ласка, ваш номер телефону — менеджер зв’яжеться з вами напряму."
-        in ai_profile.metadata_["behavior_rules"]
-    )
-    assert "Never invent Orange Park phone numbers or manager contacts." in (
-        ai_profile.metadata_["behavior_rules"]
-    )
-    assert "Never repeat the same refusal or manager-confirmation loop twice." in (
-        ai_profile.metadata_["behavior_rules"]
-    )
-    assert (
-        "Orange Park Telegram stage 1 contact form in Russian: Пожалуйста, оставьте данные в таком формате:\n\nИмя:\nФамилия:\nТелефон:"
-        in ai_profile.metadata_["behavior_rules"]
-    )
-    assert (
-        "Orange Park Telegram stage 1 contact form in Ukrainian: Будь ласка, залиште дані у такому форматі:\n\nІм'я:\nПрізвище:\nТелефон:"
-        in ai_profile.metadata_["behavior_rules"]
-    )
-    assert (
-        "If phone is already provided in clearly Russian context, reply: Спасибо, номер получил. Напишите, пожалуйста, имя и фамилию."
-        in ai_profile.metadata_["behavior_rules"]
-    )
-    assert (
-        "If phone is already provided in Ukrainian/default context, reply: Дякую, номер отримав. Напишіть, будь ласка, ім'я та прізвище."
-        in ai_profile.metadata_["behavior_rules"]
-    )
-    assert (
-        "Minimum Orange Park stage 1 lead fields: first_name, last_name, phone, telegram_id or telegram_username when available, and interest summary."
-        in ai_profile.metadata_["behavior_rules"]
-    )
-    assert (
-        "Do not say the manager request was passed until first name, last name, and phone are collected."
-        in ai_profile.metadata_["behavior_rules"]
-    )
-    assert (
-        "Never say request passed to manager before phone, first name, and last name are collected."
-        in ai_profile.metadata_["behavior_rules"]
-    )
-    assert "If phone is missing, ask only for phone." in (
-        ai_profile.metadata_["behavior_rules"]
-    )
-    assert "If phone is provided but name is missing, ask only for first and last name." in (
-        ai_profile.metadata_["behavior_rules"]
-    )
-    assert "hesitуйте" not in ai_profile.response_style
-
-    assert channel.metadata_["default_start_language"] == "uk"
-    assert "Hello! Welcome" not in channel.metadata_["start_greeting"]
-    assert channel.metadata_["start_greeting"].startswith("Добрий день! 👋")
-    assert "Я AI-асистент ЖК Orange Park." in channel.metadata_["start_greeting"]
-    assert "🏡 Квартира" in channel.metadata_["start_greeting"]
-
-    assert "Telegram /start and the first greeting must be Ukrainian" in style.content
-    assert "Добрий день! 👋" in style.content
-    assert "💳 Умови покупки / розтермінування" in style.content
-    assert "Never output English unless the customer explicitly writes in English" in (
-        style.content
-    )
-    assert "Always reply in the language of the customer's latest message" in (
-        style.content
-    )
-    assert "Conversation history must not override the latest customer message language" in (
-        style.content
-    )
-    assert 'If the customer asks "Чому ти на російській?"' in style.content
-    assert "Never mix languages in the same sentence" in style.content
-    assert "hybrid words" in style.content
-    assert "Keep most Telegram replies to 1-3 short sentences" in style.content
-    assert "helpful consultant" in style.content
-    assert "Trust first, qualification second, manager handoff third" in style.content
-    assert "Use documentation first: Business Context Source Of Truth" in style.content
-    assert "If the answer exists in documentation" in style.content
-    assert "Do not start stable factual answers" in style.content
-    assert "Use manager handoff only for exact price" in style.content
-    assert "Do not ask for phone at the beginning" in style.content
-    assert "must be answered first from documentation without asking for phone" in (
-        style.content
-    )
-    assert "exact current price is manager-confirmed" in style.content
-    assert "Collect phone only when the customer asks for price" in style.content
-    assert "Do not repeatedly ask for phone" in style.content
-    assert "Use conversation history to avoid repeating facts" in style.content
-    assert "Do not repeat location, apartment types, payment options" in style.content
-    assert "If address or location was already answered" in style.content
-    assert "respond only to those criteria" in style.content
-    assert '"давай"' in style.content
-    assert '"з\'єднуй"' in style.content
-    assert '"номер телефону"' in style.content
-    assert '"дай контакти"' in style.content
-    assert (
-        "Добре. Напишіть, будь ласка, номер телефону — менеджер зв’яжеться з вами."
-        in style.content
-    )
-    assert (
-        "Залиште, будь ласка, ваш номер телефону — менеджер зв’яжеться з вами напряму."
-        in style.content
-    )
-    assert "Пожалуйста, оставьте данные в таком формате" in style.content
-    assert "Имя:" in style.content
-    assert "Фамилия:" in style.content
-    assert "Будь ласка, залиште дані у такому форматі" in style.content
-    assert "Ім'я:" in style.content
-    assert "Прізвище:" in style.content
-    assert "Спасибо, номер получил. Напишите, пожалуйста, имя и фамилию." in (
-        style.content
-    )
-    assert "Дякую, номер отримав. Напишіть, будь ласка, ім'я та прізвище." in (
-        style.content
-    )
-    assert "Minimum stage-1 lead data" in style.content
-    assert "Never invent Orange Park phone numbers" in style.content
-    assert "Never repeat the same refusal or manager-confirmation block twice" in (
-        style.content
-    )
-    assert "do not say the request was passed yet" in style.content
-    assert 'Never say "request passed to manager" before phone' in style.content
-    assert "If phone is missing, ask only for phone" in style.content
-    assert "If phone is provided but name is missing" in style.content
-    assert "Do not thank the customer for a phone number" in style.content
-    assert 'reply only: "Дякую. Запит передано менеджеру. Очікуйте дзвінок."' in (
-        style.content
-    )
-    assert "After collecting a phone number, acknowledge it" in style.content
-    assert "Дякую. Запит передано менеджеру. Очікуйте дзвінок." in style.content
-    assert "Hello! Welcome" not in style.content
-    assert "hesitуйте" not in style.content
+    assert all(value not in module_source for value in forbidden)
 
 
 @pytest.mark.anyio

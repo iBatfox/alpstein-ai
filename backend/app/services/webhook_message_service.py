@@ -85,7 +85,7 @@ STUB_REPLY_TO_CUSTOMER = DUPLICATE_SAFE_ACKNOWLEDGMENT
 
 CUSTOMER_NOTE_MAX_LENGTH = 2000
 ORANGE_PARK_BUSINESS_EXTERNAL_ID = "orange-park"
-ORANGE_PARK_CONTACT_COLLECTION_STAGE = "orange_park_telegram_stage1_contact_form"
+ORANGE_PARK_CONTACT_COLLECTION_STAGE = "orange_park_telegram_native_contact"
 ORANGE_PARK_APARTMENT_AREA_STAGE = "orange_park_telegram_apartment_area"
 ORANGE_PARK_START_RESET_STAGE = "orange_park_telegram_start_reset"
 ORANGE_PARK_START_WELCOME_UK = (
@@ -98,8 +98,12 @@ ORANGE_PARK_START_WELCOME_UK = (
     "🏢 Комерційне приміщення\n"
     "💳 Умови покупки / розтермінування"
 )
+ORANGE_PARK_CONTACT_BUTTON_REPLY_UK = (
+    "Для зв'язку з менеджером, будь ласка, натисніть кнопку "
+    "«📱 Поділитися номером»."
+)
 ORANGE_PARK_CONTACT_RECEIVED_REPLY_UK = (
-    "Дякую, номер отримали. Менеджер зв'яжеться з вами найближчим часом."
+    "Дякуємо. Запит передано менеджеру. Очікуйте дзвінок."
 )
 
 _PHONE_NUMBER_PATTERN = re.compile(r"(?<!\w)\+?\d[\d\s().-]{7,}\d(?!\w)")
@@ -1258,6 +1262,7 @@ class WebhookMessageService:
 
         shared_contact = _orange_park_shared_contact_from_message(incoming_message)
         if shared_contact is not None:
+            reply_text = _orange_park_reply_after_shared_contact(shared_contact)
             await session.flush()
             outbound_message = await self.message_service.save_outgoing_ai_message(
                 session,
@@ -1265,7 +1270,7 @@ class WebhookMessageService:
                 business=business,
                 conversation=conversation,
                 customer=customer,
-                message_text=ORANGE_PARK_CONTACT_RECEIVED_REPLY_UK,
+                message_text=reply_text,
                 channel=channel,
                 ai_metadata={
                     "orange_park_contact_collection": True,
@@ -1276,7 +1281,7 @@ class WebhookMessageService:
                 flow_id=flow_id,
             )
             return _ReplyResolution(
-                reply_to_customer=ORANGE_PARK_CONTACT_RECEIVED_REPLY_UK,
+                reply_to_customer=reply_text,
                 ai_failed=False,
                 outbound_message_id=outbound_message.id,
             )
@@ -2323,11 +2328,6 @@ def _orange_park_contact_collection_reply_and_metadata(
     *,
     history: ConversationHistory,
 ) -> tuple[str | None, dict[str, Any]]:
-    phone = _extract_phone_number(customer_message_text)
-    language = _orange_park_dialogue_language(
-        customer_message_text,
-        history=history,
-    )
     metadata: dict[str, Any] = {
         "orange_park_contact_collection": {
             "stage": ORANGE_PARK_CONTACT_COLLECTION_STAGE,
@@ -2342,60 +2342,26 @@ def _orange_park_contact_collection_reply_and_metadata(
         }
     }
 
-    if phone is not None:
+    if _extract_phone_number(customer_message_text) is not None:
         metadata["orange_park_contact_collection"].update(
             {
-                "intent": "phone_provided_missing_name",
-                "phone": phone,
-                "missing_fields": ["first_name", "last_name"],
+                "intent": "telegram_contact_button_required",
+                "missing_fields": ["telegram_contact"],
+                "telegram_contact_request": True,
+                "manual_phone_ignored": True,
             }
         )
-        if language == "ru":
-            return (
-                "Спасибо, номер получил. Напишите, пожалуйста, имя и фамилию.",
-                metadata,
-            )
-        if language == "en":
-            return (
-                "Thanks, I received your number. Please send your first and last name.",
-                metadata,
-            )
-        return (
-            "Дякую, номер отримав. Напишіть, будь ласка, ім'я та прізвище.",
-            metadata,
-        )
+        return ORANGE_PARK_CONTACT_BUTTON_REPLY_UK, metadata
 
     if _is_contact_collection_trigger(customer_message_text):
         metadata["orange_park_contact_collection"].update(
             {
                 "intent": "contact_collection_requested",
-                "missing_fields": ["first_name", "last_name", "phone"],
+                "missing_fields": ["telegram_contact"],
                 "telegram_contact_request": True,
             }
         )
-        if language == "ru":
-            return (
-                "Пожалуйста, оставьте данные в таком формате:\n\n"
-                "Имя:\n"
-                "Фамилия:\n"
-                "Телефон:",
-                metadata,
-            )
-        if language == "en":
-            return (
-                "Please leave your details in this format:\n\n"
-                "First name:\n"
-                "Last name:\n"
-                "Phone:",
-                metadata,
-            )
-        return (
-            "Будь ласка, залиште дані у такому форматі:\n\n"
-            "Ім'я:\n"
-            "Прізвище:\n"
-            "Телефон:",
-            metadata,
-        )
+        return ORANGE_PARK_CONTACT_BUTTON_REPLY_UK, metadata
 
     return None, metadata
 
@@ -2587,6 +2553,14 @@ def _orange_park_shared_contact_metadata(
     last_name = _clean_optional_text(request.customer.last_name)
     telegram_id = _clean_optional_text(request.customer.telegram_id)
     telegram_username = _clean_optional_text(request.customer.telegram_username)
+    missing_fields = [
+        field_name
+        for field_name, value in (
+            ("first_name", first_name),
+            ("last_name", last_name),
+        )
+        if value is None
+    ]
     return {
         "orange_park_contact_collection": {
             "stage": ORANGE_PARK_CONTACT_COLLECTION_STAGE,
@@ -2600,7 +2574,7 @@ def _orange_park_shared_contact_metadata(
             "business_id": ORANGE_PARK_BUSINESS_EXTERNAL_ID,
             "channel": "telegram",
             "external_crm_stage": "disabled_stage_1",
-            "missing_fields": [],
+            "missing_fields": missing_fields,
         }
     }
 
@@ -2619,6 +2593,20 @@ def _orange_park_shared_contact_from_message(
     if not _clean_optional_text(contact.get("phone")):
         return None
     return contact
+
+
+def _orange_park_reply_after_shared_contact(contact: dict[str, Any]) -> str:
+    missing_fields = contact.get("missing_fields")
+    if not isinstance(missing_fields, list):
+        missing_fields = []
+    missing = {field for field in missing_fields if isinstance(field, str)}
+    if not missing:
+        return ORANGE_PARK_CONTACT_RECEIVED_REPLY_UK
+    if missing == {"first_name"}:
+        return "Дякуємо, номер отримали. Напишіть, будь ласка, ім'я."
+    if missing == {"last_name"}:
+        return "Дякуємо, номер отримали. Напишіть, будь ласка, прізвище."
+    return "Дякуємо, номер отримали. Напишіть, будь ласка, ім'я та прізвище."
 
 
 def _response_metadata_from_message(message: Message) -> dict[str, Any] | None:

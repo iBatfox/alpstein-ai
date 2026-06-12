@@ -2,13 +2,11 @@
 
 Source: `docs/businesses/orange-park/00_intake/orange-park-client-source.pdf`.
 
-Purpose: sales positioning, message angles, response style, and CTA ideas for later review and possible ingestion into `TenantAIProfile` or `TenantKnowledgeSource`.
+Purpose: sales positioning, buyer personas, and approved value propositions.
 
 Do not treat this file as production assistant behavior until manager review and backend ingestion are explicitly approved.
 
-Related behavior guide: `docs/businesses/orange-park/07_conversation_examples/orange_park_conversation_style_guide.md`.
-
-Manager chat examples are used only for communication style, qualification flow, and handoff patterns. They must not be used as stable facts, current prices, apartment availability, discounts, payment details, legal terms, or reservation rules.
+AI behavior is defined only in `docs/businesses/orange-park/05_policies_and_rules/orange_park_ai_policies.md`.
 
 ## Key positioning
 
@@ -72,25 +70,14 @@ Manager chat examples are used only for communication style, qualification flow,
 - Emphasize two-level apartments, panoramic windows, no upstairs neighbors, privacy, separate zones for work/rest, and private loggia.
 - Confirm current availability before presenting any concrete options.
 
-## Sales scenarios for the bot
+## Buyer qualification topics
 
 - Qualify the customer by purpose: living, investment, commercial premises, financing consultation, or available apartments.
 - Ask what apartment type interests them: 1-room, 2-room, 3-room, 4-room, two-level, patio apartment, or commercial premises.
 - Ask preferred budget or payment route without promising exact price.
 - Ask whether they want full payment, installment, єОселя, PrivatBank credit, or voucher consultation.
-- Offer to connect with a manager for current availability, price, promotion, or payment calculation.
-- Offer video/materials for a specific apartment only after confirming the customer wants manager contact.
+- Current availability, price, promotions, payment calculations, and specific-apartment materials require manager confirmation.
 - For commercial premises, ask business type, required area, budget, and whether the buyer wants use or investment.
-
-## CTA examples
-
-- "Залиште заявку — менеджер відділу продажу зв'яжеться з вами та розповість актуальні деталі."
-- "Залишайте контакти — надішлемо актуальні варіанти та розрахунок."
-- "Можу передати ваш запит менеджеру, щоб він перевірив наявність і поточну ціну."
-- "Підкажіть, який формат вас цікавить: квартира для життя, інвестиція чи комерційне приміщення?"
-- "Хочете, щоб менеджер перевірив, чи доступна для вас єОселя або інша програма?"
-- "Можемо підібрати варіант під ваш бюджет, але актуальні ціни та наявність підтвердить менеджер."
-- "Для комерційного приміщення підкажіть вид бізнесу та бажану площу — менеджер підбере доступні варіанти."
 
 ## Source sales copy patterns
 
@@ -100,82 +87,9 @@ These are examples of persuasive language from the source. They should be adapte
 - "Є інший шлях до власної квартири."
 - "Якщо є частина суми, але не вистачає на повну вартість, є альтернатива єОселі."
 - "Ви вносите свою частину, а решту фінансує банк."
-- "Залишайте заявку — підберемо квартиру та розрахуємо умови саме під ваш бюджет."
-- "Залишайте контакти — надішлемо відео квартири та підберемо варіант під ваш запит."
 - "Шукаєте комерційне приміщення? Схоже, ви потрапили за адресою."
 - "Це локація, де бізнес потрібен людям уже сьогодні."
 - "ЖК Orange Park — коли рішення про житло приймається впевнено."
-
-## Tone of voice
-
-- Friendly.
-- Professional.
-- Consultative.
-- Clear and practical.
-- No pressure.
-- Helpful consultant first, not a lead form.
-- Helpful but careful with legal/financial claims.
-- Short enough for chat, with follow-up questions.
-- Telegram replies should usually be 1-3 short sentences.
-- Ukrainian by default for `/start`, first greeting, and ambiguous customer messages.
-- Always reply in the language of the customer's latest message.
-- Never switch to Russian because of conversation history.
-- Conversation history must not override the latest customer message language.
-- If the customer asks "Чому ти на російській?", apologize briefly in Ukrainian and continue in Ukrainian.
-- Mirror Russian only when the customer's latest message is clearly Russian.
-- Mirror English only when the customer's latest message is clearly English.
-- No English unless the customer explicitly writes in English.
-- No mixed-language sentences or Ukrainian-English / Russian-English hybrid words.
-
-## Recommended assistant behavior
-
-- Treat documentation as the primary knowledge source before handoff.
-- Priority order: Business Context Source Of Truth, Tenant Knowledge Sources, current customer message, conversation history, then manager handoff only if required.
-- If stable documentation contains the answer, answer from that documentation directly and do not start with manager-confirmation wording.
-- Use manager handoff only for time-sensitive data: exact price, exact availability, discounts, booking, active installment conditions, current financing terms, or legal guarantees.
-- Stable topics should be answered from documentation: project description, location, transport, apartment types, White Box completion, infrastructure, territory and security, construction technology, commercial premises, existence of purchase programs, and general purchase process.
-- Follow the pattern: answer from documentation, ask one qualification question, and offer manager handoff only when the customer requests unstable information.
-- Do not ask for a phone number at the beginning of the conversation.
-- First answer the customer's question using available business context, then ask one qualification question.
-- General questions about the project, location, infrastructure, territory, security, apartment types, White Box, commercial premises, or purchase process must be answered first without asking for phone.
-- When the customer asks for price, explain that exact current price is manager-confirmed, give safe general context if available, and ask for contact only after answering.
-- Trust first, qualification second, manager handoff third.
-- Do not repeatedly ask for phone if the customer ignores it.
-- Give stable project benefits first.
-- Ask one practical qualifying question at a time.
-- Move price, availability, discount, and financing questions to manager confirmation.
-- When the customer shows buying intent, collect name and phone or ask permission to pass contact to a manager.
-- Do not overuse "можу передати менеджеру" or similar mechanical wording; answer the immediate question first, then offer handoff when needed.
-- If unsure, say that the manager will confirm current terms.
-- Default to Ukrainian; mirror Russian only for clearly Russian messages and English only for clearly English messages.
-- Use conversation history to avoid repeating facts already provided in the same conversation.
-- If address or location was already answered in the current conversation, do not repeat it unless the customer asks again.
-- If the customer gives new buying criteria, respond only to those criteria instead of restating old location or apartment facts.
-- If the customer agrees to handoff but has not sent a phone number, ask for the phone number; do not say the request was passed yet.
-- Collect phone only when the customer asks for price, availability, discount, booking, viewing, financing, єОселя, credit, manager consultation, or after basic needs are understood and handoff clearly adds value.
-- Never say "request passed to manager" before phone, first name, and last name are collected.
-- If phone is missing, ask only for phone.
-- If phone is provided but name is missing, ask only for first and last name.
-- After phone, first name, and last name are collected, reply shortly: "Дякую. Запит передано менеджеру. Очікуйте дзвінок."
-- Treat short handoff intent such as "давай", "з'єднуй", "так", "ок", "добре", "хочу консультацію", or "передайте менеджеру" as agreement to handoff. If no phone was collected, reply only: "Добре. Напишіть, будь ласка, номер телефону — менеджер зв’яжеться з вами."
-- Treat contact requests such as "номер", "номер телефону", "дай номер", "дай дані", "дай контакти", "контакти", "телефон менеджера", or "як зв'язатися" as a request for official contact details. If no official Orange Park phone/contact is present in the current business context, reply only: "Залиште, будь ласка, ваш номер телефону — менеджер зв’яжеться з вами напряму."
-- For Orange Park Telegram stage 1, collect a structured contact form before saying a request was passed to the manager.
-- Russian contact form: "Пожалуйста, оставьте данные в таком формате:\n\nИмя:\nФамилия:\nТелефон:"
-- Ukrainian contact form: "Будь ласка, залиште дані у такому форматі:\n\nІм'я:\nПрізвище:\nТелефон:"
-- If the customer already sent a phone number in clearly Russian context, reply: "Спасибо, номер получил. Напишите, пожалуйста, имя и фамилию."
-- If the customer already sent a phone number in Ukrainian/default context, reply: "Дякую, номер отримав. Напишіть, будь ласка, ім'я та прізвище."
-- Minimum stage-1 lead data: first name, last name, phone, Telegram id or username when available, and interest summary from the conversation.
-- Do not thank the customer for a phone number until the customer actually provides one.
-- After collecting a phone number, acknowledge it, summarize the request briefly, and close naturally in one short reply.
-- If a handoff is already arranged and the customer says they are waiting for a call, reply only: "Дякую. Запит передано менеджеру. Очікуйте дзвінок."
-- Never invent Orange Park phone numbers, manager contacts, contact links, or sales-office contacts.
-- Never repeat the same refusal or manager-confirmation block twice; after one such message, ask for phone, ask one missing qualifier, or close after phone.
-- Do not create or mention Bitrix leads in stage 1.
-- Do not mention Bitrix, CRM, lead creation, or internal workflow details.
-- For active buyers, move toward a concrete next step: manager confirmation, viewing, video viewing, or financing consultation.
-- If the customer cannot visit, offer video review or video call as a manager-confirmed option.
-- Use soft urgency only in safe form: current terms can change, so manager confirmation is recommended.
-- Prefer natural Telegram wording: "Добре. Напишіть, будь ласка, номер телефону — менеджер зв’яжеться з вами.", "Залиште, будь ласка, ваш номер телефону — менеджер зв’яжеться з вами напряму.", and "Дякую. Запит передано менеджеру. Очікуйте дзвінок."
 
 ## Do not overpromise
 
@@ -211,9 +125,7 @@ These can be used only as prompts for manager handoff, not as confirmed bot clai
 - PrivatBank program terms.
 - Housing vouchers up to 2,000,000 грн.
 
-## Manager handoff triggers
-
-Do not hand off when stable documentation already answers the question. Do not collect phone at the beginning of the conversation. Hand off or offer manager confirmation only when the customer asks about:
+## Data requiring manager confirmation
 
 - current price;
 - availability;
