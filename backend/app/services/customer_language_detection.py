@@ -33,11 +33,11 @@ _CYRILLIC_RE = re.compile(r"[\u0400-\u04FF]")
 _UKRAINIAN_CHARS_RE = re.compile(r"[іїєґІЇЄҐ]")
 _RUSSIAN_SPECIFIC_RE = re.compile(r"[ёъыэЁЪЫЭ]")
 _UKRAINIAN_WORD_HINT_RE = re.compile(
-    r"\b(що|ти|ціна|ціни|цінами|цікавить|будь ласка|дякую|добрий|вітаю)\b",
+    r"\b(що|ти|так|ціна|ціни|цінами|цікавить|чому|російській|будь ласка|дякую|добрий|вітаю)\b",
     re.IGNORECASE,
 )
 _RUSSIAN_WORD_HINT_RE = re.compile(
-    r"\b(что|ты|цена|стоимость|пожалуйста|спасибо|свяжи|меня|давай|можешь)\b",
+    r"\b(что|ты|да|цена|стоимость|почему|русском|привет|пожалуйста|спасибо|свяжи|меня|давай|можешь)\b",
     re.IGNORECASE,
 )
 
@@ -86,7 +86,7 @@ def detect_language_from_message_text(message_text: str) -> str | None:
             return "uk"
         if _RUSSIAN_WORD_HINT_RE.search(text):
             return "ru"
-        return "ru"
+        return None
 
     if _GERMAN_HINT_RE.search(text):
         return "de"

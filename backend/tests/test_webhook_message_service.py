@@ -22,7 +22,9 @@ from app.services.ai_reply_orchestration_coordinator import REASON_AI_CHAIN_EXEC
 from app.services.flow_service import LegacyWebhookFlow
 from app.services.webhook_message_service import (
     WebhookMessageService,
+    _orange_park_area_reply_and_metadata,
     _orange_park_contact_collection_reply_and_metadata,
+    _orange_park_dialogue_language,
 )
 from tests.test_webhook_message_ai_wiring import _flow_service_mock
 from tests.webhook_test_helpers import (
@@ -135,7 +137,7 @@ def _orange_park_request(message_text: str) -> NormalizedWebhookMessageRequest:
 
 def test_orange_park_contact_form_defaults_to_ukrainian_for_ambiguous_handoff():
     reply, metadata = _orange_park_contact_collection_reply_and_metadata(
-        "Давай",
+        "Так",
         history=ConversationHistory.empty(),
     )
 
@@ -152,6 +154,221 @@ def test_orange_park_contact_form_defaults_to_ukrainian_for_ambiguous_handoff():
         "last_name",
         "phone",
     ]
+    assert "Запит передано менеджеру" not in reply
+
+
+def test_orange_park_ukrainian_latest_message_wins_over_russian_history():
+    history = ConversationHistory(
+        messages=(
+            ConversationHistoryMessage(
+                sender_type="customer",
+                message_text="Свяжи меня с менеджером",
+                created_at=datetime(2026, 5, 21, 9, 59, 0),
+            ),
+        )
+    )
+
+    assert _orange_park_dialogue_language("Так", history=history) == "uk"
+    reply, metadata = _orange_park_contact_collection_reply_and_metadata(
+        "Так",
+        history=history,
+    )
+
+    assert reply == (
+        "Будь ласка, залиште дані у такому форматі:\n\n"
+        "Ім'я:\n"
+        "Прізвище:\n"
+        "Телефон:"
+    )
+    assert metadata["orange_park_contact_collection"]["missing_fields"] == [
+        "first_name",
+        "last_name",
+        "phone",
+    ]
+    assert "Запит передано менеджеру" not in reply
+
+
+def test_orange_park_general_question_does_not_trigger_contact_collection():
+    reply, metadata = _orange_park_contact_collection_reply_and_metadata(
+        "Що таке Orange Park?",
+        history=ConversationHistory.empty(),
+    )
+
+    assert reply is None
+    assert "intent" not in metadata["orange_park_contact_collection"]
+
+
+def _area_question_history() -> ConversationHistory:
+    return ConversationHistory(
+        messages=(
+            ConversationHistoryMessage(
+                sender_type="customer",
+                message_text="Мене цікавить до 35 квадратів",
+                created_at=datetime(2026, 5, 21, 9, 59, 0),
+            ),
+            ConversationHistoryMessage(
+                sender_type="ai",
+                message_text=(
+                    "Жити в ЖК Orange Park можна в 1-кімнатних квартирах "
+                    "площею від 35 до 41 м². Яка саме площа вас цікавить?"
+                ),
+                created_at=datetime(2026, 5, 21, 10, 0, 0),
+            ),
+        )
+    )
+
+
+@pytest.mark.parametrize(
+    ("area_text", "expected_parts"),
+    [
+        (
+            "25",
+            [
+                "найменші 1-кімнатні квартири мають площу від 35 до 41 м²",
+                "Варіантів на 25 м² у документації немає",
+                "уточнити актуальну наявність",
+            ],
+        ),
+        (
+            "35",
+            [
+                "є 1-кімнатні квартири в діапазоні 35-41 м²",
+                "для проживання чи інвестиції",
+            ],
+        ),
+        (
+            "40",
+            [
+                "є 1-кімнатні квартири в діапазоні 35-41 м²",
+                "для проживання чи інвестиції",
+            ],
+        ),
+        (
+            "60",
+            [
+                "більша за діапазон 1-кімнатних квартир 35-41 м²",
+                "2-кімнатні квартири",
+            ],
+        ),
+    ],
+)
+def test_orange_park_short_numeric_reply_uses_apartment_area_context(
+    area_text: str,
+    expected_parts: list[str],
+):
+    reply, metadata = _orange_park_area_reply_and_metadata(
+        area_text,
+        history=_area_question_history(),
+    )
+
+    assert reply is not None
+    for expected in expected_parts:
+        assert expected in reply
+    assert "Orange Park — це житловий комплекс" not in reply
+    assert "точно доступ" not in reply.casefold()
+    assert "ціна" not in reply.casefold()
+    assert metadata["orange_park_apartment_search"] == {
+        "stage": "orange_park_telegram_apartment_area",
+        "intent": "apartment_search",
+        "expected_slot": "apartment_area",
+        "min_documented_area": 35,
+        "max_documented_area": 41,
+        "provided_area": int(area_text),
+    }
+
+
+def test_orange_park_short_numeric_reply_without_area_context_uses_ai_path():
+    reply, metadata = _orange_park_area_reply_and_metadata(
+        "25",
+        history=ConversationHistory.empty(),
+    )
+
+    assert reply is None
+    assert metadata["orange_park_apartment_search"]["expected_slot"] == "apartment_area"
+
+
+@pytest.mark.anyio
+async def test_orange_park_area_reply_skips_ai_and_lead_creation():
+    business = Business(
+        id=uuid.uuid4(),
+        tenant_id=uuid.uuid4(),
+        external_id="orange-park",
+        name="Orange Park",
+    )
+    customer = Customer(
+        id=uuid.uuid4(),
+        tenant_id=business.tenant_id,
+        business_id=business.id,
+        external_customer_id="tg-orange-park-customer",
+        source_channel="telegram",
+    )
+    conversation = Conversation(
+        id=uuid.uuid4(),
+        tenant_id=business.tenant_id,
+        business_id=business.id,
+        flow_id=uuid.uuid4(),
+        customer_id=customer.id,
+        channel="telegram",
+        status="open",
+    )
+    incoming = Message(
+        id=uuid.uuid4(),
+        tenant_id=business.tenant_id,
+        business_id=business.id,
+        conversation_id=conversation.id,
+        sender_type="customer",
+        direction="incoming",
+        channel="telegram",
+        message_text="25",
+    )
+    outgoing = Message(
+        id=uuid.uuid4(),
+        tenant_id=business.tenant_id,
+        business_id=business.id,
+        conversation_id=conversation.id,
+        sender_type="ai",
+        direction="outgoing",
+        channel="telegram",
+        message_text="",
+    )
+    message_service = MagicMock()
+    message_service.save_incoming_customer_message = AsyncMock(
+        return_value=IncomingMessageSaveResult(message=incoming, is_duplicate=False)
+    )
+    message_service.load_recent_conversation_history = AsyncMock(
+        return_value=_area_question_history()
+    )
+    message_service.save_outgoing_ai_message = AsyncMock(return_value=outgoing)
+    lead_service = _lead_service_mock(business, customer, conversation)
+    ai_reply_coordinator = _success_ai_coordinator()
+    service = WebhookMessageService(
+        business_service=MagicMock(get_by_external_id=AsyncMock(return_value=business)),
+        flow_service=_flow_service_mock(business),
+        customer_service=MagicMock(get_or_create_customer=AsyncMock(return_value=customer)),
+        conversation_service=MagicMock(
+            get_or_create_open_conversation=AsyncMock(return_value=conversation)
+        ),
+        message_service=message_service,
+        lead_service=lead_service,
+        ai_reply_coordinator=ai_reply_coordinator,
+        message_trace_service=message_trace_service_mock(),
+        delivery_visibility_service=delivery_visibility_service_mock(),
+        inbound_processing_lock_service=inbound_processing_lock_service_mock(),
+    )
+    session = MagicMock()
+    session.flush = AsyncMock()
+
+    result = await service.process_incoming_message(
+        session,
+        _orange_park_request("25"),
+    )
+
+    assert result.lead_created is False
+    assert "Варіантів на 25 м² у документації немає" in result.reply_to_customer
+    assert "Orange Park — це житловий комплекс" not in result.reply_to_customer
+    assert incoming.metadata_["orange_park_apartment_search"]["provided_area"] == 25
+    lead_service.create_lead.assert_not_awaited()
+    ai_reply_coordinator.execute_for_incoming_message.assert_not_awaited()
 
 
 def test_orange_park_phone_followup_defaults_to_ukrainian_without_language_context():
@@ -167,6 +384,7 @@ def test_orange_park_phone_followup_defaults_to_ukrainian_without_language_conte
         "first_name",
         "last_name",
     ]
+    assert "Запит передано менеджеру" not in reply
 
 
 @pytest.fixture
@@ -506,7 +724,7 @@ async def test_orange_park_telegram_handoff_asks_russian_contact_form_without_le
 
 
 @pytest.mark.anyio
-async def test_orange_park_telegram_phone_asks_missing_name_in_russian_without_lead():
+async def test_orange_park_telegram_phone_asks_missing_name_in_ukrainian_without_lead():
     business = Business(
         id=uuid.uuid4(),
         tenant_id=uuid.uuid4(),
@@ -597,7 +815,7 @@ async def test_orange_park_telegram_phone_asks_missing_name_in_russian_without_l
 
     assert result.lead_created is False
     assert result.reply_to_customer == (
-        "Спасибо, номер получил. Напишите, пожалуйста, имя и фамилию."
+        "Дякую, номер отримав. Напишіть, будь ласка, ім'я та прізвище."
     )
     assert "Thank" not in result.reply_to_customer
     assert "phone number" not in result.reply_to_customer

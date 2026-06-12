@@ -84,6 +84,7 @@ STUB_REPLY_TO_CUSTOMER = DUPLICATE_SAFE_ACKNOWLEDGMENT
 CUSTOMER_NOTE_MAX_LENGTH = 2000
 ORANGE_PARK_BUSINESS_EXTERNAL_ID = "orange-park"
 ORANGE_PARK_CONTACT_COLLECTION_STAGE = "orange_park_telegram_stage1_contact_form"
+ORANGE_PARK_APARTMENT_AREA_STAGE = "orange_park_telegram_apartment_area"
 ORANGE_PARK_START_RESET_STAGE = "orange_park_telegram_start_reset"
 ORANGE_PARK_START_WELCOME_UK = (
     "Добрий день! 👋\n\n"
@@ -97,16 +98,28 @@ ORANGE_PARK_START_WELCOME_UK = (
 )
 
 _PHONE_NUMBER_PATTERN = re.compile(r"(?<!\w)\+?\d[\d\s().-]{7,}\d(?!\w)")
+_SHORT_AREA_PATTERN = re.compile(r"^\s*(\d{1,3})(?:\s*(?:м2|м²|кв\.?\s*м|квадрат(?:ів|ов)?))?\s*$", re.IGNORECASE)
+ORANGE_PARK_ONE_ROOM_MIN_AREA_M2 = 35
+ORANGE_PARK_ONE_ROOM_MAX_AREA_M2 = 41
 _RUSSIAN_MARKERS = (
     "свяж",
     "соедин",
     "меня",
+    "да",
+    "почему",
+    "русск",
     "пожалуйста",
     "спасибо",
     "фамил",
     "менеджером",
 )
 _UKRAINIAN_MARKERS = (
+    "так",
+    "чому",
+    "російськ",
+    "що",
+    "цікав",
+    "ціна",
     "зв'яж",
     "звʼяж",
     "з'єдн",
@@ -128,12 +141,12 @@ _HANDOFF_MARKERS = (
     "соедин",
     "менеджер",
     "консультац",
-    "давай",
     "з'єдн",
     "зʼєдн",
     "передайте",
     "передай",
 )
+_SHORT_HANDOFF_RE = re.compile(r"(?<!\w)(давай|так|ок|добре)(?!\w)", re.IGNORECASE)
 _CONTACT_REQUEST_MARKERS = (
     "номер",
     "телефон",
@@ -964,6 +977,20 @@ class WebhookMessageService:
         if orange_park_start is not None:
             return orange_park_start
 
+        orange_park_area_reply = await self._resolve_orange_park_area_reply(
+            session,
+            tenant_id=tenant_id,
+            business=business,
+            conversation=conversation,
+            customer=customer,
+            incoming_message=incoming_message,
+            customer_message_text=customer_message_text,
+            channel=channel,
+            flow_id=flow_id,
+        )
+        if orange_park_area_reply is not None:
+            return orange_park_area_reply
+
         orange_park_reply = await self._resolve_orange_park_contact_collection_reply(
             session,
             tenant_id=tenant_id,
@@ -1137,6 +1164,58 @@ class WebhookMessageService:
             outbound_message_id=outbound_message.id,
         )
 
+    async def _resolve_orange_park_area_reply(
+        self,
+        session: AsyncSession,
+        *,
+        tenant_id: uuid.UUID,
+        business: object,
+        conversation: Conversation,
+        customer: object,
+        incoming_message: Message,
+        customer_message_text: str,
+        channel: str,
+        flow_id: uuid.UUID | None,
+    ) -> _ReplyResolution | None:
+        if not _orange_park_stage1_contact_collection_only(business, channel):
+            return None
+
+        history = await self.message_service.load_recent_conversation_history(
+            session,
+            tenant_id=tenant_id,
+            business_id=business.id,
+            conversation_id=conversation.id,
+        )
+        reply_text, metadata = _orange_park_area_reply_and_metadata(
+            customer_message_text,
+            history=history,
+        )
+        if reply_text is None:
+            return None
+
+        _set_message_metadata(incoming_message, metadata)
+        await session.flush()
+        outbound_message = await self.message_service.save_outgoing_ai_message(
+            session,
+            tenant_id=tenant_id,
+            business=business,
+            conversation=conversation,
+            customer=customer,
+            message_text=reply_text,
+            channel=channel,
+            ai_metadata={
+                "orange_park_apartment_area": True,
+                "stage": ORANGE_PARK_APARTMENT_AREA_STAGE,
+                "used_fallback": False,
+            },
+            flow_id=flow_id,
+        )
+        return _ReplyResolution(
+            reply_to_customer=reply_text,
+            ai_failed=False,
+            outbound_message_id=outbound_message.id,
+        )
+
     async def _resolve_orange_park_contact_collection_reply(
         self,
         session: AsyncSession,
@@ -1217,6 +1296,18 @@ class WebhookMessageService:
         )
         if orange_park_start is not None:
             return orange_park_start
+
+        orange_park_area_reply = await _resolve_orange_park_area_reply_legacy(
+            session,
+            tenant_id=tenant_id,
+            business=business,
+            conversation=conversation,
+            incoming_message=incoming_message,
+            customer_message_text=customer_message_text,
+            channel=channel,
+        )
+        if orange_park_area_reply is not None:
+            return orange_park_area_reply
 
         orange_park_reply = await _resolve_orange_park_contact_collection_reply_legacy(
             session,
@@ -2018,6 +2109,59 @@ async def _resolve_orange_park_start_reply_legacy(
     )
 
 
+async def _resolve_orange_park_area_reply_legacy(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    business: object,
+    conversation: object,
+    incoming_message: object,
+    customer_message_text: str,
+    channel: str,
+) -> _ReplyResolution | None:
+    if not _orange_park_stage1_contact_collection_only(business, channel):
+        return None
+
+    history = await _LegacyMessageHistoryService().load_recent_conversation_history(
+        session,
+        tenant_id=tenant_id,
+        business_id=business.id,
+        conversation_id=conversation.id,
+    )
+    reply_text, metadata = _orange_park_area_reply_and_metadata(
+        customer_message_text,
+        history=history,
+    )
+    if reply_text is None:
+        return None
+
+    await _legacy_set_message_metadata(
+        session,
+        tenant_id=tenant_id,
+        business_id=business.id,
+        message=incoming_message,
+        metadata=metadata,
+    )
+    outbound_message = await _legacy_save_outgoing_ai_message(
+        session,
+        tenant_id=tenant_id,
+        business_id=business.id,
+        conversation_id=conversation.id,
+        message_text=reply_text,
+        channel=channel,
+        ai_metadata={
+            "orange_park_apartment_area": True,
+            "stage": ORANGE_PARK_APARTMENT_AREA_STAGE,
+            "used_fallback": False,
+        },
+    )
+    return _ReplyResolution(
+        reply_to_customer=reply_text,
+        ai_failed=False,
+        outbound_message_id=outbound_message.id,
+    )
+
+
 def _orange_park_start_applies(
     business: object,
     channel: str,
@@ -2197,6 +2341,82 @@ def _orange_park_contact_collection_reply_and_metadata(
     return None, metadata
 
 
+def _orange_park_area_reply_and_metadata(
+    customer_message_text: str,
+    *,
+    history: ConversationHistory,
+) -> tuple[str | None, dict[str, Any]]:
+    area = _extract_short_area_value(customer_message_text)
+    metadata: dict[str, Any] = {
+        "orange_park_apartment_search": {
+            "stage": ORANGE_PARK_APARTMENT_AREA_STAGE,
+            "intent": "apartment_search",
+            "expected_slot": "apartment_area",
+            "min_documented_area": ORANGE_PARK_ONE_ROOM_MIN_AREA_M2,
+            "max_documented_area": ORANGE_PARK_ONE_ROOM_MAX_AREA_M2,
+        }
+    }
+    if area is None or not _orange_park_history_expects_apartment_area(history):
+        return None, metadata
+
+    metadata["orange_park_apartment_search"]["provided_area"] = area
+    if area < ORANGE_PARK_ONE_ROOM_MIN_AREA_M2:
+        return (
+            "У матеріалах Orange Park найменші 1-кімнатні квартири мають площу "
+            f"від 35 до 41 м². Варіантів на {area} м² у документації немає.\n\n"
+            "Можу зорієнтувати по компактних квартирах від 35 м² або передати "
+            "запит менеджеру, щоб уточнити актуальну наявність.",
+            metadata,
+        )
+    if area <= ORANGE_PARK_ONE_ROOM_MAX_AREA_M2:
+        return (
+            "Так, у матеріалах Orange Park є 1-кімнатні квартири в діапазоні "
+            "35-41 м². Підкажіть, розглядаєте для проживання чи інвестиції?",
+            metadata,
+        )
+    return (
+        f"Площа {area} м² більша за діапазон 1-кімнатних квартир 35-41 м² у матеріалах. "
+        "Можемо розглянути більші формати, наприклад 2-кімнатні квартири?",
+        metadata,
+    )
+
+
+def _extract_short_area_value(text_value: str) -> int | None:
+    match = _SHORT_AREA_PATTERN.match(text_value)
+    if match is None:
+        return None
+    area = int(match.group(1))
+    if area <= 0 or area > 300:
+        return None
+    return area
+
+
+def _orange_park_history_expects_apartment_area(history: ConversationHistory) -> bool:
+    for message in reversed(history.messages[-6:]):
+        text_value = message.message_text.casefold()
+        if message.sender_type == "ai" and _orange_park_ai_asked_for_area(text_value):
+            return True
+        if message.sender_type == "customer" and _orange_park_customer_discussed_area(
+            text_value
+        ):
+            return True
+    return False
+
+
+def _orange_park_ai_asked_for_area(normalized_text: str) -> bool:
+    return (
+        any(marker in normalized_text for marker in ("яка саме площ", "якую площ", "площа вас цікав", "площадь вас интерес"))
+        or (
+            any(marker in normalized_text for marker in ("площ", "квадрат", "м²", "м2"))
+            and "цікав" in normalized_text
+        )
+    )
+
+
+def _orange_park_customer_discussed_area(normalized_text: str) -> bool:
+    return any(marker in normalized_text for marker in ("квадрат", "площ", "м²", "м2"))
+
+
 def _orange_park_stage1_contact_collection_only(
     business: object,
     channel: str,
@@ -2216,7 +2436,9 @@ def _extract_phone_number(text_value: str) -> str | None:
 
 def _is_contact_collection_trigger(text_value: str) -> bool:
     normalized = text_value.casefold()
-    return any(marker in normalized for marker in _HANDOFF_MARKERS) or any(
+    return _SHORT_HANDOFF_RE.search(normalized) is not None or any(
+        marker in normalized for marker in _HANDOFF_MARKERS
+    ) or any(
         marker in normalized for marker in _CONTACT_REQUEST_MARKERS
     )
 
@@ -2226,26 +2448,39 @@ def _orange_park_dialogue_language(
     *,
     history: ConversationHistory,
 ) -> str:
+    latest_language = _orange_park_text_language(customer_message_text)
+    if latest_language is not None:
+        return latest_language
+    if customer_message_text.strip():
+        return "uk"
+
     samples = [
         message.message_text
         for message in history.messages
         if message.sender_type == "customer"
     ]
-    samples.append(customer_message_text)
-
     for text_value in reversed(samples):
-        normalized = text_value.casefold()
-        if any(marker in normalized for marker in _RUSSIAN_MARKERS) or any(
-            char in normalized for char in ("ы", "э", "ё", "ъ")
-        ):
-            return "ru"
-        if _is_clearly_english(normalized):
-            return "en"
-        if any(marker in normalized for marker in _UKRAINIAN_MARKERS) or any(
-            char in normalized for char in ("і", "ї", "є", "ґ")
-        ):
-            return "uk"
+        history_language = _orange_park_text_language(text_value)
+        if history_language is not None:
+            return history_language
     return "uk"
+
+
+def _orange_park_text_language(text_value: str) -> str | None:
+    normalized = text_value.casefold()
+    if not normalized.strip():
+        return None
+    if any(marker in normalized for marker in _UKRAINIAN_MARKERS) or any(
+        char in normalized for char in ("і", "ї", "є", "ґ")
+    ):
+        return "uk"
+    if any(marker in normalized for marker in _RUSSIAN_MARKERS) or any(
+        char in normalized for char in ("ы", "э", "ё", "ъ")
+    ):
+        return "ru"
+    if _is_clearly_english(normalized):
+        return "en"
+    return None
 
 
 def _is_clearly_english(normalized_text: str) -> bool:

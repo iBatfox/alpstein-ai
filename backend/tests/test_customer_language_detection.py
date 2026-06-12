@@ -18,6 +18,8 @@ from app.services.customer_language_detection import (
         ("Hola, ¿cuál es el horario de apertura?", "es"),
         ("Привіт, о котрій ви відкриваєтесь?", "uk"),
         ("А що ти можеш?", "uk"),
+        ("Чому ти на російській?", "uk"),
+        ("Так", "uk"),
         ("А что ты можешь?", "ru"),
     ],
 )

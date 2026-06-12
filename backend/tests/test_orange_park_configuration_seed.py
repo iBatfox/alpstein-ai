@@ -90,11 +90,19 @@ async def test_orange_park_seed_first_run_inserts_all_entities():
     )
     assert ai_profile.language == "uk"
     assert len(ai_profile.response_style) <= 100
-    assert "no repeat address" in ai_profile.response_style
-    assert "criteria only" in ai_profile.response_style
-    assert "ask phone" in ai_profile.response_style
+    assert "docs first" in ai_profile.response_style
+    assert "handoff only unstable" in ai_profile.response_style
+    assert "one question" in ai_profile.response_style
     assert "no loops" in ai_profile.response_style
-    assert "phone close" in ai_profile.response_style
+    assert "Business Context Source Of Truth and Tenant Knowledge Sources" in (
+        business_profile.business_limitations
+    )
+    assert "Answer from documentation before manager handoff" in (
+        business_profile.business_limitations
+    )
+    assert "exact price, exact availability, discounts, booking" in (
+        business_profile.business_limitations
+    )
     assert "Ukrainian /start and first greeting by default." in (
         ai_profile.metadata_["behavior_rules"]
     )
@@ -102,13 +110,16 @@ async def test_orange_park_seed_first_run_inserts_all_entities():
         ai_profile.metadata_["behavior_rules"]
     )
     assert (
-        "After customer message, keep Ukrainian unless the customer clearly writes Russian or English."
+        "Always reply in the language of the customer's latest message; conversation history must not override latest-message language."
         in ai_profile.metadata_["behavior_rules"]
     )
-    assert "Mirror Russian only when the customer's message is clearly Russian." in (
+    assert "Never switch to Russian because of conversation history." in (
         ai_profile.metadata_["behavior_rules"]
     )
-    assert "Mirror English only when the customer's message is clearly English." in (
+    assert "Mirror Russian only when the customer's latest message is clearly Russian." in (
+        ai_profile.metadata_["behavior_rules"]
+    )
+    assert "Mirror English only when the customer's latest message is clearly English." in (
         ai_profile.metadata_["behavior_rules"]
     )
     assert "Never output English unless customer writes English." in (
@@ -211,11 +222,10 @@ async def test_orange_park_seed_second_run_updates_without_duplicates():
     assert business.language == "uk"
     assert rows[3].language == "uk"
     assert len(rows[3].response_style) <= 100
-    assert "no repeat address" in rows[3].response_style
-    assert "criteria only" in rows[3].response_style
-    assert "ask phone" in rows[3].response_style
+    assert "docs first" in rows[3].response_style
+    assert "handoff only unstable" in rows[3].response_style
+    assert "one question" in rows[3].response_style
     assert "no loops" in rows[3].response_style
-    assert "phone close" in rows[3].response_style
     assert "repeating address or location after it was already answered" in (
         rows[3].forbidden_promises
     )
@@ -344,11 +354,10 @@ async def test_orange_park_seed_enforces_language_repetition_and_phone_closing_r
     assert business_profile.business_id == ai_profile.business_id == style.business_id
     assert ai_profile.language == "uk"
     assert len(ai_profile.response_style) <= 100
-    assert "no repeat address" in ai_profile.response_style
-    assert "criteria only" in ai_profile.response_style
-    assert "ask phone" in ai_profile.response_style
+    assert "docs first" in ai_profile.response_style
+    assert "handoff only unstable" in ai_profile.response_style
+    assert "one question" in ai_profile.response_style
     assert "no loops" in ai_profile.response_style
-    assert "phone close" in ai_profile.response_style
     assert "repeating address or location after it was already answered" in (
         ai_profile.forbidden_promises
     )
@@ -392,8 +401,72 @@ async def test_orange_park_seed_enforces_language_repetition_and_phone_closing_r
     assert "Never mix languages or use hybrid words." in (
         ai_profile.metadata_["behavior_rules"]
     )
+    assert (
+        "Always reply in the language of the customer's latest message; conversation history must not override latest-message language."
+        in ai_profile.metadata_["behavior_rules"]
+    )
+    assert "Never switch to Russian because of conversation history." in (
+        ai_profile.metadata_["behavior_rules"]
+    )
+    assert (
+        "If the customer asks 'Чому ти на російській?', apologize briefly in Ukrainian and continue in Ukrainian."
+        in ai_profile.metadata_["behavior_rules"]
+    )
+    assert (
+        "Use documentation first: Business Context Source Of Truth, then Tenant Knowledge Sources."
+        in ai_profile.metadata_["behavior_rules"]
+    )
+    assert (
+        "If stable documentation contains the answer, answer from documentation before manager handoff."
+        in ai_profile.metadata_["behavior_rules"]
+    )
+    assert (
+        "Do not say manager will confirm when stable documentation already answers the question."
+        in ai_profile.metadata_["behavior_rules"]
+    )
+    assert (
+        "Stable documented topics include project description, location, transport, apartment types, White Box completion, infrastructure, territory and security, construction technology, commercial premises, existence of purchase programs, and general purchase process."
+        in ai_profile.metadata_["behavior_rules"]
+    )
+    assert (
+        "Use manager handoff only for exact price, exact availability, discounts, booking, active installment conditions, current financing terms, legal guarantees, or other time-sensitive data."
+        in ai_profile.metadata_["behavior_rules"]
+    )
+    assert (
+        "Answer pattern: answer from documentation, ask one qualification question, then use manager handoff only if unstable information is requested."
+        in ai_profile.metadata_["behavior_rules"]
+    )
     assert "Keep Telegram replies concise: 1-3 short sentences." in (
         ai_profile.metadata_["behavior_rules"]
+    )
+    assert "Behave like a helpful consultant first, not a lead form." in (
+        ai_profile.metadata_["behavior_rules"]
+    )
+    assert "Trust first, qualification second, manager handoff third." in (
+        ai_profile.metadata_["behavior_rules"]
+    )
+    assert "Do not ask for a phone number at the beginning of the conversation." in (
+        ai_profile.metadata_["behavior_rules"]
+    )
+    assert (
+        "For general Orange Park questions, answer from available business context and do not ask for phone."
+        in ai_profile.metadata_["behavior_rules"]
+    )
+    assert (
+        "General questions about the project, location, infrastructure, territory, security, apartment types, White Box, commercial premises, or purchase process must be answered first without asking for phone."
+        in ai_profile.metadata_["behavior_rules"]
+    )
+    assert (
+        "When customer asks for price, explain that current exact price is manager-confirmed, give safe general context if available, and ask for contact only after answering."
+        in ai_profile.metadata_["behavior_rules"]
+    )
+    assert (
+        "Collect phone only when customer asks for price, availability, discount, booking, viewing, financing, єОселя, credit, manager consultation, or after basic needs are understood and handoff clearly adds value."
+        in ai_profile.metadata_["behavior_rules"]
+    )
+    assert (
+        "Do not repeatedly ask for phone if the customer ignores the request; continue helping and ask one useful qualification question."
+        in ai_profile.metadata_["behavior_rules"]
     )
     assert (
         "If address or location was already answered, do not repeat it when customer gives budget, area, payment, or handoff criteria."
@@ -444,6 +517,16 @@ async def test_orange_park_seed_enforces_language_repetition_and_phone_closing_r
         "Do not say the manager request was passed until first name, last name, and phone are collected."
         in ai_profile.metadata_["behavior_rules"]
     )
+    assert (
+        "Never say request passed to manager before phone, first name, and last name are collected."
+        in ai_profile.metadata_["behavior_rules"]
+    )
+    assert "If phone is missing, ask only for phone." in (
+        ai_profile.metadata_["behavior_rules"]
+    )
+    assert "If phone is provided but name is missing, ask only for first and last name." in (
+        ai_profile.metadata_["behavior_rules"]
+    )
     assert "hesitуйте" not in ai_profile.response_style
 
     assert channel.metadata_["default_start_language"] == "uk"
@@ -458,9 +541,29 @@ async def test_orange_park_seed_enforces_language_repetition_and_phone_closing_r
     assert "Never output English unless the customer explicitly writes in English" in (
         style.content
     )
+    assert "Always reply in the language of the customer's latest message" in (
+        style.content
+    )
+    assert "Conversation history must not override the latest customer message language" in (
+        style.content
+    )
+    assert 'If the customer asks "Чому ти на російській?"' in style.content
     assert "Never mix languages in the same sentence" in style.content
     assert "hybrid words" in style.content
     assert "Keep most Telegram replies to 1-3 short sentences" in style.content
+    assert "helpful consultant" in style.content
+    assert "Trust first, qualification second, manager handoff third" in style.content
+    assert "Use documentation first: Business Context Source Of Truth" in style.content
+    assert "If the answer exists in documentation" in style.content
+    assert "Do not start stable factual answers" in style.content
+    assert "Use manager handoff only for exact price" in style.content
+    assert "Do not ask for phone at the beginning" in style.content
+    assert "must be answered first from documentation without asking for phone" in (
+        style.content
+    )
+    assert "exact current price is manager-confirmed" in style.content
+    assert "Collect phone only when the customer asks for price" in style.content
+    assert "Do not repeatedly ask for phone" in style.content
     assert "Use conversation history to avoid repeating facts" in style.content
     assert "Do not repeat location, apartment types, payment options" in style.content
     assert "If address or location was already answered" in style.content
@@ -495,6 +598,9 @@ async def test_orange_park_seed_enforces_language_repetition_and_phone_closing_r
         style.content
     )
     assert "do not say the request was passed yet" in style.content
+    assert 'Never say "request passed to manager" before phone' in style.content
+    assert "If phone is missing, ask only for phone" in style.content
+    assert "If phone is provided but name is missing" in style.content
     assert "Do not thank the customer for a phone number" in style.content
     assert 'reply only: "Дякую. Запит передано менеджеру. Очікуйте дзвінок."' in (
         style.content
