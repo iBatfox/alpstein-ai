@@ -29,8 +29,13 @@ class WebhookCustomer(BaseModel):
 
     phone: str | None = None
     name: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
     email: str | None = None
     external_customer_id: str | None = None
+    telegram_id: str | None = None
+    telegram_username: str | None = None
+    contact_shared: bool | None = None
 
     @model_validator(mode="after")
     def require_customer_identifier(self) -> "WebhookCustomer":

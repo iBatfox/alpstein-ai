@@ -206,7 +206,11 @@ def test_non_alpstein_path_excludes_presales_and_alpstein_greeting(alpstein_conf
     assert "I am your Alpstein AI assistant" not in task
     assert "technical pre-sales consultant" not in task
     assert "Do not use Alpstein AI product messaging" in task
-    assert len(task) < len(PRE_SALES_CORE_CHARTER)
+    assert "Give a brief helpful introduction using tenant business reference data only" in task
+    assert "Ask how you can help today" in task
+    assert "CRM sales language" in task
+    assert "Alpstein AI capabilities" not in task
+    assert "project discussion" not in task
 
 
 @pytest.mark.parametrize(

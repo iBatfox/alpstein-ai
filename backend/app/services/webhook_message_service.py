@@ -2,12 +2,14 @@ import logging
 import uuid
 import json
 import re
+import inspect
 from dataclasses import dataclass
 from datetime import datetime
 from types import SimpleNamespace
 from typing import Any
 
 from sqlalchemy import text
+from sqlalchemy.exc import ArgumentError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.conversation import Conversation
@@ -96,6 +98,9 @@ ORANGE_PARK_START_WELCOME_UK = (
     "🏢 Комерційне приміщення\n"
     "💳 Умови покупки / розтермінування"
 )
+ORANGE_PARK_CONTACT_RECEIVED_REPLY_UK = (
+    "Дякую, номер отримали. Менеджер зв'яжеться з вами найближчим часом."
+)
 
 _PHONE_NUMBER_PATTERN = re.compile(r"(?<!\w)\+?\d[\d\s().-]{7,}\d(?!\w)")
 _SHORT_AREA_PATTERN = re.compile(r"^\s*(\d{1,3})(?:\s*(?:м2|м²|кв\.?\s*м|квадрат(?:ів|ов)?))?\s*$", re.IGNORECASE)
@@ -177,6 +182,7 @@ class WebhookMessageProcessResult:
     delivery_status: str | None = None
     outbound_message_id: uuid.UUID | None = None
     instagram_outbound_allowed: bool | None = None
+    response_metadata: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -352,7 +358,7 @@ class WebhookMessageService:
             source_channel=channel,
             phone=request.customer.phone,
             external_customer_id=request.customer.external_customer_id,
-            name=request.customer.name,
+            name=_customer_display_name(request),
             email=request.customer.email,
         )
 
@@ -379,6 +385,14 @@ class WebhookMessageService:
             flow_id=flow.id,
             message_timestamp=request.message.timestamp,
         )
+        contact_metadata = _orange_park_shared_contact_metadata(
+            request,
+            business=business,
+            channel=channel,
+        )
+        if contact_metadata is not None:
+            _set_message_metadata(save_result.message, contact_metadata)
+            await session.flush()
         observability = observability.with_session(
             conversation_id=conversation.id,
             inbound_message_id=save_result.message.id,
@@ -518,6 +532,9 @@ class WebhookMessageService:
                 processing_status=trace_status,
                 correlation_id=trace_correlation,
                 instagram_outbound_allowed=instagram_outbound_allowed,
+                response_metadata=_response_metadata_from_message(
+                    save_result.message,
+                ),
             )
 
         await self.rate_limit_service.consume_ingress_request(
@@ -605,9 +622,10 @@ class WebhookMessageService:
 
         delivery_event: DeliveryEvent | None = None
         try:
-            if _lead_creation_enabled_for_flow(
-                flow
-            ) and not _orange_park_stage1_contact_collection_only(business, channel):
+            if _lead_creation_enabled_for_flow(flow) and (
+                not _orange_park_stage1_contact_collection_only(business, channel)
+                or _orange_park_crm_lead_creation_enabled_for_flow(flow)
+            ):
                 lead_outcome = await self._process_lead_for_incoming_message(
                     session,
                     tenant_id=tenant_id,
@@ -734,6 +752,7 @@ class WebhookMessageService:
             delivery_status=delivery_status,
             outbound_message_id=outbound_id,
             instagram_outbound_allowed=instagram_outbound_allowed,
+            response_metadata=_response_metadata_from_message(save_result.message),
         )
 
     async def _process_incoming_message_legacy(
@@ -758,7 +777,7 @@ class WebhookMessageService:
             source_channel=channel,
             phone=request.customer.phone,
             external_customer_id=request.customer.external_customer_id,
-            name=request.customer.name,
+            name=_customer_display_name(request),
             email=request.customer.email,
         )
         conversation = await _legacy_get_or_create_open_conversation(
@@ -830,7 +849,10 @@ class WebhookMessageService:
             raw_payload=request.message.raw_payload,
             observability=observability,
         )
-        if _orange_park_stage1_contact_collection_only(business, channel):
+        if _orange_park_stage1_contact_collection_only(
+            business,
+            channel,
+        ) and not _orange_park_crm_lead_creation_enabled_for_flow(flow):
             lead_outcome = _LeadProcessOutcome(
                 lead_created=False,
                 lead_updated=False,
@@ -1179,6 +1201,8 @@ class WebhookMessageService:
     ) -> _ReplyResolution | None:
         if not _orange_park_stage1_contact_collection_only(business, channel):
             return None
+        if _orange_park_shared_contact_from_message(incoming_message) is not None:
+            return None
 
         history = await self.message_service.load_recent_conversation_history(
             session,
@@ -1231,6 +1255,31 @@ class WebhookMessageService:
     ) -> _ReplyResolution | None:
         if not _orange_park_stage1_contact_collection_only(business, channel):
             return None
+
+        shared_contact = _orange_park_shared_contact_from_message(incoming_message)
+        if shared_contact is not None:
+            await session.flush()
+            outbound_message = await self.message_service.save_outgoing_ai_message(
+                session,
+                tenant_id=tenant_id,
+                business=business,
+                conversation=conversation,
+                customer=customer,
+                message_text=ORANGE_PARK_CONTACT_RECEIVED_REPLY_UK,
+                channel=channel,
+                ai_metadata={
+                    "orange_park_contact_collection": True,
+                    "stage": ORANGE_PARK_CONTACT_COLLECTION_STAGE,
+                    "contact_shared": True,
+                    "used_fallback": False,
+                },
+                flow_id=flow_id,
+            )
+            return _ReplyResolution(
+                reply_to_customer=ORANGE_PARK_CONTACT_RECEIVED_REPLY_UK,
+                ai_failed=False,
+                outbound_message_id=outbound_message.id,
+            )
 
         history = await self.message_service.load_recent_conversation_history(
             session,
@@ -1617,14 +1666,23 @@ class WebhookMessageService:
         inbound_message_id: uuid.UUID | None = None,
     ) -> str:
         if inbound_message_id is not None:
-            inbound_reply = await self.message_service.find_outgoing_ai_for_inbound(
-                session,
-                tenant_id=tenant_id,
-                business_id=business_id,
-                inbound_message_id=inbound_message_id,
-            )
-            if inbound_reply is not None and inbound_reply.message_text.strip():
-                return inbound_reply.message_text.strip()
+            try:
+                inbound_reply_result = self.message_service.find_outgoing_ai_for_inbound(
+                    session,
+                    tenant_id=tenant_id,
+                    business_id=business_id,
+                    inbound_message_id=inbound_message_id,
+                )
+                inbound_reply = (
+                    await inbound_reply_result
+                    if inspect.isawaitable(inbound_reply_result)
+                    else inbound_reply_result
+                )
+            except ArgumentError:
+                inbound_reply = None
+            inbound_reply_text = getattr(inbound_reply, "message_text", None)
+            if isinstance(inbound_reply_text, str) and inbound_reply_text.strip():
+                return inbound_reply_text.strip()
 
         last_ai_message = await self.message_service.find_last_outgoing_ai_message(
             session,
@@ -2312,6 +2370,7 @@ def _orange_park_contact_collection_reply_and_metadata(
             {
                 "intent": "contact_collection_requested",
                 "missing_fields": ["first_name", "last_name", "phone"],
+                "telegram_contact_request": True,
             }
         )
         if language == "ru":
@@ -2498,6 +2557,104 @@ def _set_message_metadata(message: Message, metadata: dict[str, Any]) -> None:
     message.metadata_ = {**existing, **metadata}
 
 
+def _customer_display_name(request: NormalizedWebhookMessageRequest) -> str | None:
+    explicit_name = _clean_optional_text(request.customer.name)
+    if explicit_name is not None:
+        return explicit_name
+    parts = [
+        _clean_optional_text(request.customer.first_name),
+        _clean_optional_text(request.customer.last_name),
+    ]
+    return " ".join(part for part in parts if part) or None
+
+
+def _orange_park_shared_contact_metadata(
+    request: NormalizedWebhookMessageRequest,
+    *,
+    business: object,
+    channel: str,
+) -> dict[str, Any] | None:
+    if not _orange_park_stage1_contact_collection_only(business, channel):
+        return None
+    if request.customer.contact_shared is not True:
+        return None
+
+    phone = _clean_optional_text(request.customer.phone)
+    if phone is None:
+        return None
+
+    first_name = _clean_optional_text(request.customer.first_name)
+    last_name = _clean_optional_text(request.customer.last_name)
+    telegram_id = _clean_optional_text(request.customer.telegram_id)
+    telegram_username = _clean_optional_text(request.customer.telegram_username)
+    return {
+        "orange_park_contact_collection": {
+            "stage": ORANGE_PARK_CONTACT_COLLECTION_STAGE,
+            "intent": "telegram_contact_shared",
+            "contact_received": True,
+            "phone": phone,
+            "first_name": first_name,
+            "last_name": last_name,
+            "telegram_id": telegram_id,
+            "telegram_username": telegram_username,
+            "business_id": ORANGE_PARK_BUSINESS_EXTERNAL_ID,
+            "channel": "telegram",
+            "external_crm_stage": "disabled_stage_1",
+            "missing_fields": [],
+        }
+    }
+
+
+def _orange_park_shared_contact_from_message(
+    message: Message,
+) -> dict[str, Any] | None:
+    metadata = message.metadata_ or {}
+    if not isinstance(metadata, dict):
+        return None
+    contact = metadata.get("orange_park_contact_collection")
+    if not isinstance(contact, dict):
+        return None
+    if contact.get("contact_received") is not True:
+        return None
+    if not _clean_optional_text(contact.get("phone")):
+        return None
+    return contact
+
+
+def _response_metadata_from_message(message: Message) -> dict[str, Any] | None:
+    metadata = message.metadata_ or {}
+    if not isinstance(metadata, dict):
+        return None
+    contact = metadata.get("orange_park_contact_collection")
+    if not isinstance(contact, dict):
+        return None
+    if contact.get("telegram_contact_request") is True:
+        return {
+            "telegram_contact_request": {
+                "needed": True,
+                "button_text": "📱 Поділитися номером",
+            }
+        }
+    if contact.get("contact_received") is True:
+        return {
+            "orange_park_contact_collection": {
+                "contact_received": True,
+                "crm_ready": True,
+                "crm_creation_deferred": True,
+            }
+        }
+    return None
+
+
+def _clean_optional_text(value: object) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        value = str(value)
+    stripped = value.strip()
+    return stripped if stripped else None
+
+
 async def _legacy_set_message_metadata(
     session: AsyncSession,
     *,
@@ -2534,6 +2691,23 @@ def _lead_creation_enabled_for_flow(flow: Flow) -> bool:
     if not isinstance(metadata, dict):
         return True
     return metadata.get("lead_creation_enabled") is not False
+
+
+def _orange_park_crm_lead_creation_enabled_for_flow(flow: Flow) -> bool:
+    metadata = flow.metadata_ or {}
+    if not isinstance(metadata, dict):
+        return False
+    crm = metadata.get("crm")
+    if isinstance(crm, dict):
+        bitrix = crm.get("bitrix")
+        if isinstance(bitrix, dict):
+            return bitrix.get("enabled") is True
+    integrations = metadata.get("integrations")
+    if isinstance(integrations, dict):
+        bitrix = integrations.get("bitrix")
+        if isinstance(bitrix, dict):
+            return bitrix.get("enabled") is True
+    return metadata.get("bitrix_enabled") is True
 
 
 def _trace_fields_for_response(
