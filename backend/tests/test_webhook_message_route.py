@@ -327,6 +327,49 @@ async def test_webhook_message_passes_customer_resolution_to_service(
 
 
 @pytest.mark.anyio
+async def test_webhook_message_parses_telegram_contact_customer_fields(
+    mock_webhook_message_service: MagicMock,
+    mock_db_session: MagicMock,
+):
+    mock_webhook_message_service.process_incoming_message = AsyncMock(
+        side_effect=BusinessNotFoundError()
+    )
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        await client.post(
+            "/api/v1/webhook/message",
+            json=_valid_payload(
+                business_id="orange-park",
+                channel="telegram",
+                customer={
+                    "external_customer_id": "telegram:111",
+                    "phone": "+380671112233",
+                    "first_name": "Олена",
+                    "last_name": "Шевченко",
+                    "telegram_id": "111",
+                    "telegram_username": "olena",
+                    "contact_shared": True,
+                },
+                message={
+                    "text": "[telegram_contact_shared]",
+                    "external_message_id": "tg:111:222",
+                    "external_conversation_id": "tg:111",
+                },
+            ),
+            headers=_auth_headers(),
+        )
+
+    request = mock_webhook_message_service.process_incoming_message.await_args.args[1]
+    assert request.customer.phone == "+380671112233"
+    assert request.customer.first_name == "Олена"
+    assert request.customer.last_name == "Шевченко"
+    assert request.customer.telegram_id == "111"
+    assert request.customer.telegram_username == "olena"
+    assert request.customer.contact_shared is True
+
+
+@pytest.mark.anyio
 async def test_webhook_message_reusable_conversation_status_in_response(
     mock_webhook_message_service: MagicMock,
     mock_db_session: MagicMock,

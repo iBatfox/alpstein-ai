@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -102,6 +102,7 @@ class WebhookMessageResponseData(BaseModel):
     flow: WebhookFlowSummary
     trace: WebhookTraceSummary | None = None
     delivery: WebhookDeliverySummary | None = None
+    metadata: dict[str, Any] | None = None
     instagram_outbound_allowed: bool | None = None
     lead: WebhookLeadSummary | None = None
     notification: WebhookNotificationPayload | None = None
@@ -132,6 +133,7 @@ def build_webhook_message_success_envelope(
     delivery_status: str | None = None,
     outbound_message_id: str | None = None,
     instagram_outbound_allowed: bool | None = None,
+    metadata: dict[str, Any] | None = None,
     lead_updated: bool = False,
     lead: WebhookLeadSummary | None = None,
     notification: WebhookNotificationPayload | None = None,
@@ -166,6 +168,7 @@ def build_webhook_message_success_envelope(
                 delivery_status=delivery_status,
                 outbound_message_id=outbound_message_id,
             ),
+            metadata=metadata,
             instagram_outbound_allowed=instagram_outbound_allowed,
             lead=lead,
             notification=notification,
@@ -221,6 +224,7 @@ def serialize_webhook_message_success(
     delivery_status: str | None = None,
     outbound_message_id: str | None = None,
     instagram_outbound_allowed: bool | None = None,
+    metadata: dict[str, Any] | None = None,
     lead_updated: bool = False,
     lead: WebhookLeadSummary | None = None,
     notification: WebhookNotificationPayload | None = None,
@@ -244,6 +248,7 @@ def serialize_webhook_message_success(
         delivery_status=delivery_status,
         outbound_message_id=outbound_message_id,
         instagram_outbound_allowed=instagram_outbound_allowed,
+        metadata=metadata,
         lead=lead,
         notification=notification,
     ).model_dump(mode="json", exclude_none=True)
