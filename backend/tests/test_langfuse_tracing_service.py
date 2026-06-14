@@ -96,11 +96,11 @@ def test_tracing_enabled_in_development_with_keys():
     assert service.is_enabled() is True
 
 
-def test_tracing_disabled_in_production_without_explicit_flag():
+def test_tracing_enabled_in_production_when_credentials_exist():
     service = LangfuseTracingService(
         app_settings=_settings(environment="production")
     )
-    assert service.is_enabled() is False
+    assert service.is_enabled() is True
 
 
 def test_tracing_enabled_in_production_when_explicit():
@@ -228,7 +228,53 @@ async def test_trace_ai_reply_records_openai_generation_when_enabled():
     assert "operator_business_context" not in metadata
     assert "assembled_prompt" not in metadata
     assert "sk-test" not in str(metadata)
-    assert "pk-test" not in str(metadata)
+
+
+@pytest.mark.anyio
+async def test_message_turn_trace_covers_deterministic_reply_without_prompt_run():
+    mock_client = MagicMock()
+    mock_span = MagicMock()
+    mock_span.trace_id = "lf-deterministic"
+    mock_client.start_as_current_observation.return_value.__enter__ = MagicMock(
+        return_value=mock_span
+    )
+    mock_client.start_as_current_observation.return_value.__exit__ = MagicMock(
+        return_value=False
+    )
+    service = LangfuseTracingService(
+        app_settings=_settings(environment="production"),
+        client=mock_client,
+    )
+    observability = _observability(
+        business_external_id="orange-park",
+        channel="website_chat",
+        prompt_run_id=None,
+    )
+
+    with patch(
+        "app.services.langfuse_tracing_service.propagate_attributes"
+    ) as mock_propagate:
+        mock_propagate.return_value.__enter__ = MagicMock(return_value=None)
+        mock_propagate.return_value.__exit__ = MagicMock(return_value=False)
+
+        async with service.trace_message_turn(
+            observability=observability,
+            customer_message_preview="Які є квартири?",
+        ) as recorder:
+            assert recorder.langfuse_trace_id == "lf-deterministic"
+            recorder.record_response(
+                reply_to_customer="Який тип квартири вас цікавить?",
+                metadata={"processing_status": "completed"},
+            )
+
+    span_call = mock_client.start_as_current_observation.call_args
+    assert span_call.kwargs["name"] == "message_turn"
+    assert span_call.kwargs["as_type"] == "span"
+    assert "prompt_run_id" not in span_call.kwargs["metadata"]
+    propagated_tags = mock_propagate.call_args.kwargs["tags"]
+    assert "website_chat" in propagated_tags
+    mock_span.update.assert_called_once()
+    assert mock_span.update.call_args.kwargs["output"]["status"] == "completed"
 
 
 @pytest.mark.anyio

@@ -36,7 +36,8 @@ Alpstein AI is a **backend-centered AI reply orchestration system** for multi-te
 - **n8n** is the ingress and automation layer: receives channel events, normalizes payloads, calls the backend, sends customer replies, and optionally notifies the business owner.
 - **PromptBuilder** assembles an eight-section provider-neutral prompt per turn; conversational control (greeting, intent slices, pre-sales charter/appendix) lives in §2 `task_instructions`.
 - **PostgreSQL** stores tenants, businesses, conversations, messages, leads, AI configuration, and `prompt_runs` audit rows.
-- **Observability:** `PromptRun` DB trail (all environments when AI runs); **Langfuse** tracing (dev/internal only when keys + environment allow).
+- **Observability:** `PromptRun` DB trail when AI runs; **Langfuse** message-turn
+  tracing in every environment when credentials are configured.
 - **Telegram** is the only live customer ingress path documented with runtime evidence; test webhook path exists for Gate 1/2 verification.
 
 Not in runtime scope: CRM admin panel, vector DB, billing, self-service onboarding UI, n8n→PostgreSQL writes.
@@ -62,7 +63,7 @@ End-to-end path for a **non-duplicate** Telegram customer message (primary produ
 | 11 | `AiReplyOrchestrationCoordinator` → `AiReplyOrchestrationService.generate_reply` | **implemented** |
 | 12 | Load AI config, knowledge, history (10–20 msgs); `GreetingPolicyService.resolve`; `ConversationIntentService.resolve` if `alpstein_ai_demo_001` | **implemented** / **partial** (intent: one business only) |
 | 13 | `PromptBuilderService.build_reply_to_customer` → `AssembledPrompt` | **implemented** |
-| 14 | `LangfuseTracingService.trace_ai_reply` (no-op if disabled) → `AiGatewayService.complete` (OpenAI HTTP) | **implemented** / **partial** (Langfuse dev-only) |
+| 14 | Outer `LangfuseTracingService.trace_message_turn`; nested `trace_ai_reply` → `AiGatewayService.complete` (OpenAI HTTP) | **implemented** |
 | 15 | `PromptRunService.create_prompt_run`; outgoing AI message persisted on success/fallback | **implemented** |
 | 16 | Webhook JSON: `reply_to_customer`, `lead_*`, `notify_owner`, optional `notification` | **implemented** |
 | 17 | n8n `Shape Telegram Customer Reply` → `Telegram Send Message` to customer `chatId` | **implemented** |
@@ -303,7 +304,7 @@ Ideal behaviors described only in `docs/architecture/conversation-intent-policy-
 | PromptRun | Yes | on every AI execution attempt |
 | operator_business_context | **No** | transport-only |
 | source / attribution (ATTR-2) | **No** | validated at boundary only |
-| Langfuse traces | External SaaS | dev-only when enabled |
+| Langfuse traces | External SaaS | all environments when credentials are configured |
 
 ### Gaps
 

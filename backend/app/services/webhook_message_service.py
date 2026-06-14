@@ -1,9 +1,8 @@
 import logging
 import uuid
 import json
-import re
 import inspect
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from types import SimpleNamespace
 from typing import Any
@@ -40,6 +39,7 @@ from app.services.flow_service import FlowService, LegacyWebhookFlow
 from app.services.customer_service import CustomerService
 from app.services.lead_service import LeadService
 from app.services.lead_signal_detection_service import LeadSignalDetectionService
+from app.services.langfuse_tracing_service import LangfuseTracingService
 from app.services.message_service import IncomingMessageSaveResult, MessageService
 from app.core.config import settings
 from app.services.delivery_visibility_service import DeliveryVisibilityService
@@ -66,6 +66,16 @@ from app.services.message_trace_service import (
     build_trace_metadata,
 )
 from app.services.notification_policy_service import NotificationPolicyService
+from app.services.orange_park_bitrix_service import (
+    OrangeParkBitrixContact,
+    OrangeParkBitrixError,
+    OrangeParkBitrixLeadResult,
+    OrangeParkBitrixService,
+)
+from app.services.orange_park_dialog_service import (
+    ORANGE_PARK_DIALOG_VERSION,
+    OrangeParkDialogService,
+)
 from app.services.tenant_context_validator import validate_tenant_context
 from app.schemas.conversation_context import (
     ConversationHistory,
@@ -86,106 +96,6 @@ STUB_REPLY_TO_CUSTOMER = DUPLICATE_SAFE_ACKNOWLEDGMENT
 CUSTOMER_NOTE_MAX_LENGTH = 2000
 ORANGE_PARK_BUSINESS_EXTERNAL_ID = "orange-park"
 ORANGE_PARK_CONTACT_COLLECTION_STAGE = "orange_park_telegram_native_contact"
-ORANGE_PARK_APARTMENT_AREA_STAGE = "orange_park_telegram_apartment_area"
-ORANGE_PARK_START_RESET_STAGE = "orange_park_telegram_start_reset"
-ORANGE_PARK_START_WELCOME_UK = (
-    "Добрий день! 👋\n\n"
-    "Я AI-асистент ЖК Orange Park.\n\n"
-    "Можу допомогти з інформацією про комплекс, квартири, комерційні приміщення "
-    "та умови придбання, а також передати ваш запит менеджеру.\n\n"
-    "Що вас цікавить?\n"
-    "🏡 Квартира\n"
-    "🏢 Комерційне приміщення\n"
-    "💳 Умови покупки / розтермінування"
-)
-ORANGE_PARK_CONTACT_BUTTON_REPLY_UK = (
-    "Для зв'язку з менеджером, будь ласка, натисніть кнопку "
-    "«📱 Поділитися номером»."
-)
-ORANGE_PARK_BUDGET_CONTACT_BUTTON_REPLY_UK = (
-    "Актуальні варіанти в межах бюджету підтвердить менеджер.\n\n"
-    f"{ORANGE_PARK_CONTACT_BUTTON_REPLY_UK}"
-)
-ORANGE_PARK_CONTACT_RECEIVED_REPLY_UK = (
-    "Дякуємо. Запит передано менеджеру. Очікуйте дзвінок."
-)
-
-_PHONE_NUMBER_PATTERN = re.compile(r"(?<!\w)\+?\d[\d\s().-]{7,}\d(?!\w)")
-_SHORT_AREA_PATTERN = re.compile(r"^\s*(\d{1,3})(?:\s*(?:м2|м²|кв\.?\s*м|квадрат(?:ів|ов)?))?\s*$", re.IGNORECASE)
-ORANGE_PARK_ONE_ROOM_MIN_AREA_M2 = 35
-ORANGE_PARK_ONE_ROOM_MAX_AREA_M2 = 41
-_RUSSIAN_MARKERS = (
-    "свяж",
-    "соедин",
-    "меня",
-    "да",
-    "почему",
-    "русск",
-    "пожалуйста",
-    "спасибо",
-    "фамил",
-    "менеджером",
-)
-_UKRAINIAN_MARKERS = (
-    "так",
-    "чому",
-    "російськ",
-    "що",
-    "цікав",
-    "ціна",
-    "зв'яж",
-    "звʼяж",
-    "з'єдн",
-    "зʼєдн",
-    "будь ласка",
-    "дякую",
-    "прізви",
-)
-_ENGLISH_MARKERS = (
-    "hello",
-    "hi",
-    "manager",
-    "price",
-    "contact",
-    "phone",
-)
-_HANDOFF_MARKERS = (
-    "свяж",
-    "соедин",
-    "менеджер",
-    "консультац",
-    "з'єдн",
-    "зʼєдн",
-    "передайте",
-    "передай",
-)
-_SHORT_HANDOFF_RE = re.compile(r"(?<!\w)(давай|так|ок|добре)(?!\w)", re.IGNORECASE)
-_CONTACT_REQUEST_MARKERS = (
-    "номер",
-    "телефон",
-    "контакт",
-    "дані",
-    "данные",
-    "дай дан",
-    "дай контакт",
-)
-_ORANGE_PARK_CURRENT_OPTIONS_MARKERS = (
-    "які є варіанти",
-    "які варіанти",
-    "що є в наявності",
-    "що в наявності",
-    "актуальні варіанти",
-    "наявні варіанти",
-    "ціна",
-    "ціни",
-    "вартість",
-    "скільки кошту",
-    "бюджет",
-)
-_ORANGE_PARK_BUDGET_LIMIT_RE = re.compile(
-    r"(?<!\w)до\s+\d[\d\s]*(?:грн|₴|uah)?(?!\w)",
-    re.IGNORECASE,
-)
 
 
 @dataclass(frozen=True)
@@ -250,6 +160,9 @@ class WebhookMessageService:
         rate_limit_service: RateLimitService | None = None,
         spam_protection_service: SpamProtectionService | None = None,
         instagram_outbound_dedup_service: InstagramOutboundDedupService | None = None,
+        orange_park_bitrix_service: OrangeParkBitrixService | None = None,
+        orange_park_dialog_service: OrangeParkDialogService | None = None,
+        langfuse_tracing_service: LangfuseTracingService | None = None,
     ) -> None:
         self.business_service = business_service or BusinessService()
         self.customer_service = customer_service or CustomerService()
@@ -287,6 +200,15 @@ class WebhookMessageService:
         self.spam_protection_service = spam_protection_service or SpamProtectionService()
         self.instagram_outbound_dedup_service = (
             instagram_outbound_dedup_service or InstagramOutboundDedupService()
+        )
+        self.orange_park_bitrix_service = (
+            orange_park_bitrix_service or OrangeParkBitrixService()
+        )
+        self.orange_park_dialog_service = (
+            orange_park_dialog_service or OrangeParkDialogService()
+        )
+        self.langfuse_tracing_service = (
+            langfuse_tracing_service or LangfuseTracingService()
         )
 
     async def _instagram_outbound_allowed_for_response(
@@ -342,6 +264,38 @@ class WebhookMessageService:
                 external_message_id=request.message.external_message_id,
                 external_conversation_id=request.message.external_conversation_id,
             )
+        if observability.business_external_id is None:
+            observability = replace(
+                observability,
+                business_external_id=request.business_id,
+            )
+        async with self.langfuse_tracing_service.trace_message_turn(
+            observability=observability,
+            customer_message_preview=request.message.text,
+        ) as trace_recorder:
+            try:
+                result = await self._process_incoming_message(
+                    session,
+                    request,
+                    observability=observability,
+                )
+            except Exception as exc:
+                trace_recorder.record_error(exc)
+                raise
+            if isinstance(result, WebhookMessageProcessResult):
+                trace_recorder.record_response(
+                    reply_to_customer=result.reply_to_customer,
+                    metadata=_message_turn_trace_metadata(result),
+                )
+            return result
+
+    async def _process_incoming_message(
+        self,
+        session: AsyncSession,
+        request: NormalizedWebhookMessageRequest,
+        *,
+        observability: ObservabilityContext,
+    ) -> WebhookMessageProcessResult:
         business = await self.business_service.get_by_external_id(
             session,
             request.business_id,
@@ -647,9 +601,19 @@ class WebhookMessageService:
 
         delivery_event: DeliveryEvent | None = None
         try:
+            orange_park_bitrix_contact = (
+                _orange_park_bitrix_contact_for_sync(
+                    save_result.message,
+                    business=business,
+                    channel=channel,
+                    flow=flow,
+                )
+                if self.orange_park_bitrix_service.is_configured()
+                else None
+            )
             if _lead_creation_enabled_for_flow(flow) and (
-                not _orange_park_stage1_contact_collection_only(business, channel)
-                or _orange_park_crm_lead_creation_enabled_for_flow(flow)
+                not _is_orange_park_telegram(business, channel)
+                or orange_park_bitrix_contact is not None
             ):
                 lead_outcome = await self._process_lead_for_incoming_message(
                     session,
@@ -667,6 +631,27 @@ class WebhookMessageService:
                     lead_updated=False,
                     lead=None,
                 )
+
+            bitrix_result = None
+            if orange_park_bitrix_contact is not None:
+                try:
+                    bitrix_result = await self._sync_orange_park_bitrix_contact(
+                        session,
+                        tenant_id=tenant_id,
+                        business_id=business.id,
+                        conversation_id=conversation.id,
+                        incoming_message=save_result.message,
+                        contact=orange_park_bitrix_contact,
+                    )
+                except (OrangeParkBitrixError, ValueError):
+                    logger.exception(
+                        "orange_park_bitrix_sync_failed",
+                        extra={
+                            "tenant_id": str(tenant_id),
+                            "business_id": str(business.id),
+                            "conversation_id": str(conversation.id),
+                        },
+                    )
 
             reply_resolution = await self._resolve_reply_to_customer(
                 session,
@@ -730,14 +715,27 @@ class WebhookMessageService:
                 )
             raise
 
-        notification_decision = self.notification_policy_service.decide(
-            is_duplicate=False,
-            lead_created=lead_outcome.lead_created,
-            lead_updated=lead_outcome.lead_updated,
-            urgent_detected=signals.urgent_detected,
-            handoff_requested=signals.handoff_requested,
-            ai_failed=reply_resolution.ai_failed,
-        )
+        if bitrix_result is not None:
+            lead_outcome = _LeadProcessOutcome(
+                lead_created=bitrix_result.action == "create",
+                lead_updated=bitrix_result.action == "update",
+                lead=lead_outcome.lead,
+            )
+            notification_decision = NotificationDecision(
+                should_notify_owner=False,
+                notification_type=None,
+                reason="bitrix_contact_handoff",
+                priority="normal",
+            )
+        else:
+            notification_decision = self.notification_policy_service.decide(
+                is_duplicate=False,
+                lead_created=lead_outcome.lead_created,
+                lead_updated=lead_outcome.lead_updated,
+                urgent_detected=signals.urgent_detected,
+                handoff_requested=signals.handoff_requested,
+                ai_failed=reply_resolution.ai_failed,
+            )
         notification = _notification_from_decision(notification_decision)
         lead_summary = (
             _lead_summary_from_model(lead_outcome.lead)
@@ -779,6 +777,46 @@ class WebhookMessageService:
             instagram_outbound_allowed=instagram_outbound_allowed,
             response_metadata=_response_metadata_from_message(save_result.message),
         )
+
+    async def _sync_orange_park_bitrix_contact(
+        self,
+        session: AsyncSession,
+        *,
+        tenant_id: uuid.UUID,
+        business_id: uuid.UUID,
+        conversation_id: uuid.UUID,
+        incoming_message: Message,
+        contact: OrangeParkBitrixContact,
+    ) -> OrangeParkBitrixLeadResult | None:
+        history = await self.message_service.load_recent_conversation_history(
+            session,
+            tenant_id=tenant_id,
+            business_id=business_id,
+            conversation_id=conversation_id,
+        )
+        result = await self.orange_park_bitrix_service.create_or_update_lead(
+            contact=contact,
+            history=history,
+        )
+        if result is None:
+            return None
+
+        contact_metadata = _orange_park_shared_contact_from_message(incoming_message)
+        if contact_metadata is None:
+            return None
+        updated_contact_metadata = {
+            **contact_metadata,
+            "external_crm_stage": "synced",
+            "bitrix_lead_id": result.lead_id,
+            "action": result.action,
+            "timestamp": result.timestamp.isoformat(),
+        }
+        _set_message_metadata(
+            incoming_message,
+            {"orange_park_contact_collection": updated_contact_metadata},
+        )
+        await session.flush()
+        return result
 
     async def _process_incoming_message_legacy(
         self,
@@ -874,7 +912,7 @@ class WebhookMessageService:
             raw_payload=request.message.raw_payload,
             observability=observability,
         )
-        if _orange_park_stage1_contact_collection_only(
+        if _is_orange_park_telegram(
             business,
             channel,
         ) and not _orange_park_crm_lead_creation_enabled_for_flow(flow):
@@ -1009,7 +1047,7 @@ class WebhookMessageService:
         observability: ObservabilityContext | None = None,
         flow_id: uuid.UUID | None = None,
     ) -> _ReplyResolution:
-        orange_park_start = await self._resolve_orange_park_start_reply(
+        orange_park_v3 = await self._resolve_orange_park_v3_reply(
             session,
             tenant_id=tenant_id,
             business=business,
@@ -1021,36 +1059,8 @@ class WebhookMessageService:
             raw_payload=raw_payload,
             flow_id=flow_id,
         )
-        if orange_park_start is not None:
-            return orange_park_start
-
-        orange_park_area_reply = await self._resolve_orange_park_area_reply(
-            session,
-            tenant_id=tenant_id,
-            business=business,
-            conversation=conversation,
-            customer=customer,
-            incoming_message=incoming_message,
-            customer_message_text=customer_message_text,
-            channel=channel,
-            flow_id=flow_id,
-        )
-        if orange_park_area_reply is not None:
-            return orange_park_area_reply
-
-        orange_park_reply = await self._resolve_orange_park_contact_collection_reply(
-            session,
-            tenant_id=tenant_id,
-            business=business,
-            conversation=conversation,
-            customer=customer,
-            incoming_message=incoming_message,
-            customer_message_text=customer_message_text,
-            channel=channel,
-            flow_id=flow_id,
-        )
-        if orange_park_reply is not None:
-            return orange_park_reply
+        if orange_park_v3 is not None:
+            return orange_park_v3
 
         orchestration_outcome = await self.ai_reply_coordinator.execute_for_incoming_message(
             session,
@@ -1154,7 +1164,7 @@ class WebhookMessageService:
             prompt_run_id=prompt_run_id,
         )
 
-    async def _resolve_orange_park_start_reply(
+    async def _resolve_orange_park_v3_reply(
         self,
         session: AsyncSession,
         *,
@@ -1168,177 +1178,73 @@ class WebhookMessageService:
         raw_payload: dict[str, Any] | None,
         flow_id: uuid.UUID | None,
     ) -> _ReplyResolution | None:
-        if not _orange_park_start_applies(business, channel, customer_message_text):
+        if not _is_orange_park_telegram(business, channel):
             return None
 
-        reply_text = ORANGE_PARK_START_WELCOME_UK
-        await _archive_orange_park_pre_start_history(
+        state_result = self.message_service.load_latest_orange_park_dialog_state(
             session,
             tenant_id=tenant_id,
             business_id=business.id,
             conversation_id=conversation.id,
-            current_message_id=incoming_message.id,
+            before_message_id=incoming_message.id,
         )
-        _set_message_metadata(
-            incoming_message,
-            {
-                "orange_park_start_reset": {
-                    "stage": ORANGE_PARK_START_RESET_STAGE,
-                    "excluded_previous_history": True,
-                    "language": "uk",
-                }
-            },
+        previous_state = (
+            await state_result if inspect.isawaitable(state_result) else state_result
         )
-        await session.flush()
-        outbound_message = await self.message_service.save_outgoing_ai_message(
-            session,
-            tenant_id=tenant_id,
-            business=business,
-            conversation=conversation,
-            customer=customer,
-            message_text=reply_text,
-            channel=channel,
-            ai_metadata={
-                "orange_park_start_reset": True,
-                "stage": ORANGE_PARK_START_RESET_STAGE,
-                "used_fallback": False,
-            },
-            flow_id=flow_id,
-        )
-        return _ReplyResolution(
-            reply_to_customer=reply_text,
-            ai_failed=False,
-            outbound_message_id=outbound_message.id,
-        )
+        if not isinstance(previous_state, dict):
+            previous_state = None
 
-    async def _resolve_orange_park_area_reply(
-        self,
-        session: AsyncSession,
-        *,
-        tenant_id: uuid.UUID,
-        business: object,
-        conversation: Conversation,
-        customer: object,
-        incoming_message: Message,
-        customer_message_text: str,
-        channel: str,
-        flow_id: uuid.UUID | None,
-    ) -> _ReplyResolution | None:
-        if not _orange_park_stage1_contact_collection_only(business, channel):
-            return None
-        if _orange_park_shared_contact_from_message(incoming_message) is not None:
-            return None
-
-        history = await self.message_service.load_recent_conversation_history(
-            session,
-            tenant_id=tenant_id,
-            business_id=business.id,
-            conversation_id=conversation.id,
-        )
-        reply_text, metadata = _orange_park_area_reply_and_metadata(
+        contact_received = _orange_park_shared_contact_from_message(incoming_message) is not None
+        result = self.orange_park_dialog_service.respond(
             customer_message_text,
-            history=history,
+            previous_state=previous_state,
+            contact_received=contact_received,
         )
-        if reply_text is None:
-            return None
-
-        _set_message_metadata(incoming_message, metadata)
-        await session.flush()
-        outbound_message = await self.message_service.save_outgoing_ai_message(
-            session,
-            tenant_id=tenant_id,
-            business=business,
-            conversation=conversation,
-            customer=customer,
-            message_text=reply_text,
-            channel=channel,
-            ai_metadata={
-                "orange_park_apartment_area": True,
-                "stage": ORANGE_PARK_APARTMENT_AREA_STAGE,
-                "used_fallback": False,
-            },
-            flow_id=flow_id,
-        )
-        return _ReplyResolution(
-            reply_to_customer=reply_text,
-            ai_failed=False,
-            outbound_message_id=outbound_message.id,
-        )
-
-    async def _resolve_orange_park_contact_collection_reply(
-        self,
-        session: AsyncSession,
-        *,
-        tenant_id: uuid.UUID,
-        business: object,
-        conversation: Conversation,
-        customer: object,
-        incoming_message: Message,
-        customer_message_text: str,
-        channel: str,
-        flow_id: uuid.UUID | None,
-    ) -> _ReplyResolution | None:
-        if not _orange_park_stage1_contact_collection_only(business, channel):
-            return None
-
-        shared_contact = _orange_park_shared_contact_from_message(incoming_message)
-        if shared_contact is not None:
-            reply_text = _orange_park_reply_after_shared_contact(shared_contact)
-            await session.flush()
-            outbound_message = await self.message_service.save_outgoing_ai_message(
+        if result.reset_history:
+            await _archive_orange_park_pre_start_history(
                 session,
                 tenant_id=tenant_id,
-                business=business,
-                conversation=conversation,
-                customer=customer,
-                message_text=reply_text,
-                channel=channel,
-                ai_metadata={
-                    "orange_park_contact_collection": True,
-                    "stage": ORANGE_PARK_CONTACT_COLLECTION_STAGE,
-                    "contact_shared": True,
-                    "used_fallback": False,
-                },
-                flow_id=flow_id,
-            )
-            return _ReplyResolution(
-                reply_to_customer=reply_text,
-                ai_failed=False,
-                outbound_message_id=outbound_message.id,
+                business_id=business.id,
+                conversation_id=conversation.id,
+                current_message_id=incoming_message.id,
             )
 
-        history = await self.message_service.load_recent_conversation_history(
-            session,
-            tenant_id=tenant_id,
-            business_id=business.id,
-            conversation_id=conversation.id,
+        dialog_metadata: dict[str, Any] = {
+            "state": result.state,
+            "request_contact": result.request_contact,
+        }
+        if result.reset_history:
+            dialog_metadata["excluded_previous_history"] = True
+        _set_message_metadata(
+            incoming_message,
+            {"orange_park_dialog": dialog_metadata},
         )
-        reply_text, metadata = _orange_park_contact_collection_reply_and_metadata(
-            customer_message_text,
-            history=history,
-        )
-        if reply_text is None:
-            return None
-
-        _set_message_metadata(incoming_message, metadata)
+        if result.request_contact:
+            _set_message_metadata(
+                incoming_message,
+                _orange_park_contact_request_metadata(
+                    intent=str(result.state.get("intent") or "manager_contact"),
+                ),
+            )
         await session.flush()
+
         outbound_message = await self.message_service.save_outgoing_ai_message(
             session,
             tenant_id=tenant_id,
             business=business,
             conversation=conversation,
             customer=customer,
-            message_text=reply_text,
+            message_text=result.reply,
             channel=channel,
             ai_metadata={
-                "orange_park_contact_collection": True,
-                "stage": ORANGE_PARK_CONTACT_COLLECTION_STAGE,
+                "orange_park_dialog_engine": ORANGE_PARK_DIALOG_VERSION,
+                "stage": result.state.get("stage"),
                 "used_fallback": False,
             },
             flow_id=flow_id,
         )
         return _ReplyResolution(
-            reply_to_customer=reply_text,
+            reply_to_customer=result.reply,
             ai_failed=False,
             outbound_message_id=outbound_message.id,
         )
@@ -1359,43 +1265,6 @@ class WebhookMessageService:
         raw_payload: dict[str, Any] | None = None,
         observability: ObservabilityContext | None = None,
     ) -> _ReplyResolution:
-        orange_park_start = await _resolve_orange_park_start_reply_legacy(
-            session,
-            tenant_id=tenant_id,
-            business=business,
-            conversation=conversation,
-            incoming_message=incoming_message,
-            customer_message_text=customer_message_text,
-            channel=channel,
-            raw_payload=raw_payload,
-        )
-        if orange_park_start is not None:
-            return orange_park_start
-
-        orange_park_area_reply = await _resolve_orange_park_area_reply_legacy(
-            session,
-            tenant_id=tenant_id,
-            business=business,
-            conversation=conversation,
-            incoming_message=incoming_message,
-            customer_message_text=customer_message_text,
-            channel=channel,
-        )
-        if orange_park_area_reply is not None:
-            return orange_park_area_reply
-
-        orange_park_reply = await _resolve_orange_park_contact_collection_reply_legacy(
-            session,
-            tenant_id=tenant_id,
-            business=business,
-            conversation=conversation,
-            incoming_message=incoming_message,
-            customer_message_text=customer_message_text,
-            channel=channel,
-        )
-        if orange_park_reply is not None:
-            return orange_park_reply
-
         coordinator = AiReplyOrchestrationCoordinator(
             AiReplyOrchestrationService(
                 message_service=_LegacyMessageHistoryService(),
@@ -2138,125 +2007,6 @@ def _lead_summary_from_model(lead: Lead) -> WebhookLeadSummary:
     )
 
 
-async def _resolve_orange_park_start_reply_legacy(
-    session: AsyncSession,
-    *,
-    tenant_id: uuid.UUID,
-    business: object,
-    conversation: object,
-    incoming_message: object,
-    customer_message_text: str,
-    channel: str,
-    raw_payload: dict[str, Any] | None,
-) -> _ReplyResolution | None:
-    if not _orange_park_start_applies(business, channel, customer_message_text):
-        return None
-
-    reply_text = ORANGE_PARK_START_WELCOME_UK
-    await _archive_orange_park_pre_start_history(
-        session,
-        tenant_id=tenant_id,
-        business_id=business.id,
-        conversation_id=conversation.id,
-        current_message_id=incoming_message.id,
-    )
-    await _legacy_set_message_metadata(
-        session,
-        tenant_id=tenant_id,
-        business_id=business.id,
-        message=incoming_message,
-        metadata={
-            "orange_park_start_reset": {
-                "stage": ORANGE_PARK_START_RESET_STAGE,
-                "excluded_previous_history": True,
-                "language": "uk",
-            }
-        },
-    )
-    outbound_message = await _legacy_save_outgoing_ai_message(
-        session,
-        tenant_id=tenant_id,
-        business_id=business.id,
-        conversation_id=conversation.id,
-        message_text=reply_text,
-        channel=channel,
-        ai_metadata={
-            "orange_park_start_reset": True,
-            "stage": ORANGE_PARK_START_RESET_STAGE,
-            "used_fallback": False,
-        },
-    )
-    return _ReplyResolution(
-        reply_to_customer=reply_text,
-        ai_failed=False,
-        outbound_message_id=outbound_message.id,
-    )
-
-
-async def _resolve_orange_park_area_reply_legacy(
-    session: AsyncSession,
-    *,
-    tenant_id: uuid.UUID,
-    business: object,
-    conversation: object,
-    incoming_message: object,
-    customer_message_text: str,
-    channel: str,
-) -> _ReplyResolution | None:
-    if not _orange_park_stage1_contact_collection_only(business, channel):
-        return None
-
-    history = await _LegacyMessageHistoryService().load_recent_conversation_history(
-        session,
-        tenant_id=tenant_id,
-        business_id=business.id,
-        conversation_id=conversation.id,
-    )
-    reply_text, metadata = _orange_park_area_reply_and_metadata(
-        customer_message_text,
-        history=history,
-    )
-    if reply_text is None:
-        return None
-
-    await _legacy_set_message_metadata(
-        session,
-        tenant_id=tenant_id,
-        business_id=business.id,
-        message=incoming_message,
-        metadata=metadata,
-    )
-    outbound_message = await _legacy_save_outgoing_ai_message(
-        session,
-        tenant_id=tenant_id,
-        business_id=business.id,
-        conversation_id=conversation.id,
-        message_text=reply_text,
-        channel=channel,
-        ai_metadata={
-            "orange_park_apartment_area": True,
-            "stage": ORANGE_PARK_APARTMENT_AREA_STAGE,
-            "used_fallback": False,
-        },
-    )
-    return _ReplyResolution(
-        reply_to_customer=reply_text,
-        ai_failed=False,
-        outbound_message_id=outbound_message.id,
-    )
-
-
-def _orange_park_start_applies(
-    business: object,
-    channel: str,
-    customer_message_text: str,
-) -> bool:
-    if not _orange_park_stage1_contact_collection_only(business, channel):
-        return False
-    normalized = customer_message_text.strip()
-    return normalized == "/start" or normalized.startswith("/start ")
-
-
 async def _archive_orange_park_pre_start_history(
     session: AsyncSession,
     *,
@@ -2281,6 +2031,7 @@ async def _archive_orange_park_pre_start_history(
                 {
                     "excluded_from_prompt_history": True,
                     "excluded_by_orange_park_start_reset": True,
+                    "dialog_engine_version": ORANGE_PARK_DIALOG_VERSION,
                 }
             ),
             "tenant_id": tenant_id,
@@ -2291,189 +2042,20 @@ async def _archive_orange_park_pre_start_history(
     )
 
 
-async def _resolve_orange_park_contact_collection_reply_legacy(
-    session: AsyncSession,
-    *,
-    tenant_id: uuid.UUID,
-    business: object,
-    conversation: object,
-    incoming_message: object,
-    customer_message_text: str,
-    channel: str,
-) -> _ReplyResolution | None:
-    if not _orange_park_stage1_contact_collection_only(business, channel):
-        return None
-
-    history = await _LegacyMessageHistoryService().load_recent_conversation_history(
-        session,
-        tenant_id=tenant_id,
-        business_id=business.id,
-        conversation_id=conversation.id,
-    )
-    reply_text, metadata = _orange_park_contact_collection_reply_and_metadata(
-        customer_message_text,
-        history=history,
-    )
-    if reply_text is None:
-        return None
-
-    await _legacy_set_message_metadata(
-        session,
-        tenant_id=tenant_id,
-        business_id=business.id,
-        message=incoming_message,
-        metadata=metadata,
-    )
-    outbound_message = await _legacy_save_outgoing_ai_message(
-        session,
-        tenant_id=tenant_id,
-        business_id=business.id,
-        conversation_id=conversation.id,
-        message_text=reply_text,
-        channel=channel,
-        ai_metadata={
-            "orange_park_contact_collection": True,
-            "stage": ORANGE_PARK_CONTACT_COLLECTION_STAGE,
-            "used_fallback": False,
-        },
-    )
-    return _ReplyResolution(
-        reply_to_customer=reply_text,
-        ai_failed=False,
-        outbound_message_id=outbound_message.id,
-    )
-
-
-def _orange_park_contact_collection_reply_and_metadata(
-    customer_message_text: str,
-    *,
-    history: ConversationHistory,
-) -> tuple[str | None, dict[str, Any]]:
-    metadata: dict[str, Any] = {
+def _orange_park_contact_request_metadata(*, intent: str) -> dict[str, Any]:
+    return {
         "orange_park_contact_collection": {
             "stage": ORANGE_PARK_CONTACT_COLLECTION_STAGE,
-            "minimum_fields": [
-                "first_name",
-                "last_name",
-                "phone",
-                "telegram_id_or_username",
-                "interest_summary",
-            ],
-            "external_crm_stage": "disabled_stage_1",
+            "dialog_engine_version": ORANGE_PARK_DIALOG_VERSION,
+            "intent": intent,
+            "missing_fields": ["telegram_contact"],
+            "telegram_contact_request": True,
+            "external_crm_stage": "pending_contact",
         }
     }
 
-    if _extract_phone_number(customer_message_text) is not None:
-        metadata["orange_park_contact_collection"].update(
-            {
-                "intent": "telegram_contact_button_required",
-                "missing_fields": ["telegram_contact"],
-                "telegram_contact_request": True,
-                "manual_phone_ignored": True,
-            }
-        )
-        return ORANGE_PARK_CONTACT_BUTTON_REPLY_UK, metadata
 
-    if _is_orange_park_budget_or_current_options_intent(customer_message_text):
-        metadata["orange_park_contact_collection"].update(
-            {
-                "intent": "budget_or_current_options_requires_manager",
-                "missing_fields": ["telegram_contact"],
-                "telegram_contact_request": True,
-            }
-        )
-        return ORANGE_PARK_BUDGET_CONTACT_BUTTON_REPLY_UK, metadata
-
-    if _is_contact_collection_trigger(customer_message_text):
-        metadata["orange_park_contact_collection"].update(
-            {
-                "intent": "contact_collection_requested",
-                "missing_fields": ["telegram_contact"],
-                "telegram_contact_request": True,
-            }
-        )
-        return ORANGE_PARK_CONTACT_BUTTON_REPLY_UK, metadata
-
-    return None, metadata
-
-
-def _orange_park_area_reply_and_metadata(
-    customer_message_text: str,
-    *,
-    history: ConversationHistory,
-) -> tuple[str | None, dict[str, Any]]:
-    area = _extract_short_area_value(customer_message_text)
-    metadata: dict[str, Any] = {
-        "orange_park_apartment_search": {
-            "stage": ORANGE_PARK_APARTMENT_AREA_STAGE,
-            "intent": "apartment_search",
-            "expected_slot": "apartment_area",
-            "min_documented_area": ORANGE_PARK_ONE_ROOM_MIN_AREA_M2,
-            "max_documented_area": ORANGE_PARK_ONE_ROOM_MAX_AREA_M2,
-        }
-    }
-    if area is None or not _orange_park_history_expects_apartment_area(history):
-        return None, metadata
-
-    metadata["orange_park_apartment_search"]["provided_area"] = area
-    if area < ORANGE_PARK_ONE_ROOM_MIN_AREA_M2:
-        return (
-            "У матеріалах Orange Park найменші 1-кімнатні квартири мають площу "
-            f"від 35 до 41 м². Варіантів на {area} м² у документації немає.\n\n"
-            "Можу зорієнтувати по компактних квартирах від 35 м² або передати "
-            "запит менеджеру, щоб уточнити актуальну наявність.",
-            metadata,
-        )
-    if area <= ORANGE_PARK_ONE_ROOM_MAX_AREA_M2:
-        return (
-            "Так, у матеріалах Orange Park є 1-кімнатні квартири в діапазоні "
-            "35-41 м². Підкажіть, розглядаєте для проживання чи інвестиції?",
-            metadata,
-        )
-    return (
-        f"Площа {area} м² більша за діапазон 1-кімнатних квартир 35-41 м² у матеріалах. "
-        "Можемо розглянути більші формати, наприклад 2-кімнатні квартири?",
-        metadata,
-    )
-
-
-def _extract_short_area_value(text_value: str) -> int | None:
-    match = _SHORT_AREA_PATTERN.match(text_value)
-    if match is None:
-        return None
-    area = int(match.group(1))
-    if area <= 0 or area > 300:
-        return None
-    return area
-
-
-def _orange_park_history_expects_apartment_area(history: ConversationHistory) -> bool:
-    for message in reversed(history.messages[-6:]):
-        text_value = message.message_text.casefold()
-        if message.sender_type == "ai" and _orange_park_ai_asked_for_area(text_value):
-            return True
-        if message.sender_type == "customer" and _orange_park_customer_discussed_area(
-            text_value
-        ):
-            return True
-    return False
-
-
-def _orange_park_ai_asked_for_area(normalized_text: str) -> bool:
-    return (
-        any(marker in normalized_text for marker in ("яка саме площ", "якую площ", "площа вас цікав", "площадь вас интерес"))
-        or (
-            any(marker in normalized_text for marker in ("площ", "квадрат", "м²", "м2"))
-            and "цікав" in normalized_text
-        )
-    )
-
-
-def _orange_park_customer_discussed_area(normalized_text: str) -> bool:
-    return any(marker in normalized_text for marker in ("квадрат", "площ", "м²", "м2"))
-
-
-def _orange_park_stage1_contact_collection_only(
+def _is_orange_park_telegram(
     business: object,
     channel: str,
 ) -> bool:
@@ -2481,79 +2063,6 @@ def _orange_park_stage1_contact_collection_only(
         getattr(business, "external_id", None) == ORANGE_PARK_BUSINESS_EXTERNAL_ID
         and channel == "telegram"
     )
-
-
-def _extract_phone_number(text_value: str) -> str | None:
-    match = _PHONE_NUMBER_PATTERN.search(text_value)
-    if match is None:
-        return None
-    return match.group(0).strip()
-
-
-def _is_contact_collection_trigger(text_value: str) -> bool:
-    normalized = text_value.casefold()
-    return _SHORT_HANDOFF_RE.search(normalized) is not None or any(
-        marker in normalized for marker in _HANDOFF_MARKERS
-    ) or any(
-        marker in normalized for marker in _CONTACT_REQUEST_MARKERS
-    )
-
-
-def _is_orange_park_budget_or_current_options_intent(text_value: str) -> bool:
-    normalized = " ".join(text_value.casefold().split())
-    return _ORANGE_PARK_BUDGET_LIMIT_RE.search(normalized) is not None or any(
-        marker in normalized for marker in _ORANGE_PARK_CURRENT_OPTIONS_MARKERS
-    )
-
-
-def _orange_park_dialogue_language(
-    customer_message_text: str,
-    *,
-    history: ConversationHistory,
-) -> str:
-    latest_language = _orange_park_text_language(customer_message_text)
-    if latest_language is not None:
-        return latest_language
-    if customer_message_text.strip():
-        return "uk"
-
-    samples = [
-        message.message_text
-        for message in history.messages
-        if message.sender_type == "customer"
-    ]
-    for text_value in reversed(samples):
-        history_language = _orange_park_text_language(text_value)
-        if history_language is not None:
-            return history_language
-    return "uk"
-
-
-def _orange_park_text_language(text_value: str) -> str | None:
-    normalized = text_value.casefold()
-    if not normalized.strip():
-        return None
-    if any(marker in normalized for marker in _UKRAINIAN_MARKERS) or any(
-        char in normalized for char in ("і", "ї", "є", "ґ")
-    ):
-        return "uk"
-    if any(marker in normalized for marker in _RUSSIAN_MARKERS) or any(
-        char in normalized for char in ("ы", "э", "ё", "ъ")
-    ):
-        return "ru"
-    if _is_clearly_english(normalized):
-        return "en"
-    return None
-
-
-def _is_clearly_english(normalized_text: str) -> bool:
-    ascii_letters = sum(1 for char in normalized_text if "a" <= char <= "z")
-    if ascii_letters < 4:
-        return False
-    has_cyrillic = any("а" <= char <= "я" or char in "іїєґё" for char in normalized_text)
-    if has_cyrillic:
-        return False
-    return any(marker in normalized_text for marker in _ENGLISH_MARKERS)
 
 
 def _set_message_metadata(message: Message, metadata: dict[str, Any]) -> None:
@@ -2578,7 +2087,7 @@ def _orange_park_shared_contact_metadata(
     business: object,
     channel: str,
 ) -> dict[str, Any] | None:
-    if not _orange_park_stage1_contact_collection_only(business, channel):
+    if not _is_orange_park_telegram(business, channel):
         return None
     if request.customer.contact_shared is not True:
         return None
@@ -2602,6 +2111,7 @@ def _orange_park_shared_contact_metadata(
     return {
         "orange_park_contact_collection": {
             "stage": ORANGE_PARK_CONTACT_COLLECTION_STAGE,
+            "dialog_engine_version": ORANGE_PARK_DIALOG_VERSION,
             "intent": "telegram_contact_shared",
             "contact_received": True,
             "phone": phone,
@@ -2611,7 +2121,7 @@ def _orange_park_shared_contact_metadata(
             "telegram_username": telegram_username,
             "business_id": ORANGE_PARK_BUSINESS_EXTERNAL_ID,
             "channel": "telegram",
-            "external_crm_stage": "disabled_stage_1",
+            "external_crm_stage": "pending_sync",
             "missing_fields": missing_fields,
         }
     }
@@ -2626,6 +2136,8 @@ def _orange_park_shared_contact_from_message(
     contact = metadata.get("orange_park_contact_collection")
     if not isinstance(contact, dict):
         return None
+    if contact.get("dialog_engine_version") != ORANGE_PARK_DIALOG_VERSION:
+        return None
     if contact.get("contact_received") is not True:
         return None
     if not _clean_optional_text(contact.get("phone")):
@@ -2633,18 +2145,36 @@ def _orange_park_shared_contact_from_message(
     return contact
 
 
-def _orange_park_reply_after_shared_contact(contact: dict[str, Any]) -> str:
-    missing_fields = contact.get("missing_fields")
-    if not isinstance(missing_fields, list):
-        missing_fields = []
-    missing = {field for field in missing_fields if isinstance(field, str)}
-    if not missing:
-        return ORANGE_PARK_CONTACT_RECEIVED_REPLY_UK
-    if missing == {"first_name"}:
-        return "Дякуємо, номер отримали. Напишіть, будь ласка, ім'я."
-    if missing == {"last_name"}:
-        return "Дякуємо, номер отримали. Напишіть, будь ласка, прізвище."
-    return "Дякуємо, номер отримали. Напишіть, будь ласка, ім'я та прізвище."
+def _orange_park_bitrix_contact_for_sync(
+    message: Message,
+    *,
+    business: object,
+    channel: str,
+    flow: Flow,
+) -> OrangeParkBitrixContact | None:
+    if not _is_orange_park_telegram(business, channel):
+        return None
+    if not _orange_park_crm_lead_creation_enabled_for_flow(flow):
+        return None
+
+    contact = _orange_park_shared_contact_from_message(message)
+    if contact is None:
+        return None
+    phone = _clean_optional_text(contact.get("phone"))
+    if phone is None:
+        return None
+    first_name = (
+        _clean_optional_text(contact.get("first_name"))
+        or _clean_optional_text(contact.get("telegram_username"))
+        or "Telegram contact"
+    )
+    return OrangeParkBitrixContact(
+        first_name=first_name,
+        last_name=_clean_optional_text(contact.get("last_name")),
+        phone=phone,
+        telegram_id=_clean_optional_text(contact.get("telegram_id")),
+        telegram_username=_clean_optional_text(contact.get("telegram_username")),
+    )
 
 
 def _response_metadata_from_message(message: Message) -> dict[str, Any] | None:
@@ -2654,14 +2184,34 @@ def _response_metadata_from_message(message: Message) -> dict[str, Any] | None:
     contact = metadata.get("orange_park_contact_collection")
     if not isinstance(contact, dict):
         return None
+    if contact.get("dialog_engine_version") != ORANGE_PARK_DIALOG_VERSION:
+        return None
     if contact.get("telegram_contact_request") is True:
         return {
+            "contact_request_required": True,
+            "contact_request_channel": "telegram",
+            "telegram_reply_markup_type": "request_contact",
+            "telegram_button_text": "📱 Поділитися номером",
             "telegram_contact_request": {
                 "needed": True,
                 "button_text": "📱 Поділитися номером",
             }
         }
     if contact.get("contact_received") is True:
+        bitrix_lead_id = _clean_optional_text(contact.get("bitrix_lead_id"))
+        action = _clean_optional_text(contact.get("action"))
+        timestamp = _clean_optional_text(contact.get("timestamp"))
+        if bitrix_lead_id and action and timestamp:
+            return {
+                "orange_park_contact_collection": {
+                    "contact_received": True,
+                    "crm_ready": True,
+                    "crm_creation_deferred": False,
+                    "bitrix_lead_id": bitrix_lead_id,
+                    "action": action,
+                    "timestamp": timestamp,
+                }
+            }
         return {
             "orange_park_contact_collection": {
                 "contact_received": True,
@@ -2672,6 +2222,43 @@ def _response_metadata_from_message(message: Message) -> dict[str, Any] | None:
     return None
 
 
+def _message_turn_trace_metadata(
+    result: WebhookMessageProcessResult,
+) -> dict[str, str]:
+    metadata = {
+        "tenant_id": str(result.conversation.tenant_id),
+        "business_uuid": str(result.conversation.business_id),
+        "flow_id": str(result.flow.id),
+        "flow_key": result.flow.flow_key,
+        "conversation_id": str(result.conversation.id),
+        "inbound_message_id": str(result.message.id),
+        "is_duplicate": "true" if result.is_duplicate else "false",
+        "lead_created": "true" if result.lead_created else "false",
+        "lead_updated": "true" if result.lead_updated else "false",
+        "processing_status": result.processing_status or "",
+    }
+    message_metadata = result.message.metadata_ or {}
+    if isinstance(message_metadata, dict):
+        dialog = message_metadata.get("orange_park_dialog")
+        if isinstance(dialog, dict):
+            state = dialog.get("state")
+            if isinstance(state, dict):
+                metadata["runtime_path"] = "deterministic_dialog_engine"
+                for source_key, trace_key in (
+                    ("intent", "dialog_intent"),
+                    ("stage", "dialog_stage"),
+                    ("purchase_path", "dialog_purchase_path"),
+                ):
+                    value = _clean_optional_text(state.get(source_key))
+                    if value is not None:
+                        metadata[trace_key] = value
+        contact = message_metadata.get("orange_park_contact_collection")
+        if isinstance(contact, dict) and contact.get("contact_received") is True:
+            action = _clean_optional_text(contact.get("action"))
+            metadata["crm_sync_status"] = action or "failed_deferred"
+    return metadata
+
+
 def _clean_optional_text(value: object) -> str | None:
     if value is None:
         return None
@@ -2679,37 +2266,6 @@ def _clean_optional_text(value: object) -> str | None:
         value = str(value)
     stripped = value.strip()
     return stripped if stripped else None
-
-
-async def _legacy_set_message_metadata(
-    session: AsyncSession,
-    *,
-    tenant_id: uuid.UUID,
-    business_id: uuid.UUID,
-    message: object,
-    metadata: dict[str, Any],
-) -> None:
-    message_id = getattr(message, "id")
-    existing = getattr(message, "metadata_", None) or {}
-    merged = {**existing, **metadata}
-    setattr(message, "metadata_", merged)
-    await session.execute(
-        text(
-            """
-            update messages
-            set metadata = cast(:metadata as jsonb)
-            where id = :message_id
-              and tenant_id = :tenant_id
-              and business_id = :business_id
-            """
-        ),
-        {
-            "metadata": json.dumps(merged),
-            "message_id": message_id,
-            "tenant_id": tenant_id,
-            "business_id": business_id,
-        },
-    )
 
 
 def _lead_creation_enabled_for_flow(flow: Flow) -> bool:

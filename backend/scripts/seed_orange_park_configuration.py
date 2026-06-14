@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run Orange Park Telegram-only MVP configuration seed."""
+"""Run Orange Park Dialog Engine v3 configuration seed."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ from app.seed.orange_park_configuration import (  # noqa: E402
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Seed Orange Park Telegram-only MVP backend configuration.",
+        description="Seed Orange Park Dialog Engine v3 backend configuration.",
     )
     parser.add_argument(
         "--dry-run",

@@ -247,6 +247,14 @@ class Settings(BaseSettings):
         default=False,
         validation_alias="ALPSTEIN_INSTAGRAM_OUTBOUND_ENABLED",
     )
+    orange_park_bitrix_webhook_url: str = Field(
+        default="",
+        validation_alias="ORANGE_PARK_BITRIX_WEBHOOK_URL",
+    )
+    orange_park_bitrix_timeout_seconds: float = Field(
+        default=10.0,
+        validation_alias="ORANGE_PARK_BITRIX_TIMEOUT_SECONDS",
+    )
     bcb_ai_enabled: bool = Field(
         default=True,
         validation_alias="BCB_AI_ENABLED",
@@ -278,17 +286,13 @@ class Settings(BaseSettings):
     )
 
 
-LANGFUSE_DEV_ENVIRONMENTS = frozenset({"development", "dev", "local", "test"})
-
-
 def langfuse_tracing_active(app_settings: Settings | None = None) -> bool:
-    """Dev/internal tracing only; requires keys and non-production (or explicit enable)."""
+    """Tracing is active whenever the required Langfuse credentials exist."""
     cfg = app_settings or settings
-    if not cfg.langfuse_public_key.strip() or not cfg.langfuse_secret_key.strip():
-        return False
-    if cfg.langfuse_tracing_enabled:
-        return True
-    return cfg.environment.lower() in LANGFUSE_DEV_ENVIRONMENTS
+    return bool(
+        cfg.langfuse_public_key.strip()
+        and cfg.langfuse_secret_key.strip()
+    )
 
 
 settings = Settings()

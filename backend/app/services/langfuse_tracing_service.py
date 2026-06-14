@@ -1,4 +1,4 @@
-"""Langfuse tracing for AI reply orchestration (dev/internal only)."""
+"""Langfuse tracing for complete message turns and AI generations."""
 
 from __future__ import annotations
 
@@ -35,6 +35,20 @@ class AiReplyTraceRecorder(Protocol):
     def update_trace_metadata(self, metadata: dict[str, str]) -> None: ...
 
 
+class MessageTurnTraceRecorder(Protocol):
+    @property
+    def langfuse_trace_id(self) -> str | None: ...
+
+    def record_response(
+        self,
+        *,
+        reply_to_customer: str,
+        metadata: dict[str, str],
+    ) -> None: ...
+
+    def record_error(self, error: Exception) -> None: ...
+
+
 @dataclass
 class _SpanHandle:
     span: Any | None = None
@@ -64,6 +78,73 @@ class _NoOpTraceRecorder:
 
     def update_trace_metadata(self, metadata: dict[str, str]) -> None:
         del metadata
+
+
+class _NoOpMessageTurnTraceRecorder:
+    @property
+    def langfuse_trace_id(self) -> str | None:
+        return None
+
+    def record_response(
+        self,
+        *,
+        reply_to_customer: str,
+        metadata: dict[str, str],
+    ) -> None:
+        del reply_to_customer, metadata
+
+    def record_error(self, error: Exception) -> None:
+        del error
+
+
+class _LangfuseMessageTurnTraceRecorder:
+    def __init__(self, span: Any) -> None:
+        self._span = span
+        self._finished = False
+
+    @property
+    def langfuse_trace_id(self) -> str | None:
+        return _try_extract_langfuse_trace_id(self._span)
+
+    def record_response(
+        self,
+        *,
+        reply_to_customer: str,
+        metadata: dict[str, str],
+    ) -> None:
+        try:
+            self._span.update(
+                output={
+                    "status": "completed",
+                    "reply_to_customer": _truncate(reply_to_customer, 500),
+                },
+                metadata=metadata,
+            )
+        except Exception:
+            logger.exception("Langfuse message-turn response update failed")
+        self._finished = True
+
+    def record_error(self, error: Exception) -> None:
+        try:
+            self._span.update(
+                output={
+                    "status": "failed",
+                    "error_type": type(error).__name__,
+                },
+                level="ERROR",
+            )
+        except Exception:
+            logger.exception("Langfuse message-turn error update failed")
+        self._finished = True
+
+    def finish_if_needed(self) -> None:
+        if self._finished:
+            return
+        try:
+            self._span.update(output={"status": "completed"})
+        except Exception:
+            logger.exception("Langfuse message-turn final update failed")
+        self._finished = True
 
 
 class _LangfuseTraceRecorder:
@@ -143,6 +224,71 @@ class LangfuseTracingService:
 
     def is_enabled(self) -> bool:
         return langfuse_tracing_active(self._settings)
+
+    @asynccontextmanager
+    async def trace_message_turn(
+        self,
+        *,
+        observability: ObservabilityContext,
+        customer_message_preview: str,
+    ) -> AsyncIterator[MessageTurnTraceRecorder]:
+        if not self.is_enabled():
+            yield _NoOpMessageTurnTraceRecorder()
+            return
+
+        client = self._client or self._build_client()
+        tags = _build_tags(observability)
+        metadata = observability.to_langfuse_metadata(settings=self._settings)
+        session_id = str(
+            observability.conversation_id or observability.correlation_id
+        )
+        span_input = {
+            "business_id": observability.business_external_id,
+            "channel": observability.channel,
+            "customer_message": _truncate(customer_message_preview, 500),
+            "correlation_id": str(observability.correlation_id),
+        }
+
+        trace_started = False
+        business_error: Exception | None = None
+        try:
+            with propagate_attributes(
+                tags=tags,
+                session_id=session_id,
+                metadata=metadata,
+            ):
+                with client.start_as_current_observation(
+                    name="message_turn",
+                    as_type="span",
+                    input=span_input,
+                    metadata=metadata,
+                ) as span:
+                    trace_started = True
+                    recorder = _LangfuseMessageTurnTraceRecorder(span)
+                    try:
+                        yield recorder
+                    except Exception as exc:
+                        business_error = exc
+                        raise
+                    finally:
+                        recorder.finish_if_needed()
+        except Exception:
+            if business_error is not None:
+                raise
+            logger.exception(
+                "Langfuse message-turn trace failed",
+                extra={"correlation_id": str(observability.correlation_id)},
+            )
+            if not trace_started:
+                yield _NoOpMessageTurnTraceRecorder()
+        finally:
+            try:
+                client.flush()
+            except Exception:
+                logger.exception(
+                    "Langfuse flush failed",
+                    extra={"correlation_id": str(observability.correlation_id)},
+                )
 
     @asynccontextmanager
     async def trace_ai_reply(
@@ -258,8 +404,8 @@ class _CompositeTraceRecorder:
 
 def _build_tags(observability: ObservabilityContext) -> list[str]:
     tags = [TRACE_TAG_GREETING]
-    if observability.channel == "telegram":
-        tags.append("telegram")
+    if observability.channel:
+        tags.append(observability.channel)
     if observability.business_external_id == ALPSTEIN_DEMO_BUSINESS_EXTERNAL_ID:
         tags.append(ALPSTEIN_DEMO_BUSINESS_EXTERNAL_ID)
     return tags

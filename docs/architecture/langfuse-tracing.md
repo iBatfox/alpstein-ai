@@ -6,7 +6,10 @@
 
 # Langfuse tracing (backend MVP)
 
-**Status:** Implemented — dev/internal only (production policy unchanged per spec §16.6). **D4.4:** flat metadata production-safe; generation I/O exposure remains if tracing enabled in production — see [`d4-operational-wrap-up-2026-05-27.md`](../audits/d4-operational-wrap-up-2026-05-27.md).
+**Status:** Implemented for all environments when credentials are configured.
+**D4.4:** flat metadata production-safe; generation I/O exposure remains when
+AI tracing is active — see
+[`d4-operational-wrap-up-2026-05-27.md`](../audits/d4-operational-wrap-up-2026-05-27.md).
 
 ## Enable
 
@@ -20,7 +23,8 @@ LANGFUSE_TRACING_ENABLED=true
 ALPSTEIN_AI_ENVIRONMENT=development
 ```
 
-Tracing auto-enables in `development` / `dev` / `local` / `test` when both keys are set. Production requires explicit `LANGFUSE_TRACING_ENABLED=true`.
+Tracing activates whenever both keys are set. Environment and
+`LANGFUSE_TRACING_ENABLED` do not disable tracing when credentials are present.
 
 ## Trace shape
 
@@ -52,7 +56,9 @@ Full contract: observability-metadata.md §16.
 
 ## Integration point
 
-`AiReplyOrchestrationService.generate_reply` wraps `AiGatewayService.complete`.
+`WebhookMessageService.process_incoming_message` wraps the complete message
+turn. `AiReplyOrchestrationService.generate_reply` adds the nested AI
+generation span when the AI Gateway is used.
 
 ## Security
 

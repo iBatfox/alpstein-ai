@@ -33,6 +33,36 @@ class IncomingMessageSaveResult:
 
 
 class MessageService:
+    async def load_latest_orange_park_dialog_state(
+        self,
+        session: AsyncSession,
+        *,
+        tenant_id: uuid.UUID,
+        business_id: uuid.UUID,
+        conversation_id: uuid.UUID,
+        before_message_id: uuid.UUID,
+    ) -> dict[str, Any] | None:
+        result = await session.execute(
+            select(Message)
+            .where(
+                Message.tenant_id == tenant_id,
+                Message.business_id == business_id,
+                Message.conversation_id == conversation_id,
+                Message.id != before_message_id,
+            )
+            .order_by(desc(Message.created_at))
+            .limit(CONVERSATION_HISTORY_MAX_LIMIT)
+        )
+        for message in result.scalars().all():
+            metadata = message.metadata_ or {}
+            dialog = metadata.get("orange_park_dialog")
+            if not isinstance(dialog, dict):
+                continue
+            state = dialog.get("state")
+            if isinstance(state, dict):
+                return dict(state)
+        return None
+
     async def find_inbound_customer_message(
         self,
         session: AsyncSession,

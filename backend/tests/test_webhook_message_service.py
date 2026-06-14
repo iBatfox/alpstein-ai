@@ -1,5 +1,6 @@
 import uuid
-from datetime import datetime
+from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -15,16 +16,22 @@ from app.schemas.conversation_context import (
     ConversationHistoryMessage,
 )
 from app.services.message_service import IncomingMessageSaveResult
+from app.services.orange_park_bitrix_service import (
+    OrangeParkBitrixError,
+    OrangeParkBitrixLeadResult,
+)
 from app.services.conversation_service import NEW_CONVERSATION_STATUS, ConversationService
 from app.schemas.ai_reply import AiReplyResult
 from app.schemas.ai_reply_orchestration import AiReplyOrchestrationOutcome
 from app.services.ai_reply_orchestration_coordinator import REASON_AI_CHAIN_EXECUTED
 from app.services.flow_service import LegacyWebhookFlow
+from app.services.orange_park_dialog_service import (
+    ORANGE_PARK_CONTACT_RECEIVED_REPLY_UK,
+    ORANGE_PARK_START_WELCOME_UK,
+)
 from app.services.webhook_message_service import (
     WebhookMessageService,
-    _orange_park_area_reply_and_metadata,
-    _orange_park_contact_collection_reply_and_metadata,
-    _orange_park_dialogue_language,
+    _response_metadata_from_message,
 )
 from tests.test_webhook_message_ai_wiring import _flow_service_mock
 from tests.webhook_test_helpers import (
@@ -33,16 +40,16 @@ from tests.webhook_test_helpers import (
     message_trace_service_mock,
 )
 
-ORANGE_PARK_START_WELCOME_UK = (
-    "Добрий день! 👋\n\n"
-    "Я AI-асистент ЖК Orange Park.\n\n"
-    "Можу допомогти з інформацією про комплекс, квартири, комерційні приміщення "
-    "та умови придбання, а також передати ваш запит менеджеру.\n\n"
-    "Що вас цікавить?\n"
-    "🏡 Квартира\n"
-    "🏢 Комерційне приміщення\n"
-    "💳 Умови покупки / розтермінування"
-)
+
+class _TracingServiceStub:
+    def __init__(self) -> None:
+        self.recorder = MagicMock(langfuse_trace_id="lf-message-turn")
+        self.calls: list[dict] = []
+
+    @asynccontextmanager
+    async def trace_message_turn(self, **kwargs):
+        self.calls.append(kwargs)
+        yield self.recorder
 
 
 def _none_result() -> MagicMock:
@@ -81,7 +88,7 @@ def _lead_service_mock(
     return lead_service
 
 
-def _success_ai_coordinator() -> MagicMock:
+def _success_ai_coordinator(reply_text: str = "AI wired reply") -> MagicMock:
     return MagicMock(
         execute_for_incoming_message=AsyncMock(
             return_value=AiReplyOrchestrationOutcome(
@@ -89,7 +96,7 @@ def _success_ai_coordinator() -> MagicMock:
                 ai_executed=True,
                 reason=REASON_AI_CHAIN_EXECUTED,
                 ai_reply=AiReplyResult(
-                    text="AI wired reply",
+                    text=reply_text,
                     is_success=True,
                     prompt_run_id=uuid.uuid4(),
                     model="gpt-4o-mini",
@@ -171,181 +178,6 @@ def _orange_park_contact_request() -> NormalizedWebhookMessageRequest:
     )
 
 
-def test_orange_park_contact_collection_uses_telegram_button_for_ambiguous_handoff():
-    reply, metadata = _orange_park_contact_collection_reply_and_metadata(
-        "Так",
-        history=ConversationHistory.empty(),
-    )
-
-    assert reply == (
-        "Для зв'язку з менеджером, будь ласка, натисніть кнопку "
-        "«📱 Поділитися номером»."
-    )
-    assert "Пожалуйста" not in reply
-    assert "Please" not in reply
-    assert "Телефон:" not in reply
-    assert metadata["orange_park_contact_collection"]["missing_fields"] == [
-        "telegram_contact",
-    ]
-    assert metadata["orange_park_contact_collection"]["telegram_contact_request"] is True
-    assert "Запит передано менеджеру" not in reply
-
-
-def test_orange_park_ukrainian_latest_message_wins_over_russian_history():
-    history = ConversationHistory(
-        messages=(
-            ConversationHistoryMessage(
-                sender_type="customer",
-                message_text="Свяжи меня с менеджером",
-                created_at=datetime(2026, 5, 21, 9, 59, 0),
-            ),
-        )
-    )
-
-    assert _orange_park_dialogue_language("Так", history=history) == "uk"
-    reply, metadata = _orange_park_contact_collection_reply_and_metadata(
-        "Так",
-        history=history,
-    )
-
-    assert reply == (
-        "Для зв'язку з менеджером, будь ласка, натисніть кнопку "
-        "«📱 Поділитися номером»."
-    )
-    assert metadata["orange_park_contact_collection"]["missing_fields"] == [
-        "telegram_contact",
-    ]
-    assert metadata["orange_park_contact_collection"]["telegram_contact_request"] is True
-    assert "Запит передано менеджеру" not in reply
-
-
-def test_orange_park_general_question_does_not_trigger_contact_collection():
-    reply, metadata = _orange_park_contact_collection_reply_and_metadata(
-        "Що таке Orange Park?",
-        history=ConversationHistory.empty(),
-    )
-
-    assert reply is None
-    assert "intent" not in metadata["orange_park_contact_collection"]
-
-
-@pytest.mark.parametrize(
-    "message_text",
-    (
-        "Які є варіанти до 100000 грн?",
-        "Покажіть квартири до 1600000",
-        "Які є варіанти?",
-        "Що є в наявності?",
-    ),
-)
-def test_orange_park_budget_and_current_options_use_telegram_contact_button(
-    message_text: str,
-):
-    reply, metadata = _orange_park_contact_collection_reply_and_metadata(
-        message_text,
-        history=ConversationHistory.empty(),
-    )
-
-    assert reply == (
-        "Актуальні варіанти в межах бюджету підтвердить менеджер.\n\n"
-        "Для зв'язку з менеджером, будь ласка, натисніть кнопку "
-        "«📱 Поділитися номером»."
-    )
-    assert "Напишіть, будь ласка, номер телефону" not in reply
-    assert metadata["orange_park_contact_collection"]["intent"] == (
-        "budget_or_current_options_requires_manager"
-    )
-    assert metadata["orange_park_contact_collection"]["telegram_contact_request"] is True
-
-
-def _area_question_history() -> ConversationHistory:
-    return ConversationHistory(
-        messages=(
-            ConversationHistoryMessage(
-                sender_type="customer",
-                message_text="Мене цікавить до 35 квадратів",
-                created_at=datetime(2026, 5, 21, 9, 59, 0),
-            ),
-            ConversationHistoryMessage(
-                sender_type="ai",
-                message_text=(
-                    "Жити в ЖК Orange Park можна в 1-кімнатних квартирах "
-                    "площею від 35 до 41 м². Яка саме площа вас цікавить?"
-                ),
-                created_at=datetime(2026, 5, 21, 10, 0, 0),
-            ),
-        )
-    )
-
-
-@pytest.mark.parametrize(
-    ("area_text", "expected_parts"),
-    [
-        (
-            "25",
-            [
-                "найменші 1-кімнатні квартири мають площу від 35 до 41 м²",
-                "Варіантів на 25 м² у документації немає",
-                "уточнити актуальну наявність",
-            ],
-        ),
-        (
-            "35",
-            [
-                "є 1-кімнатні квартири в діапазоні 35-41 м²",
-                "для проживання чи інвестиції",
-            ],
-        ),
-        (
-            "40",
-            [
-                "є 1-кімнатні квартири в діапазоні 35-41 м²",
-                "для проживання чи інвестиції",
-            ],
-        ),
-        (
-            "60",
-            [
-                "більша за діапазон 1-кімнатних квартир 35-41 м²",
-                "2-кімнатні квартири",
-            ],
-        ),
-    ],
-)
-def test_orange_park_short_numeric_reply_uses_apartment_area_context(
-    area_text: str,
-    expected_parts: list[str],
-):
-    reply, metadata = _orange_park_area_reply_and_metadata(
-        area_text,
-        history=_area_question_history(),
-    )
-
-    assert reply is not None
-    for expected in expected_parts:
-        assert expected in reply
-    assert "Orange Park — це житловий комплекс" not in reply
-    assert "точно доступ" not in reply.casefold()
-    assert "ціна" not in reply.casefold()
-    assert metadata["orange_park_apartment_search"] == {
-        "stage": "orange_park_telegram_apartment_area",
-        "intent": "apartment_search",
-        "expected_slot": "apartment_area",
-        "min_documented_area": 35,
-        "max_documented_area": 41,
-        "provided_area": int(area_text),
-    }
-
-
-def test_orange_park_short_numeric_reply_without_area_context_uses_ai_path():
-    reply, metadata = _orange_park_area_reply_and_metadata(
-        "25",
-        history=ConversationHistory.empty(),
-    )
-
-    assert reply is None
-    assert metadata["orange_park_apartment_search"]["expected_slot"] == "apartment_area"
-
 
 @pytest.mark.anyio
 async def test_orange_park_area_reply_skips_ai_and_lead_creation():
@@ -396,11 +228,26 @@ async def test_orange_park_area_reply_skips_ai_and_lead_creation():
         return_value=IncomingMessageSaveResult(message=incoming, is_duplicate=False)
     )
     message_service.load_recent_conversation_history = AsyncMock(
-        return_value=_area_question_history()
+        return_value=ConversationHistory.empty()
+    )
+    message_service.load_latest_orange_park_dialog_state = AsyncMock(
+        return_value={
+            "dialog_engine_version": "orange_park_v3",
+            "intent": "apartment_sales",
+            "stage": "apartment_area",
+            "property_type": "apartment",
+            "apartment_type": "1-room",
+            "area_interest": None,
+            "purpose": None,
+            "purchase_path": None,
+            "contact_requested": False,
+            "contact_received": False,
+        }
     )
     message_service.save_outgoing_ai_message = AsyncMock(return_value=outgoing)
     lead_service = _lead_service_mock(business, customer, conversation)
     ai_reply_coordinator = _success_ai_coordinator()
+    tracing_service = _TracingServiceStub()
     service = WebhookMessageService(
         business_service=MagicMock(get_by_external_id=AsyncMock(return_value=business)),
         flow_service=_flow_service_mock(business),
@@ -414,6 +261,7 @@ async def test_orange_park_area_reply_skips_ai_and_lead_creation():
         message_trace_service=message_trace_service_mock(),
         delivery_visibility_service=delivery_visibility_service_mock(),
         inbound_processing_lock_service=inbound_processing_lock_service_mock(),
+        langfuse_tracing_service=tracing_service,
     )
     session = MagicMock()
     session.flush = AsyncMock()
@@ -424,33 +272,28 @@ async def test_orange_park_area_reply_skips_ai_and_lead_creation():
     )
 
     assert result.lead_created is False
-    assert "Варіантів на 25 м² у документації немає" in result.reply_to_customer
-    assert "Orange Park — це житловий комплекс" not in result.reply_to_customer
-    assert incoming.metadata_["orange_park_apartment_search"]["provided_area"] == 25
+    assert "Зафіксував бажану площу близько 25 м²" in result.reply_to_customer
+    assert incoming.metadata_["orange_park_dialog"]["state"]["area_interest"] == "25"
     lead_service.create_lead.assert_not_awaited()
     ai_reply_coordinator.execute_for_incoming_message.assert_not_awaited()
-
-
-def test_orange_park_manual_phone_still_requests_telegram_contact_button():
-    reply, metadata = _orange_park_contact_collection_reply_and_metadata(
-        "+41798232786",
-        history=ConversationHistory.empty(),
+    assert tracing_service.calls[0]["customer_message_preview"] == "25"
+    assert (
+        tracing_service.calls[0]["observability"].business_external_id
+        == "orange-park"
     )
-
-    assert reply == (
-        "Для зв'язку з менеджером, будь ласка, натисніть кнопку "
-        "«📱 Поділитися номером»."
+    tracing_service.recorder.record_response.assert_called_once()
+    assert (
+        tracing_service.recorder.record_response.call_args.kwargs["metadata"][
+            "business_uuid"
+        ]
+        == str(business.id)
     )
-    assert "Спасибо" not in reply
-    assert "Thanks" not in reply
-    assert "ім'я" not in reply
-    assert "номер телефону" not in reply
-    assert metadata["orange_park_contact_collection"]["missing_fields"] == [
-        "telegram_contact",
+    trace_metadata = tracing_service.recorder.record_response.call_args.kwargs[
+        "metadata"
     ]
-    assert metadata["orange_park_contact_collection"]["telegram_contact_request"] is True
-    assert metadata["orange_park_contact_collection"]["manual_phone_ignored"] is True
-    assert "Запит передано менеджеру" not in reply
+    assert trace_metadata["runtime_path"] == "deterministic_dialog_engine"
+    assert trace_metadata["dialog_intent"] == "apartment_sales"
+    assert trace_metadata["dialog_stage"] == "apartment_purpose"
 
 
 @pytest.fixture
@@ -521,6 +364,7 @@ async def test_process_incoming_message_orchestrates_services(
     session.flush = AsyncMock()
 
     flow_service = _flow_service_mock(business)
+    tracing_service = _TracingServiceStub()
     service = WebhookMessageService(
         business_service=business_service,
         customer_service=customer_service,
@@ -532,6 +376,7 @@ async def test_process_incoming_message_orchestrates_services(
         message_trace_service=message_trace_service_mock(),
         delivery_visibility_service=delivery_visibility_service_mock(),
         inbound_processing_lock_service=inbound_processing_lock_service_mock(),
+        langfuse_tracing_service=tracing_service,
     )
     request = _request()
 
@@ -556,6 +401,11 @@ async def test_process_incoming_message_orchestrates_services(
     assert result.notify_owner is True
     assert result.reply_to_customer == "AI wired reply"
     ai_reply_coordinator.execute_for_incoming_message.assert_awaited_once()
+    assert (
+        tracing_service.calls[0]["observability"].business_external_id
+        == "demo_barbershop_001"
+    )
+    tracing_service.recorder.record_response.assert_called_once()
     assert conversation.last_message_at == datetime(2026, 5, 21, 10, 0, 0)
 
 
@@ -673,10 +523,23 @@ async def test_orange_park_telegram_start_always_ukrainian_and_skips_ai(
     assert result.reply_to_customer == ORANGE_PARK_START_WELCOME_UK
     assert "I'm here" not in result.reply_to_customer
     assert "What are you interested" not in result.reply_to_customer
-    assert incoming.metadata_["orange_park_start_reset"] == {
-        "stage": "orange_park_telegram_start_reset",
+    assert incoming.metadata_["orange_park_dialog"] == {
+        "state": {
+            "dialog_engine_version": "orange_park_v3",
+            "intent": "unknown",
+            "stage": "idle",
+            "property_type": None,
+            "apartment_type": None,
+            "commercial_type": None,
+            "area_interest": None,
+            "budget_interest": None,
+            "purpose": None,
+            "purchase_path": None,
+            "contact_requested": False,
+            "contact_received": False,
+        },
+        "request_contact": False,
         "excluded_previous_history": True,
-        "language": "uk",
     }
     archive_call = session.execute.await_args_list[0]
     assert "update messages" in str(archive_call.args[0])
@@ -693,13 +556,12 @@ async def test_orange_park_telegram_start_always_ukrainian_and_skips_ai(
     (
         (
             "Свяжи меня с менеджером",
-            "Для зв'язку з менеджером, будь ласка, натисніть кнопку "
+            "Для зв'язку з менеджером натисніть кнопку "
             "«📱 Поділитися номером».",
         ),
         (
             "Які є варіанти до 100000 грн?",
-            "Актуальні варіанти в межах бюджету підтвердить менеджер.\n\n"
-            "Для зв'язку з менеджером, будь ласка, натисніть кнопку "
+            "Для зв'язку з менеджером натисніть кнопку "
             "«📱 Поділитися номером».",
         ),
     ),
@@ -806,7 +668,7 @@ async def test_orange_park_telegram_handoff_uses_contact_button_without_lead(
 
 
 @pytest.mark.anyio
-async def test_orange_park_telegram_phone_asks_missing_name_in_ukrainian_without_lead():
+async def test_orange_park_telegram_manual_phone_from_idle_does_not_request_contact():
     business = Business(
         id=uuid.uuid4(),
         tenant_id=uuid.uuid4(),
@@ -896,24 +758,16 @@ async def test_orange_park_telegram_phone_asks_missing_name_in_ukrainian_without
     )
 
     assert result.lead_created is False
-    assert result.reply_to_customer == (
-        "Для зв'язку з менеджером, будь ласка, натисніть кнопку "
-        "«📱 Поділитися номером»."
-    )
+    assert result.reply_to_customer.startswith("Підкажіть, будь ласка")
     assert "Thank" not in result.reply_to_customer
     assert "phone number" not in result.reply_to_customer
-    assert incoming.metadata_["orange_park_contact_collection"]["missing_fields"] == [
-        "telegram_contact",
-    ]
-    assert incoming.metadata_["orange_park_contact_collection"][
-        "manual_phone_ignored"
-    ] is True
+    assert "orange_park_contact_collection" not in incoming.metadata_
     lead_service.create_lead.assert_not_awaited()
     ai_reply_coordinator.execute_for_incoming_message.assert_not_awaited()
 
 
 @pytest.mark.anyio
-async def test_orange_park_contact_request_sets_telegram_button_metadata():
+async def test_orange_park_yes_from_idle_does_not_set_contact_button_metadata():
     business = Business(
         id=uuid.uuid4(),
         tenant_id=uuid.uuid4(),
@@ -984,16 +838,94 @@ async def test_orange_park_contact_request_sets_telegram_button_metadata():
 
     result = await service.process_incoming_message(session, _orange_park_request("Так"))
 
-    assert result.response_metadata == {
-        "telegram_contact_request": {
-            "needed": True,
-            "button_text": "📱 Поділитися номером",
-        }
-    }
-    assert incoming.metadata_["orange_park_contact_collection"][
-        "telegram_contact_request"
-    ] is True
+    assert result.response_metadata is None
+    assert "orange_park_contact_collection" not in incoming.metadata_
+    assert incoming.metadata_["orange_park_dialog"]["state"]["stage"] == "idle"
     lead_service.create_lead.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_orange_park_v3_unknown_message_bypasses_ai():
+    business = Business(
+        id=uuid.uuid4(),
+        tenant_id=uuid.uuid4(),
+        external_id="orange-park",
+        name="Orange Park",
+    )
+    customer = Customer(
+        id=uuid.uuid4(),
+        tenant_id=business.tenant_id,
+        business_id=business.id,
+        external_customer_id="telegram:111",
+        source_channel="telegram",
+    )
+    conversation = Conversation(
+        id=uuid.uuid4(),
+        tenant_id=business.tenant_id,
+        business_id=business.id,
+        flow_id=uuid.uuid4(),
+        customer_id=customer.id,
+        channel="telegram",
+        status="open",
+    )
+    incoming = Message(
+        id=uuid.uuid4(),
+        tenant_id=business.tenant_id,
+        business_id=business.id,
+        conversation_id=conversation.id,
+        sender_type="customer",
+        direction="incoming",
+        channel="telegram",
+        message_text="Хочу уточнити деталі",
+    )
+    outgoing = Message(
+        id=uuid.uuid4(),
+        tenant_id=business.tenant_id,
+        business_id=business.id,
+        conversation_id=conversation.id,
+        sender_type="ai",
+        direction="outgoing",
+        channel="telegram",
+        message_text="",
+    )
+    message_service = MagicMock()
+    message_service.save_incoming_customer_message = AsyncMock(
+        return_value=IncomingMessageSaveResult(message=incoming, is_duplicate=False)
+    )
+    message_service.load_recent_conversation_history = AsyncMock(
+        return_value=ConversationHistory.empty()
+    )
+    message_service.save_outgoing_ai_message = AsyncMock(return_value=outgoing)
+    lead_service = _lead_service_mock(business, customer, conversation)
+    ai_reply_coordinator = _success_ai_coordinator(
+        "Для уточнення залиште номер телефону для зв'язку."
+    )
+    service = WebhookMessageService(
+        business_service=MagicMock(get_by_external_id=AsyncMock(return_value=business)),
+        flow_service=_flow_service_mock(business),
+        customer_service=MagicMock(get_or_create_customer=AsyncMock(return_value=customer)),
+        conversation_service=MagicMock(
+            get_or_create_open_conversation=AsyncMock(return_value=conversation)
+        ),
+        message_service=message_service,
+        lead_service=lead_service,
+        ai_reply_coordinator=ai_reply_coordinator,
+        message_trace_service=message_trace_service_mock(),
+        delivery_visibility_service=delivery_visibility_service_mock(),
+        inbound_processing_lock_service=inbound_processing_lock_service_mock(),
+    )
+    session = MagicMock()
+    session.flush = AsyncMock()
+
+    result = await service.process_incoming_message(
+        session,
+        _orange_park_request("Хочу уточнити деталі"),
+    )
+
+    assert result.response_metadata is None
+    assert "що саме вас цікавить:" in result.reply_to_customer
+    assert "orange_park_contact_collection" not in incoming.metadata_
+    ai_reply_coordinator.execute_for_incoming_message.assert_not_awaited()
 
 
 @pytest.mark.anyio
@@ -1082,6 +1014,7 @@ async def test_orange_park_telegram_contact_payload_acknowledges_without_manual_
             "crm_creation_deferred": True,
         }
     }
+
     contact = incoming.metadata_["orange_park_contact_collection"]
     assert contact["phone"] == "+380671112233"
     assert contact["first_name"] == "Олена"
@@ -1097,7 +1030,7 @@ async def test_orange_park_telegram_contact_payload_acknowledges_without_manual_
 
 
 @pytest.mark.anyio
-async def test_orange_park_telegram_contact_missing_name_asks_only_for_missing_name():
+async def test_orange_park_telegram_contact_with_first_name_only_does_not_ask_last_name():
     business = Business(
         id=uuid.uuid4(),
         tenant_id=uuid.uuid4(),
@@ -1169,10 +1102,9 @@ async def test_orange_park_telegram_contact_missing_name_asks_only_for_missing_n
 
     result = await service.process_incoming_message(session, request)
 
-    assert result.reply_to_customer == (
-        "Дякуємо, номер отримали. Напишіть, будь ласка, прізвище."
-    )
+    assert result.reply_to_customer == ORANGE_PARK_CONTACT_RECEIVED_REPLY_UK
     assert "телефон" not in result.reply_to_customer.casefold()
+    assert "прізвище" not in result.reply_to_customer.casefold()
     assert incoming.metadata_["orange_park_contact_collection"]["missing_fields"] == [
         "last_name",
     ]
@@ -1236,6 +1168,16 @@ async def test_orange_park_telegram_contact_is_ready_for_lead_when_bitrix_enable
     message_service.load_recent_conversation_history = AsyncMock()
     message_service.save_outgoing_ai_message = AsyncMock(return_value=outgoing)
     lead_service = _lead_service_mock(business, customer, conversation)
+    bitrix_service = MagicMock()
+    bitrix_service.is_configured.return_value = True
+    bitrix_service.create_or_update_lead = AsyncMock(
+        return_value=OrangeParkBitrixLeadResult(
+            lead_id="501",
+            action="create",
+            timestamp=datetime(2026, 6, 13, 10, 0, tzinfo=UTC),
+        )
+    )
+    tracing_service = _TracingServiceStub()
     service = WebhookMessageService(
         business_service=MagicMock(get_by_external_id=AsyncMock(return_value=business)),
         flow_service=flow_service,
@@ -1245,6 +1187,141 @@ async def test_orange_park_telegram_contact_is_ready_for_lead_when_bitrix_enable
         ),
         message_service=message_service,
         lead_service=lead_service,
+        orange_park_bitrix_service=bitrix_service,
+        ai_reply_coordinator=_success_ai_coordinator(),
+        message_trace_service=message_trace_service_mock(),
+        delivery_visibility_service=delivery_visibility_service_mock(),
+        inbound_processing_lock_service=inbound_processing_lock_service_mock(),
+        langfuse_tracing_service=tracing_service,
+    )
+    session = MagicMock()
+    session.flush = AsyncMock()
+
+    result = await service.process_incoming_message(
+        session,
+        _orange_park_contact_request(),
+    )
+
+    assert result.lead_created is True
+    assert result.lead_updated is False
+    assert result.notify_owner is False
+    assert result.lead is not None
+    assert result.reply_to_customer == (
+        "Дякуємо. Запит передано менеджеру. Очікуйте дзвінок."
+    )
+    lead_service.create_lead.assert_awaited_once()
+    bitrix_service.create_or_update_lead.assert_awaited_once()
+    assert incoming.metadata_["orange_park_contact_collection"]["bitrix_lead_id"] == "501"
+    assert incoming.metadata_["orange_park_contact_collection"]["action"] == "create"
+    assert result.response_metadata == {
+        "orange_park_contact_collection": {
+            "contact_received": True,
+            "crm_ready": True,
+            "crm_creation_deferred": False,
+            "bitrix_lead_id": "501",
+            "action": "create",
+            "timestamp": "2026-06-13T10:00:00+00:00",
+        }
+    }
+    assert (
+        tracing_service.recorder.record_response.call_args.kwargs["metadata"][
+            "crm_sync_status"
+        ]
+        == "create"
+    )
+
+    bitrix_service.create_or_update_lead.side_effect = OrangeParkBitrixError(
+        "Bitrix24 network request failed"
+    )
+    failed_result = await service.process_incoming_message(
+        session,
+        _orange_park_contact_request(),
+    )
+
+    assert failed_result.reply_to_customer == ORANGE_PARK_CONTACT_RECEIVED_REPLY_UK
+    assert failed_result.response_metadata == {
+        "orange_park_contact_collection": {
+            "contact_received": True,
+            "crm_ready": True,
+            "crm_creation_deferred": True,
+        }
+    }
+    assert (
+        tracing_service.recorder.record_response.call_args.kwargs["metadata"][
+            "crm_sync_status"
+        ]
+        == "failed_deferred"
+    )
+
+
+@pytest.mark.anyio
+async def test_orange_park_bitrix_flag_with_missing_webhook_keeps_sync_deferred():
+    business = Business(
+        id=uuid.uuid4(),
+        tenant_id=uuid.uuid4(),
+        external_id="orange-park",
+        name="Orange Park",
+    )
+    customer = Customer(
+        id=uuid.uuid4(),
+        tenant_id=business.tenant_id,
+        business_id=business.id,
+        phone="+380671112233",
+        external_customer_id="telegram:111",
+        source_channel="telegram",
+    )
+    conversation = Conversation(
+        id=uuid.uuid4(),
+        tenant_id=business.tenant_id,
+        business_id=business.id,
+        flow_id=uuid.uuid4(),
+        customer_id=customer.id,
+        channel="telegram",
+        status="open",
+    )
+    flow_service = _flow_service_mock(business)
+    flow_service.resolve_for_webhook.return_value.metadata_ = {
+        "crm": {"bitrix": {"enabled": True}},
+    }
+    incoming = Message(
+        id=uuid.uuid4(),
+        tenant_id=business.tenant_id,
+        business_id=business.id,
+        conversation_id=conversation.id,
+        sender_type="customer",
+        direction="incoming",
+        channel="telegram",
+        message_text="[telegram_contact_shared]",
+    )
+    outgoing = Message(
+        id=uuid.uuid4(),
+        tenant_id=business.tenant_id,
+        business_id=business.id,
+        conversation_id=conversation.id,
+        sender_type="ai",
+        direction="outgoing",
+        channel="telegram",
+        message_text="",
+    )
+    message_service = MagicMock()
+    message_service.save_incoming_customer_message = AsyncMock(
+        return_value=IncomingMessageSaveResult(message=incoming, is_duplicate=False)
+    )
+    message_service.save_outgoing_ai_message = AsyncMock(return_value=outgoing)
+    lead_service = _lead_service_mock(business, customer, conversation)
+    bitrix_service = MagicMock()
+    bitrix_service.is_configured.return_value = False
+    bitrix_service.create_or_update_lead = AsyncMock()
+    service = WebhookMessageService(
+        business_service=MagicMock(get_by_external_id=AsyncMock(return_value=business)),
+        flow_service=flow_service,
+        customer_service=MagicMock(get_or_create_customer=AsyncMock(return_value=customer)),
+        conversation_service=MagicMock(
+            get_or_create_open_conversation=AsyncMock(return_value=conversation)
+        ),
+        message_service=message_service,
+        lead_service=lead_service,
+        orange_park_bitrix_service=bitrix_service,
         ai_reply_coordinator=_success_ai_coordinator(),
         message_trace_service=message_trace_service_mock(),
         delivery_visibility_service=delivery_visibility_service_mock(),
@@ -1258,12 +1335,100 @@ async def test_orange_park_telegram_contact_is_ready_for_lead_when_bitrix_enable
         _orange_park_contact_request(),
     )
 
-    assert result.lead_created is True
-    assert result.lead is not None
-    assert result.reply_to_customer == (
-        "Дякуємо. Запит передано менеджеру. Очікуйте дзвінок."
+    assert result.lead_created is False
+    assert result.lead_updated is False
+    assert result.notify_owner is False
+    lead_service.create_lead.assert_not_awaited()
+    bitrix_service.create_or_update_lead.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_orange_park_bitrix_does_not_run_for_ordinary_telegram_message():
+    business = Business(
+        id=uuid.uuid4(),
+        tenant_id=uuid.uuid4(),
+        external_id="orange-park",
+        name="Orange Park",
     )
-    lead_service.create_lead.assert_awaited_once()
+    customer = Customer(
+        id=uuid.uuid4(),
+        tenant_id=business.tenant_id,
+        business_id=business.id,
+        external_customer_id="telegram:111",
+        source_channel="telegram",
+    )
+    conversation = Conversation(
+        id=uuid.uuid4(),
+        tenant_id=business.tenant_id,
+        business_id=business.id,
+        flow_id=uuid.uuid4(),
+        customer_id=customer.id,
+        channel="telegram",
+        status="open",
+    )
+    incoming = Message(
+        id=uuid.uuid4(),
+        tenant_id=business.tenant_id,
+        business_id=business.id,
+        conversation_id=conversation.id,
+        sender_type="customer",
+        direction="incoming",
+        channel="telegram",
+        message_text="Які є квартири?",
+    )
+    outgoing = Message(
+        id=uuid.uuid4(),
+        tenant_id=business.tenant_id,
+        business_id=business.id,
+        conversation_id=conversation.id,
+        sender_type="ai",
+        direction="outgoing",
+        channel="telegram",
+        message_text="AI wired reply",
+    )
+    flow_service = _flow_service_mock(business)
+    flow_service.resolve_for_webhook.return_value.metadata_ = {
+        "crm": {"bitrix": {"enabled": True}},
+    }
+    message_service = MagicMock()
+    message_service.save_incoming_customer_message = AsyncMock(
+        return_value=IncomingMessageSaveResult(message=incoming, is_duplicate=False)
+    )
+    message_service.load_recent_conversation_history = AsyncMock(
+        return_value=ConversationHistory.empty()
+    )
+    message_service.save_outgoing_ai_message = AsyncMock(return_value=outgoing)
+    lead_service = _lead_service_mock(business, customer, conversation)
+    bitrix_service = MagicMock()
+    bitrix_service.is_configured.return_value = True
+    bitrix_service.create_or_update_lead = AsyncMock()
+    service = WebhookMessageService(
+        business_service=MagicMock(get_by_external_id=AsyncMock(return_value=business)),
+        flow_service=flow_service,
+        customer_service=MagicMock(get_or_create_customer=AsyncMock(return_value=customer)),
+        conversation_service=MagicMock(
+            get_or_create_open_conversation=AsyncMock(return_value=conversation)
+        ),
+        message_service=message_service,
+        lead_service=lead_service,
+        orange_park_bitrix_service=bitrix_service,
+        ai_reply_coordinator=_success_ai_coordinator(),
+        message_trace_service=message_trace_service_mock(),
+        delivery_visibility_service=delivery_visibility_service_mock(),
+        inbound_processing_lock_service=inbound_processing_lock_service_mock(),
+    )
+    session = MagicMock()
+    session.flush = AsyncMock()
+
+    result = await service.process_incoming_message(
+        session,
+        _orange_park_request("Які є квартири?"),
+    )
+
+    assert result.lead_created is False
+    assert result.lead_updated is False
+    lead_service.create_lead.assert_not_awaited()
+    bitrix_service.create_or_update_lead.assert_not_awaited()
 
 
 @pytest.mark.anyio

@@ -1,115 +1,40 @@
-# Orange Park Pre-Ingestion Documentation Workspace
+# Orange Park Dialog Engine v3
 
-## Purpose
+The six active Orange Park knowledge sources are:
 
-This folder is the isolated pre-ingestion documentation workspace for Orange Park / ЖК Orange Park.
+1. `01_business_profile`
+2. `02_sales_presentation`
+3. `03_sales_scenarios`
+4. `04_purchase_rules`
+5. `05_apartment_catalog`
+6. `06_commercial_catalog`
 
-Use it to collect, review, and normalize client-provided business materials before any approved ingestion into Alpstein AI production data stores.
+The backend seed writes these sources with `dialog_engine_version` set to
+`orange_park_v3` and deactivates older Orange Park knowledge rows.
 
-## Important Warnings
+These six documents are the only active Orange Park behavior and knowledge
+sources. Old FAQ, pricing, AI-policy, contact-form, and conversation-style
+documents are historical and are not runtime sources. Do not restore them to
+the active seed.
 
-- This is pre-ingestion documentation only.
-- Runtime source of truth remains PostgreSQL.
-- Do not treat files in this folder as live assistant context until a separate approved ingestion task writes scoped records to the existing backend tables.
-- Production isolation must remain `tenant_id + business_id`.
-- Runtime business identity enters through `businesses.external_id`.
+Runtime responsibilities:
 
-## Placeholder Identifiers
+- backend owns dialog state and Bitrix contact synchronization;
+- n8n normalizes Telegram input and delivers backend responses;
+- secrets remain in environment variables or external credential storage;
+- all database records remain scoped by `tenant_id` and `business_id`.
 
-```text
-business_external_id: orange-park
-display_name: Orange Park / ЖК Orange Park
-tenant_id: TODO
-business_id: TODO
-```
+Dialog Engine v3 scenarios consume explicit `intent`, `stage`, and state fields
+from the active turn. They must not infer active dialog state from stale
+history. Short confirmations and numeric replies advance only a compatible
+active stage.
 
-## Backend Cell Mapping
+The platform end-to-end message trace remains active for deterministic and AI
+paths across all businesses and channels. Langfuse observes those paths in
+every environment when its credentials are configured; environment or
+feature-flag values do not disable it. Langfuse is separate from `PromptRun`,
+and deterministic replies must not create a `PromptRun` solely for tracing.
 
-### TenantBusinessProfile
-
-Store stable factual business data here after ingestion:
-
-- business description;
-- project/location facts;
-- services;
-- stable pricing summary;
-- working hours;
-- city, region, country;
-- business limitations.
-
-Recommended source folders:
-
-- `01_business_profile_facts/`
-- stable summaries from `04_prices_and_availability/`
-- stable limitations from `05_policies_and_rules/`
-
-### TenantAIProfile
-
-Store assistant behavior and sales style here after ingestion:
-
-- tone;
-- language;
-- response style;
-- lead qualification questions;
-- handoff rules;
-- forbidden promises;
-- fallback behavior.
-
-Recommended source folders:
-
-- `02_ai_behavior_and_sales_materials/`
-- selected patterns from `07_conversation_examples/`
-
-### Channel Settings
-
-Store per-channel reply behavior here after ingestion:
-
-- Telegram-specific response length;
-- emoji/link rules;
-- channel-specific formatting constraints;
-- channel-specific reply style.
-
-Recommended source folder:
-
-- `09_telegram_bot/`
-
-Do not store Telegram bot tokens in this folder.
-
-### TenantKnowledgeSource
-
-Store retrievable business knowledge here after ingestion:
-
-- FAQ;
-- detailed pricing;
-- policies;
-- rules;
-- promotions;
-- static availability notes;
-- service details;
-- sales reference material.
-
-Recommended source folders:
-
-- `03_faq/`
-- `04_prices_and_availability/`
-- `05_policies_and_rules/`
-- `06_promotions/`
-- longer reference material from `02_ai_behavior_and_sales_materials/`
-
-### PromptTemplate
-
-Do not store Orange Park-specific facts in `PromptTemplate`.
-
-`PromptTemplate` is platform-owned and must remain generic. It controls Alpstein AI system behavior, safety rules, task instructions, and prompt structure.
-
-## Secret Handling Rules
-
-- No secrets in this folder.
-- No Telegram bot token.
-- No Bitrix24 webhook URL.
-- No API keys.
-- No passwords.
-- No database URLs.
-- No private n8n credentials.
-
-Secrets must remain in environment variables or existing secret management only.
+`00_intake` contains the original client input and is not active assistant
+behavior. Catalog files are extension points and contain no live availability,
+prices, photos, or gallery data.

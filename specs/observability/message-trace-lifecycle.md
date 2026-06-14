@@ -106,7 +106,7 @@ INDEX message_traces_flow_id_created_at_idx (flow_id, created_at DESC)
 | n8n POST | body `correlation_id`, headers `X-Correlation-Id`, `X-N8n-Execution-Id` | → backend |
 | Backend ingress | `ObservabilityContext` | internal |
 | `prompt_runs.metadata` | subset of envelope | DB audit |
-| Langfuse trace | flat metadata keys | dev only |
+| Langfuse trace | flat metadata keys | all environments when credentials are configured |
 | n8n delivery | pass `correlation_id` in logs only | ops |
 | Webhook response | return `correlation_id` | → n8n / widget |
 

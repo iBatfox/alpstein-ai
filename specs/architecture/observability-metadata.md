@@ -460,14 +460,15 @@ D2 implementation replaces current drift (`demo_barbershop_001` incorrectly rece
 
 Backend does not branch on workflow id for business logic.
 
-### 16.6 Production Langfuse policy (approved — no change)
+### 16.6 Platform Langfuse policy
 
 | Environment | Tracing |
 |-------------|---------|
-| `development` / `dev` / `local` / `test` | Auto-enable when Langfuse public + secret keys are set (current) |
-| Production / staging (other) | **Off** unless `LANGFUSE_TRACING_ENABLED=true` **and** keys set (current) |
+| All environments | Enabled whenever Langfuse public and secret keys are configured |
 
-No change to existing [`langfuse_tracing_active`](../../backend/app/core/config.py) behavior in D2 unless explicitly required for bugfix.
+Environment and feature-flag values must not disable tracing when credentials
+are present. Missing credentials remain a safe no-op because the platform
+cannot create a remote trace without authentication.
 
 ---
 

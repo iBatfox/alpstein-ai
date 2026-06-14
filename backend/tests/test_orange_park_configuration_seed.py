@@ -58,7 +58,7 @@ async def test_orange_park_seed_creates_clean_layered_configuration():
 
     assert result.tenant_slug == ORANGE_PARK_TENANT_SLUG
     assert result.business_external_id == ORANGE_PARK_BUSINESS_EXTERNAL_ID
-    assert session.add.call_count == 8
+    assert session.add.call_count == 11
 
     rows = _seed_rows(session)
     business = next(row for row in rows if isinstance(row, Business))
@@ -75,7 +75,7 @@ async def test_orange_park_seed_creates_clean_layered_configuration():
     assert business.language == "uk"
 
     assert business_profile.business_description.startswith(
-        "# Orange Park — Factual Business Data"
+        "# Orange Park Business Profile"
     )
     assert "Response quality rules" not in business_profile.business_description
     assert "Current inventory, exact prices" in business_profile.business_limitations
@@ -85,30 +85,37 @@ async def test_orange_park_seed_creates_clean_layered_configuration():
     assert "behavior_rules" not in ai_profile.metadata_
     assert ai_profile.ask_for_name is None
     assert ai_profile.ask_for_phone is None
-    assert "single source of truth for Orange Park AI behavior" in behavior
-    assert "Use native Telegram contact sharing." in behavior
-    assert "Do not ask customer to type phone manually." in behavior
-    assert (
-        "Для зв'язку з менеджером, будь ласка, натисніть кнопку «📱 Поділитися номером»."
-        in behavior
-    )
-    assert "Дякуємо. Запит передано менеджеру. Очікуйте дзвінок." in behavior
+    assert ai_profile.metadata_["dialog_engine_version"] == "orange_park_v3"
+    assert ai_profile.metadata_["language"] == "uk"
+    assert ai_profile.metadata_["bitrix_contact_sync_enabled"] is True
+    assert "Consume the" in behavior
+    assert "current `stage` before applying root intent routing." in behavior
+    assert "Do not trigger the contact button from idle replies" in behavior
+    assert "PromptRun` and Langfuse are separate concerns" in behavior
+    assert "show the" in behavior
+    assert "native Telegram contact button only when" in behavior
     assert "exact apartment availability" in ai_profile.forbidden_promises
 
     assert channel.channel == ORANGE_PARK_CHANNEL
     assert channel.allow_emojis is True
     assert channel.allow_links is False
+    assert channel.metadata_["dialog_engine_version"] == "orange_park_v3"
+    assert channel.metadata_["language"] == "uk"
+    assert channel.metadata_["bitrix_contact_sync_enabled"] is True
     assert channel.metadata_["start_greeting"].startswith("Добрий день! 👋")
 
     assert {row.source_type for row in knowledge} == {
-        "faq",
-        "pricing",
-        "conversation_style",
+        "business_profile",
+        "sales_presentation",
+        "sales_scenarios",
+        "purchase_rules",
+        "apartment_catalog",
+        "commercial_catalog",
     }
-    style = next(row for row in knowledge if row.source_type == "conversation_style")
-    assert style.content.startswith("# Orange Park — Conversation Examples")
-    assert "Normative AI behavior is defined only" in style.content
-    assert "Native Telegram contact flow" not in style.content
+    apartment_catalog = next(
+        row for row in knowledge if row.source_type == "apartment_catalog"
+    )
+    assert "No live prices" in apartment_catalog.content
 
     active_text = "\n".join(
         (
@@ -161,26 +168,18 @@ async def test_orange_park_seed_updates_existing_rows_without_duplicates():
             id=uuid.uuid4(),
             tenant_id=tenant.id,
             business_id=business.id,
-            source_type="faq",
-            title="Orange Park FAQ",
+            source_type=source_type,
+            title=title,
             content="legacy",
-        ),
-        TenantKnowledgeSource(
-            id=uuid.uuid4(),
-            tenant_id=tenant.id,
-            business_id=business.id,
-            source_type="pricing",
-            title="Orange Park Prices And Availability - Manager Confirmed Only",
-            content="legacy",
-        ),
-        TenantKnowledgeSource(
-            id=uuid.uuid4(),
-            tenant_id=tenant.id,
-            business_id=business.id,
-            source_type="conversation_style",
-            title="Orange Park Conversation Style Guide",
-            content="legacy",
-        ),
+        )
+        for source_type, title in (
+            ("business_profile", "01_business_profile"),
+            ("sales_presentation", "02_sales_presentation"),
+            ("sales_scenarios", "03_sales_scenarios"),
+            ("purchase_rules", "04_purchase_rules"),
+            ("apartment_catalog", "05_apartment_catalog"),
+            ("commercial_catalog", "06_commercial_catalog"),
+        )
     ]
     existing = [
         tenant,
@@ -193,7 +192,11 @@ async def test_orange_park_seed_updates_existing_rows_without_duplicates():
     session = AsyncMock()
     session.add = MagicMock()
     session.execute = AsyncMock(
-        side_effect=[_execute_scalar(row) for row in existing]
+        side_effect=[
+            *[_execute_scalar(row) for row in existing],
+            MagicMock(),
+            MagicMock(),
+        ]
     )
     session.flush = AsyncMock(return_value=None)
 
@@ -201,13 +204,18 @@ async def test_orange_park_seed_updates_existing_rows_without_duplicates():
 
     session.add.assert_not_called()
     assert business_profile.business_description.startswith(
-        "# Orange Park — Factual Business Data"
+        "# Orange Park Business Profile"
     )
     assert "behavior_rules" not in ai_profile.metadata_
     assert "behavior_instructions" in ai_profile.metadata_
     assert ai_profile.ask_for_name is None
     assert ai_profile.ask_for_phone is None
+    assert ai_profile.metadata_["dialog_engine_version"] == "orange_park_v3"
+    assert ai_profile.metadata_["language"] == "uk"
+    assert ai_profile.metadata_["bitrix_contact_sync_enabled"] is True
     assert channel.allow_emojis is True
+    assert channel.metadata_["dialog_engine_version"] == "orange_park_v3"
+    assert channel.metadata_["language"] == "uk"
     assert all(row.content != "legacy" for row in knowledge)
 
 
@@ -247,7 +255,6 @@ def test_orange_park_seed_has_no_flow_or_secret_dependency():
     ).read_text(encoding="utf-8").lower()
     forbidden = (
         "telegram_bot_token",
-        "bitrix",
         "sk-",
         "api_key",
         "password",

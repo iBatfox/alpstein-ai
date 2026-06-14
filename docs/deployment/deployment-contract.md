@@ -207,7 +207,7 @@ Resolved from environment as `ALPSTEIN_AI_<FIELD_NAME>` in uppercase.
 | Contract name | Field | Required | Default | Notes |
 |---------------|-------|----------|---------|-------|
 | `ALPSTEIN_AI_DATABASE_URL` | `database_url` | **Yes** | localhost URL | Use hostname `postgres` in compose |
-| `ALPSTEIN_AI_ENVIRONMENT` | `environment` | **Yes** | `production` | Controls seed guard, Langfuse auto-enable |
+| `ALPSTEIN_AI_ENVIRONMENT` | `environment` | **Yes** | `production` | Controls seed guard and environment-specific redaction |
 | `ALPSTEIN_AI_SERVICE_NAME` | `service_name` | No | `alpstein-ai-backend` | Health payload |
 
 **Deprecated names (do not use in new deploys):** `DATABASE_URL`, `ENVIRONMENT` without prefix — listed in older specs only.
@@ -226,7 +226,7 @@ These names are used **exactly as shown** — no `ALPSTEIN_AI_` prefix.
 | `LANGFUSE_SECRET_KEY` | No | Backend only | |
 | `LANGFUSE_HOST` | No | Backend only | Default `https://cloud.langfuse.com` |
 | `LANGFUSE_BASE_URL` | No | Compose compatibility only | Legacy alias; compose maps to `LANGFUSE_HOST` when `LANGFUSE_HOST` is unset |
-| `LANGFUSE_TRACING_ENABLED` | No | Backend only | `true` forces tracing even in production |
+| `LANGFUSE_TRACING_ENABLED` | No | Backend only | Compatibility setting; credentials activate tracing in every environment |
 
 #### C — n8n-only (not loaded by backend `Settings`)
 
@@ -256,10 +256,10 @@ These names are used **exactly as shown** — no `ALPSTEIN_AI_` prefix.
 
 ### 5.4 Local / dev / prod separation
 
-| `ALPSTEIN_AI_ENVIRONMENT` | Seed script | Langfuse auto-enable (if keys set) | Intended use |
+| `ALPSTEIN_AI_ENVIRONMENT` | Seed script | Langfuse when keys set | Intended use |
 |---------------------------|-------------|-----------------------------------|--------------|
 | `development`, `dev`, `local`, `test` | Allowed | Yes | Local compose, CI, clone smoke |
-| `production`, `staging`, other | **Blocked** | Only if `LANGFUSE_TRACING_ENABLED=true` | Production-like |
+| `production`, `staging`, other | **Blocked** | Yes | Production-like |
 
 **Contract profiles (B2.5+):**
 

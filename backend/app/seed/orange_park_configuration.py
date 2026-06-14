@@ -1,4 +1,4 @@
-"""Seed Orange Park Telegram-only MVP configuration."""
+"""Seed Orange Park Dialog Engine v3 configuration."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.business import Business
@@ -26,30 +26,45 @@ ORANGE_PARK_BUSINESS_TYPE = "real_estate"
 ORANGE_PARK_LANGUAGE = "uk"
 ORANGE_PARK_TIMEZONE = "Europe/Kyiv"
 ORANGE_PARK_CHANNEL = "telegram"
+ORANGE_PARK_DIALOG_ENGINE_VERSION = "orange_park_v3"
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ORANGE_PARK_DOCS_ROOT = REPO_ROOT / "docs" / "businesses" / "orange-park"
 
 FACTS_PATH = (
     ORANGE_PARK_DOCS_ROOT
-    / "01_business_profile_facts"
-    / "orange_park_facts.md"
+    / "01_business_profile"
+    / "orange_park_business_profile.md"
 )
 AI_POLICIES_PATH = (
     ORANGE_PARK_DOCS_ROOT
-    / "05_policies_and_rules"
-    / "orange_park_ai_policies.md"
+    / "03_sales_scenarios"
+    / "orange_park_sales_scenarios.md"
 )
-FAQ_PATH = ORANGE_PARK_DOCS_ROOT / "03_faq" / "orange_park_faq.md"
-PRICES_AVAILABILITY_PATH = (
+SALES_PRESENTATION_PATH = (
     ORANGE_PARK_DOCS_ROOT
-    / "04_prices_and_availability"
-    / "orange_park_prices_and_availability.md"
+    / "02_sales_presentation"
+    / "orange_park_sales_presentation.md"
 )
-CONVERSATION_STYLE_GUIDE_PATH = (
+SALES_SCENARIOS_PATH = (
     ORANGE_PARK_DOCS_ROOT
-    / "07_conversation_examples"
-    / "orange_park_conversation_style_guide.md"
+    / "03_sales_scenarios"
+    / "orange_park_sales_scenarios.md"
+)
+PURCHASE_RULES_PATH = (
+    ORANGE_PARK_DOCS_ROOT
+    / "04_purchase_rules"
+    / "orange_park_purchase_rules.md"
+)
+APARTMENT_CATALOG_PATH = (
+    ORANGE_PARK_DOCS_ROOT
+    / "05_apartment_catalog"
+    / "orange_park_apartment_catalog.md"
+)
+COMMERCIAL_CATALOG_PATH = (
+    ORANGE_PARK_DOCS_ROOT
+    / "06_commercial_catalog"
+    / "orange_park_commercial_catalog.md"
 )
 
 
@@ -112,49 +127,66 @@ async def seed_orange_park_configuration(
         business=business,
         actions=actions,
     )
-    await _ensure_knowledge_source(
+    source_definitions = (
+        (
+            "business_profile",
+            "01_business_profile",
+            docs["facts"],
+            ["stable_facts"],
+        ),
+        (
+            "sales_presentation",
+            "02_sales_presentation",
+            docs["sales_presentation"],
+            ["sales"],
+        ),
+        (
+            "sales_scenarios",
+            "03_sales_scenarios",
+            docs["sales_scenarios"],
+            ["dialog_v3"],
+        ),
+        (
+            "purchase_rules",
+            "04_purchase_rules",
+            docs["purchase_rules"],
+            ["requires_manager_confirmation"],
+        ),
+        (
+            "apartment_catalog",
+            "05_apartment_catalog",
+            docs["apartment_catalog"],
+            ["extension_point"],
+        ),
+        (
+            "commercial_catalog",
+            "06_commercial_catalog",
+            docs["commercial_catalog"],
+            ["extension_point"],
+        ),
+    )
+    for source_type, title, document, tags in source_definitions:
+        await _ensure_knowledge_source(
+            session,
+            tenant=tenant,
+            business=business,
+            source_type=source_type,
+            title=title,
+            document=document,
+            tags=[*tags, "orange_park", "orange_park_v3"],
+            actions=actions,
+        )
+    await _deactivate_obsolete_knowledge_sources(
         session,
         tenant=tenant,
         business=business,
-        source_type="faq",
-        title="Orange Park FAQ",
-        document=docs["faq"],
-        tags=["faq", "orange_park", "telegram_mvp"],
+        active_titles={definition[1] for definition in source_definitions},
         actions=actions,
     )
-    await _ensure_knowledge_source(
+    await _update_orange_park_flow_metadata(
         session,
         tenant=tenant,
         business=business,
-        source_type="pricing",
-        title="Orange Park Prices And Availability - Manager Confirmed Only",
-        document=docs["prices_availability"],
-        tags=[
-            "pricing",
-            "availability",
-            "requires_manager_confirmation",
-            "time_sensitive",
-            "orange_park",
-            "telegram_mvp",
-        ],
-        actions=actions,
-    )
-    await _ensure_knowledge_source(
-        session,
-        tenant=tenant,
-        business=business,
-        source_type="conversation_style",
-        title="Orange Park Conversation Style Guide",
-        document=docs["conversation_style"],
-        tags=[
-            "conversation_style",
-            "ai_behavior",
-            "qualification",
-            "manager_handoff",
-            "orange_park",
-            "telegram_mvp",
-            "not_factual_knowledge",
-        ],
         actions=actions,
     )
 
@@ -171,9 +203,11 @@ def _load_source_documents() -> dict[str, SourceDocument]:
     paths = {
         "facts": FACTS_PATH,
         "ai_policies": AI_POLICIES_PATH,
-        "faq": FAQ_PATH,
-        "prices_availability": PRICES_AVAILABILITY_PATH,
-        "conversation_style": CONVERSATION_STYLE_GUIDE_PATH,
+        "sales_presentation": SALES_PRESENTATION_PATH,
+        "sales_scenarios": SALES_SCENARIOS_PATH,
+        "purchase_rules": PURCHASE_RULES_PATH,
+        "apartment_catalog": APARTMENT_CATALOG_PATH,
+        "commercial_catalog": COMMERCIAL_CATALOG_PATH,
     }
     return {key: _read_source_document(path) for key, path in paths.items()}
 
@@ -234,7 +268,7 @@ async def _ensure_business(
             external_id=ORANGE_PARK_BUSINESS_EXTERNAL_ID,
             name=ORANGE_PARK_BUSINESS_NAME,
             business_type=ORANGE_PARK_BUSINESS_TYPE,
-            description="Orange Park residential complex Telegram-only MVP business.",
+            description="Orange Park residential complex with Dialog Engine v3.",
             language=ORANGE_PARK_LANGUAGE,
             timezone=ORANGE_PARK_TIMEZONE,
             storage_mode="shared",
@@ -246,9 +280,7 @@ async def _ensure_business(
         _assert_business_belongs_to_tenant(business, tenant)
         business.name = ORANGE_PARK_BUSINESS_NAME
         business.business_type = ORANGE_PARK_BUSINESS_TYPE
-        business.description = (
-            "Orange Park residential complex Telegram-only MVP business."
-        )
+        business.description = "Orange Park residential complex with Dialog Engine v3."
         business.language = ORANGE_PARK_LANGUAGE
         business.timezone = ORANGE_PARK_TIMEZONE
         business.storage_mode = "shared"
@@ -320,11 +352,9 @@ async def _ensure_ai_profile(
 ) -> TenantAiProfile:
     profile = await _get_ai_profile(session, tenant.id, business.id)
     values = {
-        "profile_name": "Orange Park Telegram MVP",
+        "profile_name": "Orange Park Dialog Engine v3",
         "tone": "professional, consultative, friendly",
-        "response_style": (
-            "docs first; 1-3 short; handoff only unstable; one question; no loops"
-        ),
+        "response_style": "scenario-based; concise; one question; explicit handoff",
         "language": ORANGE_PARK_LANGUAGE,
         "ask_for_name": None,
         "ask_for_phone": None,
@@ -361,7 +391,6 @@ async def _ensure_ai_profile(
             "legal guarantees",
             "live pricing",
             "live availability",
-            "external CRM lead creation",
             "payment instructions",
             "bank or card details",
             "tax, notary, registration, or service-fee amounts",
@@ -374,8 +403,9 @@ async def _ensure_ai_profile(
         "metadata_": _metadata_for_documents(
             ai_policies,
             category="tenant_ai_profile",
-            telegram_only_mvp=True,
-            lead_creation_enabled=False,
+            dialog_engine_version=ORANGE_PARK_DIALOG_ENGINE_VERSION,
+            language=ORANGE_PARK_LANGUAGE,
+            bitrix_contact_sync_enabled=True,
             behavior_instructions=ai_policies.content,
         ),
     }
@@ -416,8 +446,10 @@ async def _ensure_channel_setting(
         "allow_emojis": True,
         "allow_links": False,
         "metadata_": {
-            "stage": "telegram_only_mvp",
+            "dialog_engine_version": ORANGE_PARK_DIALOG_ENGINE_VERSION,
+            "language": ORANGE_PARK_LANGUAGE,
             "credential_storage": "external_runtime_only",
+            "bitrix_contact_sync_enabled": True,
             "default_start_language": ORANGE_PARK_LANGUAGE,
             "start_greeting": (
                 "Добрий день! 👋\n\n"
@@ -504,6 +536,64 @@ async def _ensure_knowledge_source(
         actions.append(f"updated knowledge source {title!r}")
     await session.flush()
     return source
+
+
+async def _deactivate_obsolete_knowledge_sources(
+    session: AsyncSession,
+    *,
+    tenant: Tenant,
+    business: Business,
+    active_titles: set[str],
+    actions: list[str],
+) -> None:
+    await session.execute(
+        update(TenantKnowledgeSource)
+        .where(
+            TenantKnowledgeSource.tenant_id == tenant.id,
+            TenantKnowledgeSource.business_id == business.id,
+            TenantKnowledgeSource.title.not_in(active_titles),
+            TenantKnowledgeSource.is_active.is_(True),
+        )
+        .values(is_active=False)
+    )
+    actions.append("deactivated obsolete Orange Park knowledge sources")
+
+
+async def _update_orange_park_flow_metadata(
+    session: AsyncSession,
+    *,
+    tenant: Tenant,
+    business: Business,
+    actions: list[str],
+) -> None:
+    await session.execute(
+        text(
+            """
+            update flows
+            set metadata = coalesce(metadata, '{}'::jsonb)
+                || jsonb_build_object(
+                    'dialog_engine_version', cast(:dialog_engine_version as text),
+                    'language', cast(:language as text),
+                    'crm',
+                    coalesce(metadata->'crm', '{}'::jsonb)
+                        || jsonb_build_object(
+                            'bitrix',
+                            coalesce(metadata->'crm'->'bitrix', '{}'::jsonb)
+                                || '{"enabled": true}'::jsonb
+                        )
+                )
+            where tenant_id = :tenant_id
+              and business_id = :business_id
+            """
+        ),
+        {
+            "dialog_engine_version": ORANGE_PARK_DIALOG_ENGINE_VERSION,
+            "language": ORANGE_PARK_LANGUAGE,
+            "tenant_id": tenant.id,
+            "business_id": business.id,
+        },
+    )
+    actions.append("updated Orange Park flow metadata")
 
 
 async def _get_tenant_by_slug(session: AsyncSession, slug: str) -> Tenant | None:
@@ -662,7 +752,7 @@ def _metadata_for_documents(
         "seed": "orange_park_configuration",
         "category": category,
         "business_external_id": ORANGE_PARK_BUSINESS_EXTERNAL_ID,
-        "stage": "telegram_only_mvp",
+        "dialog_engine_version": ORANGE_PARK_DIALOG_ENGINE_VERSION,
         "source_documents": [
             {
                 "path": document.relative_path,

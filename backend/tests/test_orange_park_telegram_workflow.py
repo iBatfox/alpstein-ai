@@ -62,3 +62,16 @@ def test_orange_park_workflow_normalizes_telegram_contact_payload_without_token(
     serialized = json.dumps(workflow).casefold()
     assert "api.telegram.org/bot" not in serialized
     assert "telegram_bot_token" not in serialized
+
+
+def test_orange_park_workflow_posts_v3_contract_without_operator_overlay():
+    workflow = _workflow()
+    normalize_code = _node(workflow, "Normalize Telegram Message")["parameters"][
+        "jsCode"
+    ]
+    post_body = _node(workflow, "POST Backend")["parameters"]["jsonBody"]
+
+    assert workflow["versionId"] == "orange-park-dialog-engine-v3"
+    assert "operator_business_context" not in normalize_code
+    assert "operator_business_context" not in post_body
+    assert "No Bitrix24" not in json.dumps(workflow)
